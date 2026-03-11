@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
+import { Decimal } from '@prisma/client/runtime/library'
 
 // 创建单个楼层
 const createSchema = z.object({
@@ -165,7 +166,7 @@ export async function PUT(request: NextRequest) {
         buildingId: parsed.buildingId,
         name: floorName,
         sort: currentSort++,
-        area: 0,
+        area: new Decimal(0),
       })
     }
 
