@@ -71,7 +71,7 @@ export function BuildingDetail({ building }: { building: Building }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          buildingId: building.id,
+          buildingId: Number(building.id),
           name: singleName,
           area: Number(singleArea) || 0,
           sort: floors.length + 1,
@@ -95,11 +95,17 @@ export function BuildingDetail({ building }: { building: Building }) {
 
   // 批量添加楼层
   const handleBatchAdd = async () => {
-    if (batchEnd < batchStart) {
+    const start = Number(batchStart)
+    const end = Number(batchEnd)
+    if (isNaN(start) || isNaN(end)) {
+      alert('请输入有效的楼层数字')
+      return
+    }
+    if (end < start) {
       alert('结束楼层必须大于等于开始楼层')
       return
     }
-    if (batchEnd - batchStart > 50) {
+    if (end - start > 50) {
       alert('一次最多添加50个楼层')
       return
     }
@@ -109,9 +115,9 @@ export function BuildingDetail({ building }: { building: Building }) {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          buildingId: building.id,
-          startFloor: batchStart,
-          endFloor: batchEnd,
+          buildingId: Number(building.id),
+          startFloor: start,
+          endFloor: end,
           prefix: batchPrefix,
           suffix: batchSuffix,
         }),
