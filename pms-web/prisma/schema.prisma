@@ -1,0 +1,636 @@
+// 商业写字楼物业管理系统 - 数据库模型
+// 基于 PRD 需求文档设计
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ========== 系统管理 ==========
+
+model Company {
+  id        Int      @id @default(autoincrement())
+  name      String
+  contact   String
+  phone     String
+  address   String?
+  appId     String?
+  appSecret String?
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  departments     Department[]
+  employees       Employee[]
+  roles           Role[]
+  buildings       Building[]
+  rooms           Room[]
+  projects        Project[]
+  tenants         Tenant[]
+  tenantUsers     TenantUser[]
+  billRules       BillRule[]
+  bills           Bill[]
+  payments        Payment[]
+  refunds         Refund[]
+  paymentReminders PaymentReminder[]
+  workOrders      WorkOrder[]
+  workOrderTypes  WorkOrderType[]
+  nfcTags         NfcTag[]
+  inspectionPlans InspectionPlan[]
+  inspectionTasks InspectionTask[]
+  inspectionRecords InspectionRecord[]
+  announcements   Announcement[]
+  complaints      Complaint[]
+  devices         Device[]
+  deviceMaintenances DeviceMaintenance[]
+  accounts        Account[]
+  printTemplates  PrintTemplate[]
+  dictionaries   Dictionary[]
+}
+
+model Department {
+  id          Int      @id @default(autoincrement())
+  name        String
+  parentId    Int?
+  managerId   Int?
+  projectIds  String?  // number[]
+  buildingIds String?  // number[]
+  companyId   Int
+  sort        Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parent   Department? @relation("DeptHierarchy", fields: [parentId], references: [id])
+  children Department[] @relation("DeptHierarchy")
+  employees Employee[]
+}
+
+model Role {
+  id        Int      @id @default(autoincrement())
+  name      String
+  code      String
+  dataScope String
+  menuIds   String?
+  companyId Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees Employee[]
+}
+
+model Employee {
+  id            Int      @id @default(autoincrement())
+  name          String
+  phone         String   @unique
+  password      String
+  projectId     Int?
+  departmentId  Int?
+  position      String
+  isLeader      Boolean  @default(false)
+  businessTypes String?
+  roleId        Int
+  companyId     Int
+  status        String   @default("active")
+  lastLoginAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id])
+  role       Role       @relation(fields: [roleId], references: [id])
+  project    Project?   @relation(fields: [projectId], references: [id])
+}
+
+// 超级管理员(跨公司)
+model SuperAdmin {
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========== 基础信息 ==========
+
+model Project {
+  id         Int      @id @default(autoincrement())
+  name         String
+  location     String?
+  area         Decimal
+  greenArea    Decimal
+  manager      String
+  phone        String
+  buildingIds  String?
+  companyId    Int
+  createdAt    DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  buildings Building[]
+  employees Employee[]
+}
+
+model Building {
+  id        Int      @id @default(autoincrement())
+  name      String
+  area      Decimal
+  manager   String
+  phone     String
+  location  String?
+  projectId Int?
+  companyId Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project?  @relation(fields: [projectId], references: [id])
+  floors    Floor[]
+  rooms     Room[]
+  nfcTags   NfcTag[]
+  devices   Device[]
+  tenants   Tenant[]
+}
+
+model Floor {
+  id         Int      @id @default(autoincrement())
+  buildingId Int
+  name       String
+  sort       Int      @default(0)
+  area       Decimal  @default(0)
+  createdAt  DateTime @default(now())
+
+  building Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  rooms    Room[]
+}
+
+model Room {
+  id            Int      @id @default(autoincrement())
+  name          String
+  roomNumber    String
+  area          Decimal
+  buildingId    Int
+  floorId       Int
+  type          String
+  status        String
+  leasingStatus String
+  companyId     Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  building    Building  @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  floor       Floor     @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tenantRooms TenantRoom[]
+  bills       Bill[]
+  workOrders  WorkOrder[]
+}
+
+// ========== 租客管理 ==========
+
+model Tenant {
+  id            Int      @id @default(autoincrement())
+  type          String   // 租客/业主
+  companyName   String
+  moveInDate    DateTime
+  leaseStartDate DateTime
+  leaseEndDate  DateTime
+  buildingId    Int
+  totalArea    Decimal
+  companyId     Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  building    Building    @relation(fields: [buildingId], references: [id])
+  tenantRooms TenantRoom[]
+  tenantUsers TenantUserRelation[]
+  bills       Bill[]
+  workOrders  WorkOrder[]
+  complaints  Complaint[]
+}
+
+model TenantRoom {
+  id        Int     @id @default(autoincrement())
+  tenantId  Int
+  roomId    Int
+  leaseArea Decimal
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, roomId])
+}
+
+model TenantUser {
+  id        Int      @id @default(autoincrement())
+  phone     String   @unique
+  password  String
+  name      String
+  companyId Int
+  status    String   @default("active")
+  lastLoginAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  relations TenantUserRelation[]
+}
+
+model TenantUserRelation {
+  id          Int   @id @default(autoincrement())
+  tenantUserId Int
+  tenantId    Int
+  buildingId  Int
+  isAdmin     Boolean @default(false)
+  createdAt   DateTime @default(now())
+
+  tenantUser TenantUser @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantUserId, tenantId])
+}
+
+// Building 需要添加 tenants 关联
+// 在 Building 中通过 Tenant.buildingId 已关联
+
+// ========== 收费管理 ==========
+
+model Account {
+  id           Int      @id @default(autoincrement())
+  name         String
+  bankName     String
+  accountNumber String
+  companyId    Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  billRules BillRule[]
+  bills     Bill[]
+}
+
+model BillRule {
+  id              Int      @id @default(autoincrement())
+  name            String
+  code            String
+  feeType         String
+  amount          Decimal
+  discountRate    Decimal  @default(0)
+  discountAmount  Decimal  @default(0)
+  tenantIds       String?
+  buildingIds     String?
+  roomIds         String?
+  periodStartDate DateTime
+  periodEndDate   DateTime
+  accountId       Int
+  companyId       Int
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id])
+  bills   Bill[]
+}
+
+model Bill {
+  id                Int      @id @default(autoincrement())
+  code              String   @unique
+  ruleId            Int
+  ruleName          String
+  projectId         Int?
+  buildingId        Int
+  roomId            Int
+  tenantId          Int
+  feeType           String
+  period            String
+  accountReceivable Decimal
+  amountPaid        Decimal  @default(0)
+  amountDue         Decimal
+  status            String   @default("open")
+  paymentStatus     String
+  dueDate           DateTime
+  accountId         Int
+  remark            String?
+  companyId         Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  room     Room     @relation(fields: [roomId], references: [id])
+  account  Account  @relation(fields: [accountId], references: [id])
+  rule     BillRule @relation(fields: [ruleId], references: [id])
+  payments PaymentBill[]
+  refunds  Refund[]
+}
+
+model Payment {
+  id             Int      @id @default(autoincrement())
+  code           String   @unique
+  tenantId       Int
+  paidAt         DateTime
+  payer          String
+  totalAmount    Decimal
+  paymentMethod  String
+  paymentStatus  String
+  transactionId  String?
+  operatorId     Int
+  companyId      Int
+  createdAt      DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bills   PaymentBill[]
+}
+
+model PaymentBill {
+  id             Int     @id @default(autoincrement())
+  paymentId      Int
+  billId         Int
+  billCode       String
+  amount         Decimal
+  amountDueBefore Decimal
+  amountDueAfter  Decimal
+  createdAt      DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  bill    Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
+}
+
+model Refund {
+  id         Int      @id @default(autoincrement())
+  code       String   @unique
+  billId     Int
+  tenantId   Int
+  refundAt   DateTime
+  refunder   String
+  operatorId Int
+  amount     Decimal
+  reason     String
+  remark     String?
+  companyId  Int
+  createdAt  DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bill    Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
+}
+
+model PaymentReminder {
+  id             Int      @id @default(autoincrement())
+  code           String   @unique
+  billIds        String
+  method         String
+  content        String?
+  notifyTargetId Int
+  status         String
+  sentAt         DateTime
+  operatorId     Int
+  companyId      Int
+  createdAt      DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ========== 工单管理 ==========
+
+
+model WorkOrderType {
+  id        Int      @id @default(autoincrement())
+  name      String
+  sort      Int      @default(0)
+  companyId Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model WorkOrder {
+  id           Int      @id @default(autoincrement())
+  code         String   @unique
+  projectId    Int?
+  buildingId   Int
+  roomId       Int
+  tenantId     Int
+  reporterId   Int
+  source       String
+  type         String
+  title        String
+  description  String
+  images       String?
+  location     String?
+  severity     String?
+  taskId       Int?
+  tagId        String?
+  status       String
+  assignedAt   DateTime?
+  assignedTo   Int?
+  respondedAt  DateTime?
+  completedAt  DateTime?
+  evaluatedAt  DateTime?
+  companyId    Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tenant  Tenant @relation(fields: [tenantId], references: [id])
+  room    Room   @relation(fields: [roomId], references: [id])
+}
+
+// ========== 巡检管理 ==========
+
+model NfcTag {
+  id             Int      @id @default(autoincrement())
+  tagId          String
+  location       String
+  description    String?
+  inspectionType String
+  buildingId     Int
+  companyId      Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  building Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+}
+
+model InspectionPlan {
+  id             Int      @id @default(autoincrement())
+  name           String
+  inspectionType String
+  cycleType      String
+  cycleValue     Int      @default(1)
+  userIds        String?
+  route          String?
+  checkItems     String?
+  companyId      Int
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tasks   InspectionTask[]
+}
+
+model InspectionTask {
+  id             Int      @id @default(autoincrement())
+  code           String   @unique
+  planId         Int
+  planName       String
+  inspectionType String
+  scheduledDate  DateTime
+  userIds        String?
+  route          String?
+  checkItems     String?
+  status         String
+  startedAt      DateTime?
+  completedAt    DateTime?
+  completedBy    Int?
+  companyId      Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plan     InspectionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  records  InspectionRecord[]
+}
+
+model InspectionRecord {
+  id             Int      @id @default(autoincrement())
+  taskId         Int
+  taskCode       String
+  inspectionType String
+  tagId          String
+  location       String
+  checkedAt      DateTime
+  checkedBy      Int
+  status         String
+  checkItems     String?
+  companyId      Int
+  createdAt      DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  task    InspectionTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+// ========== 公告 ==========
+
+model Announcement {
+  id          Int      @id @default(autoincrement())
+  title       String
+  content     String
+  images      String?
+  scope       String
+  buildingIds  String?
+  publishTime DateTime?
+  status      String
+  readCount   Int      @default(0)
+  companyId   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ========== 卫生吐槽 ==========
+
+model Complaint {
+  id          Int      @id @default(autoincrement())
+  projectId   Int?
+  buildingId  Int
+  tenantId    Int
+  reporterId  Int
+  location    String
+  description String
+  images      String?
+  status      String
+  assignedTo  Int?
+  handledBy   Int?
+  handledAt   DateTime?
+  result      String?
+  resultImages String?
+  companyId   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tenant  Tenant @relation(fields: [tenantId], references: [id])
+}
+
+// ========== 设备 ==========
+
+model Device {
+  id              Int      @id @default(autoincrement())
+  code            String
+  name            String
+  type            String
+  location        String
+  buildingId      Int
+  commissionedDate DateTime
+  supplier        String
+  contactPhone    String?
+  tagId           String?
+  status          String
+  companyId       Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  building    Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  maintenances DeviceMaintenance[]
+}
+
+model DeviceMaintenance {
+  id           Int      @id @default(autoincrement())
+  code         String
+  deviceId     Int
+  type         String
+  date         DateTime
+  maintainerId Int
+  cost         Decimal  @default(0)
+  content      String
+  images       String?
+  remark       String?
+  companyId    Int
+  createdAt    DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  device  Device  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+}
+
+// ========== 系统配置 ==========
+
+model PrintTemplate {
+  id         Int      @id @default(autoincrement())
+  name       String
+  type       String
+  templateUrl String?
+  fields     String?
+  companyId  Int
+  status     String   @default("active")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model Dictionary {
+  id        Int      @id @default(autoincrement())
+  type      String
+  name      String
+  value     String
+  sort      Int      @default(0)
+  companyId Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
