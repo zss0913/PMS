@@ -78,6 +78,10 @@ export async function POST(request: NextRequest) {
         companyId: employee.companyId,
         type: 'employee',
         roleId: employee.roleId,
+        projectId: employee.projectId,
+        departmentId: employee.departmentId,
+        dataScope: employee.role?.dataScope ?? 'all',
+        isLeader: employee.isLeader,
       })
       const res = NextResponse.json({
         success: true,

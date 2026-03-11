@@ -10,8 +10,18 @@ export type AuthUser = {
   phone: string
   name: string
   companyId: number
-  type: 'super_admin' | 'employee'
+  type: 'super_admin' | 'employee' | 'tenant'
   roleId?: number
+  /** 员工项目ID，用于数据权限(本项目) */
+  projectId?: number | null
+  /** 员工部门ID，用于数据权限(本部门) */
+  departmentId?: number | null
+  /** 角色数据权限: all | project | department | self */
+  dataScope?: string
+  /** 是否组长，用于待派工单可见 */
+  isLeader?: boolean
+  /** 租客关联列表 tenantId, buildingId, isAdmin */
+  relations?: { tenantId: number; buildingId: number; isAdmin: boolean }[]
 }
 
 export async function createToken(user: AuthUser): Promise<string> {
@@ -22,6 +32,11 @@ export async function createToken(user: AuthUser): Promise<string> {
     companyId: user.companyId,
     type: user.type,
     roleId: user.roleId,
+    projectId: user.projectId ?? null,
+    departmentId: user.departmentId ?? null,
+    dataScope: user.dataScope ?? 'all',
+    isLeader: user.isLeader ?? false,
+    relations: user.relations ?? null,
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setExpirationTime('7d')
@@ -41,6 +56,14 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
 export async function getAuthUser(): Promise<AuthUser | null> {
   const cookieStore = await cookies()
   const token = cookieStore.get('pms_token')?.value
+  if (!token) return null
+  return verifyToken(token)
+}
+
+/** 小程序端：从 Authorization: Bearer token 获取用户 */
+export async function getMpAuthUser(request: Request): Promise<AuthUser | null> {
+  const auth = request.headers.get('Authorization')
+  const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null
   if (!token) return null
   return verifyToken(token)
 }

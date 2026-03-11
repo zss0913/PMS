@@ -169,6 +169,102 @@ async function main() {
     })
   }
 
+  let tenantUser = await prisma.tenantUser.findFirst({ where: { companyId: company.id } })
+  if (!tenantUser) {
+    tenantUser = await prisma.tenantUser.create({
+      data: {
+        phone: '13800138010',
+        password: hashedPassword,
+        name: '租客用户',
+        companyId: company.id,
+        status: 'active',
+      },
+    })
+    await prisma.tenantUserRelation.create({
+      data: {
+        tenantUserId: tenantUser.id,
+        tenantId: tenant.id,
+        buildingId: building.id,
+        isAdmin: true,
+      },
+    })
+    console.log('TenantUser created: 13800138010 / 密码: 123456')
+  }
+
+  let workOrderType = await prisma.workOrderType.findFirst({ where: { companyId: company.id } })
+  if (!workOrderType) {
+    workOrderType = await prisma.workOrderType.create({
+      data: {
+        name: '报修',
+        sort: 0,
+        enabled: true,
+        companyId: company.id,
+      },
+    })
+    await prisma.workOrderType.create({
+      data: {
+        name: '投诉',
+        sort: 1,
+        enabled: true,
+        companyId: company.id,
+      },
+    })
+  }
+
+  const workOrderCount = await prisma.workOrder.count({ where: { companyId: company.id } })
+  if (workOrderCount === 0) {
+    await prisma.workOrder.create({
+      data: {
+        code: 'WO' + Date.now().toString(36).toUpperCase(),
+        buildingId: building.id,
+        roomId: room.id,
+        tenantId: tenant.id,
+        reporterId: employee.id,
+        source: 'PC端',
+        type: '报修',
+        title: '测试工单-空调不制冷',
+        description: '101室空调不制冷，需要维修',
+        status: '待派单',
+        companyId: company.id,
+      },
+    })
+  }
+
+  let inspectionPlan = await prisma.inspectionPlan.findFirst({ where: { companyId: company.id } })
+  if (!inspectionPlan) {
+    inspectionPlan = await prisma.inspectionPlan.create({
+      data: {
+        name: '每日工程巡检',
+        inspectionType: '工程',
+        cycleType: '每天',
+        cycleValue: 1,
+        userIds: JSON.stringify([employee.id]),
+        checkItems: JSON.stringify([{ name: '电梯运行', required: true }, { name: '照明检查', required: false }]),
+        status: 'active',
+        companyId: company.id,
+      },
+    })
+  }
+
+  const taskCount = await prisma.inspectionTask.count({ where: { companyId: company.id } })
+  if (taskCount === 0) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    await prisma.inspectionTask.create({
+      data: {
+        code: 'IT' + Date.now().toString(36).toUpperCase(),
+        planId: inspectionPlan.id,
+        planName: inspectionPlan.name,
+        inspectionType: inspectionPlan.inspectionType,
+        scheduledDate: today,
+        userIds: inspectionPlan.userIds,
+        checkItems: inspectionPlan.checkItems,
+        status: '待执行',
+        companyId: company.id,
+      },
+    })
+  }
+
   console.log('Seed completed!')
 }
 

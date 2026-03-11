@@ -26,11 +26,12 @@ export default async function BuildingsPage() {
   const projects = companyId > 0
     ? await prisma.project.findMany({ where: { companyId } })
     : await prisma.project.findMany()
+  const buildingsData = buildings.map((b) => ({ ...b, area: Number(b.area) }))
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-6">楼宇管理</h1>
       <BuildingList
-        buildings={buildings}
+        buildings={buildingsData}
         projects={projects}
         isSuperAdmin={companyId === 0}
       />

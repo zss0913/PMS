@@ -6,7 +6,7 @@
 
 - **前端**: Next.js 16, React 19, Tailwind CSS 4
 - **后端**: Next.js API Routes
-- **数据库**: SQLite (开发) / MySQL (生产)
+- **数据库**: SQLite (本地开发) / MySQL (生产上线)
 - **ORM**: Prisma
 - **认证**: JWT (jose) + HttpOnly Cookie
 
@@ -18,34 +18,23 @@
 npm install
 ```
 
-### 2. 启动 MySQL
+### 2. 配置环境变量
 
-使用 Docker 启动 MySQL（在 PMS 根目录）：
-
-```bash
-cd ..
-docker-compose up -d
-```
-
-或使用本机已安装的 MySQL，确保创建数据库 `pms`。
-
-### 3. 配置环境变量
-
-复制 `.env.example` 为 `.env`：
+复制 `.env.example` 为 `.env`，本地开发默认使用 SQLite（无需 Docker）：
 
 ```
-DATABASE_URL="mysql://root:root@localhost:3306/pms"
+DATABASE_URL="file:./dev.db"
 JWT_SECRET="your-secret-key"
 ```
 
-### 4. 初始化数据库
+### 3. 初始化数据库
 
 ```bash
 npm run db:push
 npm run db:seed
 ```
 
-### 5. 启动开发服务器
+### 4. 启动开发服务器
 
 ```bash
 npm run dev
@@ -60,12 +49,13 @@ npm run dev
 | 超级管理员 | 13800138000 | 123456 |
 | 物业管理员 | 13800138002 | 123456 |
 
-## 生产部署
+## 生产上线（切换 MySQL）
 
-1. 确保 MySQL 已启动
-2. 配置 `.env` 中的 `DATABASE_URL`
-3. 运行 `npm run db:push` 和 `npm run db:seed`
-4. 构建并启动: `npm run build && npm run start`
+1. 修改 `prisma/schema.prisma` 中 `provider` 为 `mysql`
+2. 修改 `.env` 中 `DATABASE_URL` 为 `mysql://root:root@localhost:3306/pms`
+3. 启动 MySQL（`docker-compose up -d` 或本机 MySQL）
+4. 运行 `npm run db:push` 和 `npm run db:seed`
+5. 构建并启动: `npm run build && npm run start`
 
 ## 项目结构
 

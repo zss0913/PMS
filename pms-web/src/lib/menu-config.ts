@@ -1,0 +1,33 @@
+/** 菜单权限配置，用于角色菜单权限选择 */
+export const MENU_OPTIONS = [
+  { id: 1, label: '首页', path: '/' },
+  { id: 2, label: '楼宇管理', path: '/buildings' },
+  { id: 3, label: '项目管理', path: '/projects' },
+  { id: 4, label: '房源管理', path: '/rooms' },
+  { id: 5, label: '租客管理', path: '/tenants' },
+  { id: 6, label: '账单规则', path: '/bill-rules' },
+  { id: 7, label: '账单管理', path: '/bills' },
+  { id: 8, label: '缴纳记录', path: '/payments' },
+  { id: 9, label: '退费记录', path: '/refunds' },
+  { id: 10, label: '催缴管理', path: '/reminders' },
+  { id: 11, label: 'NFC标签', path: '/nfc-tags' },
+  { id: 12, label: '设备台账', path: '/devices' },
+  { id: 13, label: '工单类型', path: '/work-order-types' },
+  { id: 14, label: '工单管理', path: '/work-orders' },
+  { id: 15, label: '巡检计划', path: '/inspection-plans' },
+  { id: 16, label: '巡检任务', path: '/inspection-tasks' },
+  { id: 17, label: '巡检记录', path: '/inspection-records' },
+  { id: 18, label: '卫生吐槽', path: '/complaints' },
+  { id: 19, label: '公告管理', path: '/announcements' },
+  { id: 20, label: '物业公司', path: '/companies' },
+  { id: 21, label: '部门管理', path: '/departments' },
+  { id: 22, label: '角色管理', path: '/roles' },
+  { id: 23, label: '员工管理', path: '/employees' },
+]
+
+export const DATA_SCOPE_OPTIONS = [
+  { value: 'all', label: '全部' },
+  { value: 'project', label: '本项目' },
+  { value: 'department', label: '本部门' },
+  { value: 'self', label: '仅本人' },
+] as const
