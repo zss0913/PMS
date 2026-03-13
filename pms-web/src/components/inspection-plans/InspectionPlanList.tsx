@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { InspectionPlanForm } from './InspectionPlanForm'
 
@@ -80,6 +82,8 @@ export function InspectionPlanList() {
 
   const list = data?.list ?? []
   const employees = data?.employees ?? []
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(list, 15)
   const inspectionTypes = data?.inspectionTypes ?? ['工程', '安保', '设备', '绿化']
   const cycleTypes = data?.cycleTypes ?? ['每天', '每周', '每月']
 
@@ -127,7 +131,7 @@ export function InspectionPlanList() {
                   </td>
                 </tr>
               ) : (
-                list.map((p) => (
+                paginatedItems.map((p) => (
                   <tr
                     key={p.id}
                     className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -169,6 +173,15 @@ export function InspectionPlanList() {
           <div className="p-12 text-center text-slate-500">
             暂无巡检计划，点击「新建计划」添加
           </div>
+        )}
+        {!loading && list.length > 0 && (
+          <Pagination
+            total={total}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+          />
         )}
       </div>
 

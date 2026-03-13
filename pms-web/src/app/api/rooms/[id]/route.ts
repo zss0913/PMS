@@ -3,6 +3,23 @@ import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
 
+// 自动计算楼层面积（根据该楼层所有房源的面积总和）
+async function recalculateFloorArea(floorId: number) {
+  try {
+    const rooms = await prisma.room.findMany({
+      where: { floorId },
+      select: { area: true },
+    })
+    const totalArea = rooms.reduce((sum, room) => sum + Number(room.area), 0)
+    await prisma.floor.update({
+      where: { id: floorId },
+      data: { area: totalArea },
+    })
+  } catch (e) {
+    console.error('计算楼层面积失败:', e)
+  }
+}
+
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
   roomNumber: z.string().min(1).optional(),
@@ -37,6 +54,11 @@ export async function PUT(
     }
     const body = await request.json()
     const parsed = updateSchema.parse(body)
+
+    // 记录原楼层ID，用于后续面积重算
+    const originalFloorId = existing.floorId
+    const newFloorId = parsed.floorId
+
     const room = await prisma.room.update({
       where: { id },
       data: parsed,
@@ -46,6 +68,17 @@ export async function PUT(
         _count: { select: { tenantRooms: true } },
       },
     })
+
+    // 重新计算楼层面积
+    if (newFloorId && newFloorId !== originalFloorId) {
+      // 如果楼层变更，需要重新计算原楼层和新楼层的面积
+      await recalculateFloorArea(originalFloorId)
+      await recalculateFloorArea(newFloorId)
+    } else {
+      // 否则只重新计算当前楼层面积
+      await recalculateFloorArea(originalFloorId)
+    }
+
     return NextResponse.json({ success: true, data: room })
   } catch (e) {
     if (e instanceof z.ZodError) {
@@ -80,7 +113,15 @@ export async function DELETE(
     if (companyId > 0 && existing.companyId !== companyId) {
       return NextResponse.json({ success: false, message: '无权限' }, { status: 403 })
     }
+
+    // 记录楼层ID用于后续面积重算
+    const floorId = existing.floorId
+
     await prisma.room.delete({ where: { id } })
+
+    // 重新计算楼层面积
+    await recalculateFloorArea(floorId)
+
     return NextResponse.json({ success: true })
   } catch (e) {
     console.error(e)

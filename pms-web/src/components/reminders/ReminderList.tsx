@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { Plus } from 'lucide-react'
 
 type Reminder = {
@@ -48,6 +50,10 @@ export function ReminderList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     fetchData()
   }, [])
 
+  const list = data?.list ?? []
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(list, 15)
+
   if (isSuperAdmin) {
     return (
       <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-6 text-amber-800 dark:text-amber-200">
@@ -72,8 +78,6 @@ export function ReminderList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       </div>
     )
   }
-
-  const list = data?.list ?? []
 
   const formatDateTime = (s: string) => {
     try {
@@ -113,7 +117,7 @@ export function ReminderList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             </tr>
           </thead>
           <tbody>
-            {list.map((r) => (
+            {paginatedItems.map((r) => (
               <tr
                 key={r.id}
                 className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -140,6 +144,15 @@ export function ReminderList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <div className="p-12 text-center text-slate-500">
           暂无催缴记录，点击「新建催缴」或从账单管理发起催缴
         </div>
+      )}
+      {list.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
 
       {createOpen && (

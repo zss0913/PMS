@@ -1,14 +1,18 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
+import { AppLink } from '@/components/AppLink'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import {
   Plus,
   Pencil,
   Trash2,
   Search,
   Users,
+  Upload,
 } from 'lucide-react'
+import { RoomBatchImportModal } from './RoomBatchImportModal'
 import { formatDateTime } from '@/lib/utils'
 
 type Room = {
@@ -53,6 +57,7 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [showBatchImport, setShowBatchImport] = useState(false)
   const [filters, setFilters] = useState({
     name: '',
     roomNumber: '',
@@ -113,6 +118,9 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
     e.preventDefault()
     fetchRooms()
   }
+
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(rooms, 15)
 
   if (loading && rooms.length === 0) {
     return (
@@ -198,13 +206,21 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
             <Search className="w-4 h-4" />
             筛选
           </button>
-          <Link
+          <AppLink
             href="/rooms/new"
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
           >
             <Plus className="w-4 h-4" />
             新增房源
-          </Link>
+          </AppLink>
+          <button
+            type="button"
+            onClick={() => setShowBatchImport(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500"
+          >
+            <Upload className="w-4 h-4" />
+            批量导入
+          </button>
         </div>
       </form>
       <div className="overflow-x-auto">
@@ -225,7 +241,7 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
             </tr>
           </thead>
           <tbody>
-            {rooms.map((r) => (
+            {paginatedItems.map((r) => (
               <tr
                 key={r.id}
                 className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -242,20 +258,20 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
                 <td className="p-4">{formatDateTime(r.createdAt)}</td>
                 <td className="p-4">
                   <div className="flex gap-2">
-                    <Link
+                    <AppLink
                       href={`/rooms/${r.id}/edit`}
                       className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
                       title="编辑"
                     >
                       <Pencil className="w-4 h-4" />
-                    </Link>
-                    <Link
-                      href={`/tenants?roomId=${r.id}`}
+                    </AppLink>
+                    <AppLink
+                      href={`/rooms/${r.id}/tenants`}
                       className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
-                      title="查看租客列表"
+                      title="查看该房源租客列表"
                     >
                       <Users className="w-4 h-4" />
-                    </Link>
+                    </AppLink>
                     <button
                       onClick={() => handleDelete(r.id)}
                       disabled={deletingId === r.id}
@@ -275,6 +291,22 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
         <div className="p-12 text-center text-slate-500">
           暂无数据，点击「新增房源」添加
         </div>
+      )}
+      {rooms.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
+      )}
+      {showBatchImport && (
+        <RoomBatchImportModal
+          buildings={buildings}
+          onClose={() => setShowBatchImport(false)}
+          onSuccess={fetchRooms}
+        />
       )}
     </div>
   )

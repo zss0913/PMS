@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { Plus, Pencil, Trash2, Search, UserCheck, UserX } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 import { EmployeeForm, type EmployeeFormData } from './EmployeeForm'
@@ -21,6 +23,7 @@ export type Employee = {
   project?: { name: string } | null
   department?: { name: string } | null
   role?: { name: string } | null
+  company?: { name: string } | null
 }
 
 type Project = { id: number; name: string }
@@ -37,9 +40,11 @@ type Props = {
 }
 
 const BUSINESS_TYPE_LABELS: Record<string, string> = {
-  报修: '报修',
-  巡检: '巡检',
+  工程: '工程',
+  安保: '安保',
+  绿化: '绿化',
   设备: '设备',
+  保洁: '保洁',
 }
 
 function parseBusinessTypes(val: string | null): string[] {
@@ -93,6 +98,8 @@ export function EmployeeList({
       e.department?.name?.includes(keyword) ||
       e.role?.name?.includes(keyword)
   )
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(filtered, 15)
 
   const handleAdd = () => {
     setEditingEmployee(null)
@@ -182,6 +189,7 @@ export function EmployeeList({
         isLeader: editingEmployee.isLeader,
         businessTypes: parseBusinessTypes(editingEmployee.businessTypes),
         roleId: editingEmployee.roleId,
+        companyId: editingEmployee.companyId,
       }
     : undefined
 
@@ -218,26 +226,25 @@ export function EmployeeList({
               <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
                 <th className="text-left p-4 font-medium">姓名</th>
                 <th className="text-left p-4 font-medium">手机号</th>
-                <th className="text-left p-4 font-medium">所属项目</th>
+                <th className="text-left p-4 font-medium">所属公司</th>
                 <th className="text-left p-4 font-medium">所属部门</th>
                 <th className="text-left p-4 font-medium">岗位</th>
                 <th className="text-left p-4 font-medium">是否组长</th>
                 <th className="text-left p-4 font-medium">管理业务类型</th>
                 <th className="text-left p-4 font-medium">所属角色</th>
                 <th className="text-left p-4 font-medium">状态</th>
-                <th className="text-left p-4 font-medium">最后登录</th>
                 <th className="text-left p-4 font-medium w-36">操作</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((e) => (
+              {paginatedItems.map((e) => (
                 <tr
                   key={e.id}
                   className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
                 >
                   <td className="p-4 font-medium">{e.name}</td>
                   <td className="p-4">{e.phone}</td>
-                  <td className="p-4">{e.project?.name || '-'}</td>
+                  <td className="p-4">{e.company?.name || '-'}</td>
                   <td className="p-4">{e.department?.name || '-'}</td>
                   <td className="p-4">{e.position}</td>
                   <td className="p-4">{e.isLeader ? '是' : '否'}</td>
@@ -260,7 +267,6 @@ export function EmployeeList({
                       {e.status === 'active' ? '启用' : '禁用'}
                     </span>
                   </td>
-                  <td className="p-4">{e.lastLoginAt ? formatDateTime(e.lastLoginAt) : '-'}</td>
                   <td className="p-4">
                     <div className="flex gap-2">
                       <button
@@ -303,6 +309,15 @@ export function EmployeeList({
         <div className="p-12 text-center text-slate-500">
           暂无数据，点击「新增员工」添加
         </div>
+      )}
+      {!loading && filtered.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
       <EmployeeForm
         open={formOpen}

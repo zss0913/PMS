@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
+import { AppLink } from '@/components/AppLink'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { Search, Eye, UserPlus } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 
@@ -85,6 +87,8 @@ export function WorkOrderList() {
   const list = data?.list ?? []
   const employees = data?.employees ?? []
   const statusOptions = data?.statusOptions ?? []
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(list, 15)
 
   return (
     <div className="space-y-4">
@@ -107,12 +111,12 @@ export function WorkOrderList() {
               </select>
             </div>
           </div>
-          <Link
+          <AppLink
             href="/work-orders/new"
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
           >
             新建工单
-          </Link>
+          </AppLink>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -138,18 +142,18 @@ export function WorkOrderList() {
                   </td>
                 </tr>
               ) : (
-                list.map((wo) => (
+                paginatedItems.map((wo) => (
                   <tr
                     key={wo.id}
                     className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
                   >
                     <td className="p-4">
-                      <Link
+                      <AppLink
                         href={`/work-orders/${wo.id}`}
                         className="font-medium text-blue-600 hover:underline"
                       >
                         {wo.code}
-                      </Link>
+                      </AppLink>
                     </td>
                     <td className="p-4">{wo.title}</td>
                     <td className="p-4">{wo.type}</td>
@@ -161,13 +165,13 @@ export function WorkOrderList() {
                     <td className="p-4">{formatDateTime(wo.createdAt)}</td>
                     <td className="p-4">
                       <div className="flex gap-2">
-                        <Link
+                        <AppLink
                           href={`/work-orders/${wo.id}`}
                           className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded"
                           title="查看详情"
                         >
                           <Eye className="w-4 h-4" />
-                        </Link>
+                        </AppLink>
                         {wo.status === '待派单' && (
                           <button
                             onClick={() => {
@@ -192,6 +196,15 @@ export function WorkOrderList() {
           <div className="p-12 text-center text-slate-500">
             暂无工单，点击「新建工单」添加
           </div>
+        )}
+        {!loading && list.length > 0 && (
+          <Pagination
+            total={total}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+          />
         )}
       </div>
 

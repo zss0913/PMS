@@ -3,6 +3,23 @@ import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
 
+// 自动计算楼层面积（根据该楼层所有房源的面积总和）
+async function recalculateFloorArea(floorId: number) {
+  try {
+    const rooms = await prisma.room.findMany({
+      where: { floorId },
+      select: { area: true },
+    })
+    const totalArea = rooms.reduce((sum, room) => sum + Number(room.area), 0)
+    await prisma.floor.update({
+      where: { id: floorId },
+      data: { area: totalArea },
+    })
+  } catch (e) {
+    console.error('计算楼层面积失败:', e)
+  }
+}
+
 const createSchema = z.object({
   name: z.string().min(1, '请输入房源名称'),
   roomNumber: z.string().min(1, '请输入房号'),
@@ -84,6 +101,10 @@ export async function POST(request: NextRequest) {
         _count: { select: { tenantRooms: true } },
       },
     })
+
+    // 自动计算楼层面积
+    await recalculateFloorArea(parsed.floorId)
+
     return NextResponse.json({ success: true, data: room })
   } catch (e) {
     if (e instanceof z.ZodError) {

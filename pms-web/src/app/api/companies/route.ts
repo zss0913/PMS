@@ -28,6 +28,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const parsed = createSchema.parse(body)
 
+    // 检查公司名称是否已存在
+    const existing = await prisma.company.findFirst({
+      where: { name: parsed.name },
+    })
+    if (existing) {
+      return NextResponse.json({ success: false, message: '公司名称已存在请重新输入' }, { status: 400 })
+    }
+
     const company = await prisma.company.create({
       data: {
         name: parsed.name,

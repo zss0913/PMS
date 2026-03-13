@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { Plus, Pencil, Trash2, Search, Power, PowerOff } from 'lucide-react'
 import { BillRuleForm } from './BillRuleForm'
 
@@ -126,6 +128,17 @@ export function BillRuleList() {
     fetchData()
   }
 
+  const list = data?.list ?? []
+  const filtered = list.filter(
+    (r) =>
+      !keyword ||
+      r.name.includes(keyword) ||
+      r.code.includes(keyword) ||
+      FEE_TYPE_LABELS[r.feeType]?.includes(keyword)
+  )
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(filtered, 15)
+
   const getScopeText = (rule: BillRule) => {
     const parts: string[] = []
     if (rule.tenantIds?.length) {
@@ -161,15 +174,6 @@ export function BillRuleList() {
       </div>
     )
   }
-
-  const list = data?.list ?? []
-  const filtered = list.filter(
-    (r) =>
-      !keyword ||
-      r.name.includes(keyword) ||
-      r.code.includes(keyword) ||
-      FEE_TYPE_LABELS[r.feeType]?.includes(keyword)
-  )
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -211,7 +215,7 @@ export function BillRuleList() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r) => (
+            {paginatedItems.map((r) => (
               <tr
                 key={r.id}
                 className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -272,6 +276,15 @@ export function BillRuleList() {
         <div className="p-12 text-center text-slate-500">
           暂无数据，点击「新增规则」添加
         </div>
+      )}
+      {filtered.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
       {formOpen && (
         <BillRuleForm

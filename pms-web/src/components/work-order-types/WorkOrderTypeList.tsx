@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { Plus, Pencil, Trash2, Search } from 'lucide-react'
 import { WorkOrderTypeForm } from './WorkOrderTypeForm'
 
@@ -38,6 +40,8 @@ export function WorkOrderTypeList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const filtered = list.filter(
     (t) => !keyword || t.name.includes(keyword)
   )
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(filtered, 15)
 
   const handleDelete = async (item: WorkOrderType) => {
     if (!confirm(`确定删除工单类型「${item.name}」？`)) return
@@ -120,7 +124,7 @@ export function WorkOrderTypeList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 </td>
               </tr>
             ) : (
-              filtered.map((t) => (
+              paginatedItems.map((t) => (
                 <tr
                   key={t.id}
                   className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -167,6 +171,15 @@ export function WorkOrderTypeList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <div className="p-12 text-center text-slate-500">
           暂无数据，点击「新增工单类型」添加
         </div>
+      )}
+      {!loading && filtered.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
       {formOpen && (
         <WorkOrderTypeForm

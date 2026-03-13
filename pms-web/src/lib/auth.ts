@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
+import { prisma } from '@/lib/prisma'
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'pms-dev-secret-key-2025'
@@ -57,7 +58,29 @@ export async function getAuthUser(): Promise<AuthUser | null> {
   const cookieStore = await cookies()
   const token = cookieStore.get('pms_token')?.value
   if (!token) return null
-  return verifyToken(token)
+  const user = await verifyToken(token)
+  if (!user) return null
+
+  // 从数据库同步最新姓名，确保员工账号修改姓名后侧边栏能及时更新
+  if (user.type === 'employee') {
+    const employee = await prisma.employee.findUnique({
+      where: { id: user.id },
+      select: { name: true },
+    })
+    if (employee) {
+      user.name = employee.name
+    }
+  } else if (user.type === 'super_admin') {
+    const superAdmin = await prisma.superAdmin.findUnique({
+      where: { id: user.id },
+      select: { name: true },
+    })
+    if (superAdmin) {
+      user.name = superAdmin.name
+    }
+  }
+
+  return user
 }
 
 /** 小程序端：从 Authorization: Bearer token 获取用户 */

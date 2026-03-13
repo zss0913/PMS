@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
+import { AppLink } from '@/components/AppLink'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import {
   Plus,
   Pencil,
@@ -65,6 +67,26 @@ export function DepartmentList({
     if (!isSuperAdmin) fetchData()
   }, [isSuperAdmin])
 
+  const list = data?.list ?? []
+  const projects = data?.projects ?? []
+  const buildings = data?.buildings ?? []
+  const filtered = list.filter(
+    (d) =>
+      !keyword ||
+      d.name.includes(keyword) ||
+      d.parent?.name?.includes(keyword) ||
+      d.manager?.name?.includes(keyword)
+  )
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(filtered, 15)
+
+  const getProjectNames = (ids: number[]) => {
+    return ids.map((id) => projects.find((p) => p.id === id)?.name).filter(Boolean).join('、') || '-'
+  }
+  const getBuildingNames = (ids: number[]) => {
+    return ids.map((id) => buildings.find((b) => b.id === id)?.name).filter(Boolean).join('、') || '-'
+  }
+
   const handleDelete = async (id: number) => {
     if (!confirm('确定要删除该部门吗？')) return
     setDeletingId(id)
@@ -108,25 +130,6 @@ export function DepartmentList({
     )
   }
 
-  const list = data?.list ?? []
-  const projects = data?.projects ?? []
-  const buildings = data?.buildings ?? []
-
-  const getProjectNames = (ids: number[]) => {
-    return ids.map((id) => projects.find((p) => p.id === id)?.name).filter(Boolean).join('、') || '-'
-  }
-  const getBuildingNames = (ids: number[]) => {
-    return ids.map((id) => buildings.find((b) => b.id === id)?.name).filter(Boolean).join('、') || '-'
-  }
-
-  const filtered = list.filter(
-    (d) =>
-      !keyword ||
-      d.name.includes(keyword) ||
-      d.parent?.name?.includes(keyword) ||
-      d.manager?.name?.includes(keyword)
-  )
-
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center gap-4">
@@ -142,13 +145,13 @@ export function DepartmentList({
             />
           </div>
         </div>
-        <Link
+        <AppLink
           href="/departments/new"
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
         >
           <Plus className="w-4 h-4" />
           新增部门
-        </Link>
+        </AppLink>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -164,7 +167,7 @@ export function DepartmentList({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((d) => (
+            {paginatedItems.map((d) => (
               <tr
                 key={d.id}
                 className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -177,12 +180,12 @@ export function DepartmentList({
                 <td className="p-4">{d.employeeCount}</td>
                 <td className="p-4">
                   <div className="flex gap-2">
-                    <Link
+                    <AppLink
                       href={`/departments/${d.id}/edit`}
                       className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
                     >
                       <Pencil className="w-4 h-4" />
-                    </Link>
+                    </AppLink>
                     <button
                       onClick={() => handleDelete(d.id)}
                       disabled={deletingId === d.id}
@@ -201,6 +204,15 @@ export function DepartmentList({
         <div className="p-12 text-center text-slate-500">
           暂无数据，点击「新增部门」添加
         </div>
+      )}
+      {filtered.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
     </div>
   )

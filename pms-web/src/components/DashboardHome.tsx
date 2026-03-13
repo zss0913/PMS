@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { TodoCard, CompaniesLink } from './DashboardHomeClient'
 import {
   DollarSign,
   FileText,
@@ -54,6 +54,13 @@ async function getStats(user: AuthUser) {
   const buildingFilter = await getBuildingFilter(user)
   const buildingIdsFilter = buildingFilter.buildingIds?.length ? buildingFilter.buildingIds : null
 
+  // 当前总面积：当前物业公司下所有楼宇的管理面积之和（= 所有房源管理面积之和，与楼宇管理列表的「管理面积」一致）
+  const allRoomsForArea = await prisma.room.findMany({
+    where: { companyId },
+    select: { area: true },
+  })
+  const totalArea = allRoomsForArea.reduce((s, r) => s + Number(r.area), 0)
+
   // 物业费统计：按数据权限过滤楼宇
   const buildings = await prisma.building.findMany({
     where: {
@@ -68,8 +75,6 @@ async function getStats(user: AuthUser) {
     where: { companyId, buildingId: { in: buildingIds } },
     select: { id: true, area: true, status: true },
   })
-
-  const totalArea = buildings.reduce((s, b) => s + Number(b.area), 0)
   const leasedArea = rooms.filter((r) => r.status === '已租').reduce((s, r) => s + Number(r.area), 0)
   const selfUseArea = rooms.filter((r) => r.status === '自用').reduce((s, r) => s + Number(r.area), 0)
 
@@ -118,6 +123,36 @@ async function getStats(user: AuthUser) {
   const billWhere = {
     companyId,
     ...(buildingIds.length > 0 ? { buildingId: { in: buildingIds } } : {}),
+  }
+
+  // 本月按费用类型统计已收款：物业费、水费、电费、其他
+  const paymentBillsThisMonth = await prisma.paymentBill.findMany({
+    where: {
+      payment: {
+        companyId,
+        paidAt: { gte: monthStart, lte: monthEnd },
+        paymentStatus: 'success',
+      },
+    },
+    include: { bill: { select: { feeType: true } } },
+  })
+  const monthFeeByType = {
+    物业费: 0,
+    水费: 0,
+    电费: 0,
+    其他: 0,
+  }
+  for (const pb of paymentBillsThisMonth) {
+    const amt = Number(pb.amount)
+    const ft = pb.bill.feeType
+    if (ft === '物业费') monthFeeByType.物业费 += amt
+    else if (ft === '水费') monthFeeByType.水费 += amt
+    else if (ft === '电费') monthFeeByType.电费 += amt
+    else if (ft === '水电费') {
+      // 水电费按 50/50 拆分到水费和电费，或可全部计入电费，此处拆分为水费+电费各半
+      monthFeeByType.水费 += amt / 2
+      monthFeeByType.电费 += amt / 2
+    } else monthFeeByType.其他 += amt // 租金、其他等
   }
 
   const [allUnpaidBills, payments, refunds, workOrdersThisMonth, inspectionRecordsThisMonth] =
@@ -205,7 +240,7 @@ async function getStats(user: AuthUser) {
   ])
 
   return {
-    // 物业费统计
+    // 物业统计
     totalArea,
     leasedArea,
     selfUseArea,
@@ -223,6 +258,11 @@ async function getStats(user: AuthUser) {
     pendingProcessCount,
     pendingInspectionCount,
     overdueCount: overdueBills.length,
+    // 本月按费用类型
+    monthFeeProperty: monthFeeByType.物业费,
+    monthFeeWater: monthFeeByType.水费,
+    monthFeeElectric: monthFeeByType.电费,
+    monthFeeOther: monthFeeByType.其他,
   }
 }
 
@@ -237,22 +277,26 @@ export async function DashboardHome({ user }: { user: AuthUser }) {
 
       {stats ? (
         <>
-          {/* 物业费统计（顶部） */}
+          {/* 物业统计（顶部） */}
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 mb-6">
-            <h2 className="text-lg font-semibold mb-4">物业费统计</h2>
+            <h2 className="text-lg font-semibold mb-4">物业统计</h2>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
-              <StatCard title="当前总面积" value={`${(stats.totalArea / 10000).toFixed(2)} 万㎡`} icon={Building2} />
-              <StatCard title="租赁面积" value={`${(stats.leasedArea / 10000).toFixed(2)} 万㎡`} icon={Home} />
-              <StatCard title="自用面积" value={`${(stats.selfUseArea / 10000).toFixed(2)} 万㎡`} icon={Home} />
+              <StatCard title="当前总面积" value={formatArea(stats.totalArea)} icon={Building2} />
+              <StatCard title="租赁面积" value={formatArea(stats.leasedArea)} icon={Home} />
+              <StatCard title="自用面积" value={formatArea(stats.selfUseArea)} icon={Home} />
               <StatCard title="在租租户数" value={stats.activeLeasedCount} icon={Users} />
               <StatCard title="在用业主数" value={stats.activeSelfUseCount} icon={Users} />
             </div>
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-700 grid grid-cols-2 md:grid-cols-5 gap-4">
               <StatCard
                 title="物业费实时均价"
                 value={stats.leasedArea > 0 ? `¥${stats.avgFeePerSqm.toFixed(2)}/㎡` : '¥0/㎡'}
                 icon={DollarSign}
               />
+              <StatCard title="本月物业费" value={`¥${stats.monthFeeProperty.toLocaleString()}`} icon={DollarSign} />
+              <StatCard title="本月水费" value={`¥${stats.monthFeeWater.toLocaleString()}`} icon={DollarSign} />
+              <StatCard title="本月电费" value={`¥${stats.monthFeeElectric.toLocaleString()}`} icon={DollarSign} />
+              <StatCard title="本月其他费用" value={`¥${stats.monthFeeOther.toLocaleString()}`} icon={DollarSign} />
             </div>
           </div>
 
@@ -274,24 +318,27 @@ export async function DashboardHome({ user }: { user: AuthUser }) {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <TodoCard href="/work-orders?status=pending" title="待派工单" count={stats.pendingAssignCount} />
               <TodoCard href="/work-orders?status=assigned,processing" title="待处理工单" count={stats.pendingProcessCount} />
-              <TodoCard href="/inspection-tasks?status=pending" title="待巡检任务" count={stats.pendingInspectionCount} icon={ClipboardCheck} />
-              <TodoCard href="/bills?overdue=1" title="逾期账单" count={stats.overdueCount} icon={AlertCircle} />
+              <TodoCard href="/inspection-tasks?status=pending" title="待巡检任务" count={stats.pendingInspectionCount} iconType="clipboard" />
+              <TodoCard href="/bills?overdue=1" title="逾期账单" count={stats.overdueCount} iconType="alert" />
             </div>
           </div>
         </>
       ) : (
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-8 text-center">
           <p className="text-slate-500">超级管理员模式，请选择物业公司或使用员工账号查看数据</p>
-          <Link
-            href="/companies"
-            className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
-          >
-            管理物业公司
-          </Link>
+          <CompaniesLink />
         </div>
       )}
     </div>
   )
+}
+
+/** 面积展示：超过1万用万㎡，否则直接展示数值+㎡ */
+function formatArea(area: number): string {
+  if (area >= 10000) {
+    return `${(area / 10000).toFixed(2)} 万㎡`
+  }
+  return `${Math.round(area)} ㎡`
 }
 
 function StatCard({
@@ -314,27 +361,3 @@ function StatCard({
   )
 }
 
-function TodoCard({
-  href,
-  title,
-  count,
-  icon: Icon = FileText,
-}: {
-  href: string
-  title: string
-  count: number
-  icon?: React.ElementType
-}) {
-  return (
-    <Link
-      href={href}
-      className="flex items-center gap-4 p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition"
-    >
-      <Icon className="w-8 h-8 text-blue-500" />
-      <div>
-        <div className="font-medium">{title}</div>
-        <div className="text-2xl font-bold text-blue-600">{count}</div>
-      </div>
-    </Link>
-  )
-}

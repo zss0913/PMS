@@ -1,6 +1,6 @@
 import { getAuthUser } from '@/lib/auth'
 import { redirect, notFound } from 'next/navigation'
-import Link from 'next/link'
+import { AppLink } from '@/components/AppLink'
 import { ArrowLeft } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { WorkOrderDetail } from '@/components/work-orders/WorkOrderDetail'
@@ -39,13 +39,13 @@ export default async function WorkOrderDetailPage({
   return (
     <div className="p-6">
       <div className="flex items-center gap-4 mb-6">
-        <Link
+        <AppLink
           href="/work-orders"
           className="flex items-center gap-2 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
         >
           <ArrowLeft className="w-4 h-4" />
           返回
-        </Link>
+        </AppLink>
         <h1 className="text-2xl font-bold">工单详情 - {workOrder.code}</h1>
       </div>
       <WorkOrderDetail

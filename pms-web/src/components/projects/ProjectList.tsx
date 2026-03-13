@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
+import { AppLink } from '@/components/AppLink'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { Plus, Pencil, Trash2, Search } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
@@ -55,6 +57,11 @@ export function ProjectList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     if (!isSuperAdmin) fetchData()
   }, [isSuperAdmin])
 
+  const list = data?.list ?? []
+  const filtered = list
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(filtered, 15)
+
   const handleSearch = () => {
     if (!isSuperAdmin) fetchData()
   }
@@ -102,9 +109,6 @@ export function ProjectList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     )
   }
 
-  const list = data?.list ?? []
-  const filtered = list
-
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center gap-4">
@@ -127,13 +131,13 @@ export function ProjectList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             </button>
           </div>
         </div>
-        <Link
+        <AppLink
           href="/projects/new"
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
         >
           <Plus className="w-4 h-4" />
           新增项目
-        </Link>
+        </AppLink>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -151,7 +155,7 @@ export function ProjectList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((p) => (
+            {paginatedItems.map((p) => (
               <tr
                 key={p.id}
                 className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -166,12 +170,12 @@ export function ProjectList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 <td className="p-4">{formatDate(p.createdAt)}</td>
                 <td className="p-4">
                   <div className="flex gap-2">
-                    <Link
+                    <AppLink
                       href={`/projects/${p.id}/edit`}
                       className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
                     >
                       <Pencil className="w-4 h-4" />
-                    </Link>
+                    </AppLink>
                     <button
                       onClick={() => handleDelete(p.id)}
                       disabled={deletingId === p.id}
@@ -190,6 +194,15 @@ export function ProjectList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <div className="p-12 text-center text-slate-500">
           暂无数据，点击「新增项目」添加
         </div>
+      )}
+      {filtered.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
     </div>
   )

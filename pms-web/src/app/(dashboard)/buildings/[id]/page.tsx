@@ -1,7 +1,7 @@
 import { getAuthUser } from '@/lib/auth'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import Link from 'next/link'
+import { AppLink } from '@/components/AppLink'
 import { ArrowLeft, Pencil } from 'lucide-react'
 import { BuildingDetail } from '@/components/buildings/BuildingDetail'
 
@@ -37,21 +37,21 @@ export default async function BuildingDetailPage({
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Link
+          <AppLink
             href="/buildings"
             className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600"
           >
             <ArrowLeft className="w-4 h-4" />
             返回列表
-          </Link>
+          </AppLink>
         </div>
-        <Link
+        <AppLink
           href={`/buildings/${buildingId}/edit`}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
         >
           <Pencil className="w-4 h-4" />
           编辑
-        </Link>
+        </AppLink>
       </div>
       <BuildingDetail building={buildingData} />
     </div>

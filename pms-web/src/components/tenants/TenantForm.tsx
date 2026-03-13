@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import { AppLink } from '@/components/AppLink'
 import { ArrowLeft } from 'lucide-react'
 
 type Building = { id: number; name: string }
@@ -79,9 +79,9 @@ export function TenantForm({
             type: tenant.type as '租客' | '业主',
             companyName: tenant.companyName,
             buildingId: tenant.buildingId,
-            roomIds: tenant.tenantRooms?.map((tr: { roomId: number; leaseArea: number }) => ({
+            roomIds: tenant.tenantRooms?.map((tr: { roomId: number; leaseArea: number | string }) => ({
               roomId: tr.roomId,
-              leaseArea: tr.leaseArea,
+              leaseArea: Number(tr.leaseArea ?? 0),
             })) ?? [],
             moveInDate: tenant.moveInDate,
             leaseStartDate: tenant.leaseStartDate,
@@ -113,7 +113,7 @@ export function TenantForm({
       if (exists) {
         newRoomIds = prev.roomIds.filter((r) => r.roomId !== room.id)
       } else {
-        newRoomIds = [...prev.roomIds, { roomId: room.id, leaseArea: room.area }]
+        newRoomIds = [...prev.roomIds, { roomId: room.id, leaseArea: Number(room.area ?? 0) }]
       }
       return { ...prev, roomIds: newRoomIds }
     })
@@ -128,7 +128,7 @@ export function TenantForm({
     }))
   }
 
-  const totalArea = form.roomIds.reduce((sum, r) => sum + r.leaseArea, 0)
+  const totalArea = form.roomIds.reduce((sum, r) => sum + Number(r.leaseArea ?? 0), 0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -206,13 +206,13 @@ export function TenantForm({
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-        <Link
+        <AppLink
           href="/tenants"
           className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600"
         >
           <ArrowLeft className="w-4 h-4" />
           返回列表
-        </Link>
+        </AppLink>
       </div>
       <form onSubmit={handleSubmit} className="p-6 max-w-2xl space-y-6">
         <div>
@@ -296,7 +296,7 @@ export function TenantForm({
                             type="number"
                             step="0.01"
                             min="0"
-                            value={selected.leaseArea}
+                            value={selected.leaseArea ?? ''}
                             onChange={(e) =>
                               updateRoomLeaseArea(
                                 room.id,
@@ -366,12 +366,12 @@ export function TenantForm({
           >
             {submitting ? '保存中...' : '保存'}
           </button>
-          <Link
+          <AppLink
             href="/tenants"
             className="px-6 py-2 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
           >
             取消
-          </Link>
+          </AppLink>
         </div>
       </form>
     </div>

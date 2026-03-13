@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { Plus, Pencil, Trash2, Search } from 'lucide-react'
 import { DeviceForm } from './DeviceForm'
 
@@ -52,6 +54,8 @@ export function DeviceList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       d.buildingName?.includes(keyword) ||
       d.status.includes(keyword)
   )
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(filtered, 15)
 
   const handleDelete = async (item: Device) => {
     if (!confirm(`确定删除设备「${item.name}」？`)) return
@@ -147,7 +151,7 @@ export function DeviceList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 </td>
               </tr>
             ) : (
-              filtered.map((d) => (
+              paginatedItems.map((d) => (
                 <tr
                   key={d.id}
                   className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -185,6 +189,15 @@ export function DeviceList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <div className="p-12 text-center text-slate-500">
           暂无数据，点击「新增设备」添加
         </div>
+      )}
+      {!loading && filtered.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
       {formOpen && (
         <DeviceForm

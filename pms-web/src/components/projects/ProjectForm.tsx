@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import { AppLink } from '@/components/AppLink'
 import { ArrowLeft } from 'lucide-react'
 
 type Building = { id: number; name: string }
@@ -168,13 +168,13 @@ export function ProjectForm({
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-        <Link
+        <AppLink
           href="/projects"
           className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600"
         >
           <ArrowLeft className="w-4 h-4" />
           返回列表
-        </Link>
+        </AppLink>
       </div>
       <form onSubmit={handleSubmit} className="p-6 max-w-2xl space-y-6">
         <div>
@@ -278,12 +278,12 @@ export function ProjectForm({
           >
             {submitting ? '保存中...' : '保存'}
           </button>
-          <Link
+          <AppLink
             href="/projects"
             className="px-6 py-2 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
           >
             取消
-          </Link>
+          </AppLink>
         </div>
       </form>
     </div>

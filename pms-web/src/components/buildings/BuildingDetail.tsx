@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
+import { AppLink } from '@/components/AppLink'
 import { Building2, Plus, Edit2, Trash2, ArrowUp, ArrowDown, GripVertical } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { cn } from '@/lib/utils'
 
 type Floor = {
   id: number
@@ -197,6 +198,64 @@ export function BuildingDetail({ building }: { building: Building }) {
     setFloors(newFloors)
 
     // 保存新顺序
+    await saveFloorOrder(newFloors)
+  }
+
+  // 拖拽状态
+  const [draggingId, setDraggingId] = useState<number | null>(null)
+  const [dragOverId, setDragOverId] = useState<number | null>(null)
+
+  const handleDragStart = (e: React.DragEvent, floorId: number) => {
+    setDraggingId(floorId)
+    e.dataTransfer.effectAllowed = 'move'
+    // 设置拖拽图像
+    const dragImage = e.currentTarget.cloneNode(true) as HTMLElement
+    dragImage.style.opacity = '0.8'
+    dragImage.style.position = 'absolute'
+    dragImage.style.top = '-1000px'
+    document.body.appendChild(dragImage)
+    e.dataTransfer.setDragImage(dragImage, 0, 20)
+    setTimeout(() => document.body.removeChild(dragImage), 0)
+  }
+
+  const handleDragOver = (e: React.DragEvent, floorId: number) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (draggingId !== floorId) {
+      setDragOverId(floorId)
+    }
+  }
+
+  const handleDragLeave = () => {
+    setDragOverId(null)
+  }
+
+  const handleDrop = async (e: React.DragEvent, targetId: number) => {
+    e.preventDefault()
+    setDragOverId(null)
+    setDraggingId(null)
+
+    if (draggingId === null || draggingId === targetId) return
+
+    const fromIndex = floors.findIndex((f) => f.id === draggingId)
+    const toIndex = floors.findIndex((f) => f.id === targetId)
+
+    if (fromIndex === -1 || toIndex === -1) return
+
+    const newFloors = [...floors]
+    const [movedFloor] = newFloors.splice(fromIndex, 1)
+    newFloors.splice(toIndex, 0, movedFloor)
+
+    setFloors(newFloors)
+    await saveFloorOrder(newFloors)
+  }
+
+  const handleDragEnd = () => {
+    setDraggingId(null)
+    setDragOverId(null)
+  }
+
+  const saveFloorOrder = async (newFloors: Floor[]) => {
     setLoading(true)
     try {
       const res = await fetch('/api/floors/reorder', {
@@ -292,12 +351,12 @@ export function BuildingDetail({ building }: { building: Building }) {
               <Plus className="w-4 h-4" />
               添加楼层
             </button>
-            <Link
+            <AppLink
               href={`/rooms?buildingId=${building.id}`}
               className="text-sm text-blue-600 hover:underline px-3 py-1.5"
             >
               查看房源
-            </Link>
+            </AppLink>
           </div>
         </div>
 
@@ -316,11 +375,21 @@ export function BuildingDetail({ building }: { building: Building }) {
                 {floors.map((f, index) => (
                   <tr
                     key={f.id}
-                    className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, f.id)}
+                    onDragOver={(e) => handleDragOver(e, f.id)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, f.id)}
+                    onDragEnd={handleDragEnd}
+                    className={cn(
+                      'border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-move transition',
+                      draggingId === f.id && 'opacity-50 bg-slate-100',
+                      dragOverId === f.id && 'bg-blue-50 border-blue-300'
+                    )}
                   >
                     <td className="p-4">
                       <div className="flex items-center gap-1">
-                        <GripVertical className="w-4 h-4 text-slate-400" />
+                        <GripVertical className="w-4 h-4 text-slate-400 cursor-grab active:cursor-grabbing" />
                         <span className="text-sm text-slate-500">{index + 1}</span>
                       </div>
                     </td>
@@ -409,12 +478,11 @@ export function BuildingDetail({ building }: { building: Building }) {
                 <label className="block text-sm text-slate-500 mb-1">楼层面积(㎡)</label>
                 <input
                   type="number"
-                  value={singleArea}
-                  onChange={(e) => setSingleArea(e.target.value)}
-                  placeholder="0"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                  value={0}
+                  disabled
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed"
                 />
-                <p className="text-xs text-slate-400 mt-1">楼层面积会自动累加本层所有房源面积</p>
+                <p className="text-xs text-slate-400 mt-1">楼层面积根据本层所有房源面积自动计算，添加房源后自动更新</p>
               </div>
             </div>
             <div className="flex items-center justify-end gap-3 mt-6">
@@ -538,9 +606,10 @@ export function BuildingDetail({ building }: { building: Building }) {
                 <input
                   type="number"
                   value={editingFloor.area}
-                  onChange={(e) => setEditingFloor({ ...editingFloor, area: Number(e.target.value) })}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                  disabled
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed"
                 />
+                <p className="text-xs text-slate-400 mt-1">楼层面积根据本层所有房源面积自动计算，不可手动修改</p>
               </div>
             </div>
             <div className="flex items-center justify-end gap-3 mt-6">

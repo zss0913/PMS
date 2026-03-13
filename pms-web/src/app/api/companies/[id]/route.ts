@@ -87,6 +87,17 @@ export async function PUT(
     const body = await request.json()
     const parsed = updateSchema.parse(body)
 
+    // 检查公司名称是否已被其他公司使用
+    const duplicate = await prisma.company.findFirst({
+      where: {
+        name: parsed.name,
+        id: { not: companyId },
+      },
+    })
+    if (duplicate) {
+      return NextResponse.json({ success: false, message: '公司名称已存在请重新输入' }, { status: 400 })
+    }
+
     await prisma.company.update({
       where: { id: companyId },
       data: {

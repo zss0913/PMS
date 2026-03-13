@@ -3,12 +3,29 @@ import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
 
-// 更新楼层
+// 更新楼层 - 忽略area字段，area由系统自动计算
 const updateSchema = z.object({
   name: z.string().min(1, '楼层名称必填').optional(),
   sort: z.number().optional(),
   area: z.union([z.number(), z.string()]).transform((v) => Number(v)).optional(),
 })
+
+// 自动计算楼层面积（根据该楼层所有房源的面积总和）
+async function recalculateFloorArea(floorId: number) {
+  try {
+    const rooms = await prisma.room.findMany({
+      where: { floorId },
+      select: { area: true },
+    })
+    const totalArea = rooms.reduce((sum, room) => sum + Number(room.area), 0)
+    await prisma.floor.update({
+      where: { id: floorId },
+      data: { area: totalArea },
+    })
+  } catch (e) {
+    console.error('计算楼层面积失败:', e)
+  }
+}
 
 // 获取单个楼层
 export async function GET(
@@ -85,12 +102,40 @@ export async function PUT(
     const body = await request.json()
     const parsed = updateSchema.parse(body)
 
+    // 忽略area字段，不允许手动修改楼层面积
+    const { area, ...updateData } = parsed
+
+    // 若修改了楼层名称，同一楼宇内不能与其他楼层重复
+    if (updateData.name) {
+      const duplicate = await prisma.floor.findFirst({
+        where: {
+          buildingId: floor.buildingId,
+          name: updateData.name,
+          id: { not: floorId },
+        },
+      })
+      if (duplicate) {
+        return NextResponse.json(
+          { success: false, message: '楼层名称已存在' },
+          { status: 400 }
+        )
+      }
+    }
+
     const updated = await prisma.floor.update({
       where: { id: floorId },
-      data: parsed,
+      data: updateData,
     })
 
-    return NextResponse.json({ success: true, data: updated })
+    // 重新计算楼层面积
+    await recalculateFloorArea(floorId)
+
+    // 返回更新后的楼层（包含重新计算的面积）
+    const floorWithUpdatedArea = await prisma.floor.findUnique({
+      where: { id: floorId },
+    })
+
+    return NextResponse.json({ success: true, data: floorWithUpdatedArea })
   } catch (e) {
     if (e instanceof z.ZodError) {
       return NextResponse.json(

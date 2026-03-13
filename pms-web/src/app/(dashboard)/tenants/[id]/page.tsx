@@ -1,22 +1,28 @@
 import { getAuthUser } from '@/lib/auth'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import Link from 'next/link'
+import { AppLink } from '@/components/AppLink'
 import { ArrowLeft, Pencil } from 'lucide-react'
 import { formatDate, formatDateTime } from '@/lib/utils'
 
 export default async function TenantDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ from?: string; roomId?: string }>
 }) {
   const user = await getAuthUser()
   if (!user) redirect('/login')
   if (user.companyId === 0) redirect('/tenants')
 
   const { id } = await params
+  const { from, roomId } = await searchParams
   const tenantId = parseInt(id, 10)
   if (isNaN(tenantId)) redirect('/tenants')
+
+  const backHref = from === 'room' && roomId ? `/rooms/${roomId}/tenants` : '/tenants'
+  const backLabel = from === 'room' && roomId ? '返回房源租客列表' : '返回列表'
 
   const tenant = await prisma.tenant.findFirst({
     where: { id: tenantId, companyId: user.companyId },
@@ -36,20 +42,20 @@ export default async function TenantDetailPage({
   return (
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
-        <Link
-          href="/tenants"
+        <AppLink
+          href={backHref}
           className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600"
         >
           <ArrowLeft className="w-4 h-4" />
-          返回列表
-        </Link>
-        <Link
+          {backLabel}
+        </AppLink>
+        <AppLink
           href={`/tenants/${tenant.id}/edit`}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
         >
           <Pencil className="w-4 h-4" />
           编辑
-        </Link>
+        </AppLink>
       </div>
 
       <h1 className="text-2xl font-bold mb-6">租户详情</h1>

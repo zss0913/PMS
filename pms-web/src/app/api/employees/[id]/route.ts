@@ -14,6 +14,7 @@ const updateSchema = z.object({
   isLeader: z.boolean().optional(),
   businessTypes: z.array(z.string()).nullable().optional(),
   roleId: z.number().optional(),
+  companyId: z.number().optional(),
 })
 
 export async function PUT(
@@ -25,7 +26,8 @@ export async function PUT(
     if (!user) {
       return NextResponse.json({ success: false, message: '未登录' }, { status: 401 })
     }
-    const id = parseInt(params.id, 10)
+    const { id: idStr } = await params
+    const id = parseInt(idStr, 10)
     if (isNaN(id)) {
       return NextResponse.json({ success: false, message: '无效ID' }, { status: 400 })
     }
@@ -56,6 +58,7 @@ export async function PUT(
       updateData.businessTypes = parsed.businessTypes ? JSON.stringify(parsed.businessTypes) : null
     }
     if (parsed.roleId !== undefined) updateData.roleId = parsed.roleId
+    if (parsed.companyId !== undefined) updateData.companyId = parsed.companyId
     if (parsed.password && parsed.password.length >= 6) {
       updateData.password = await bcrypt.hash(parsed.password, 10)
     }
@@ -90,7 +93,8 @@ export async function DELETE(
     if (!user) {
       return NextResponse.json({ success: false, message: '未登录' }, { status: 401 })
     }
-    const id = parseInt(params.id, 10)
+    const { id: idStr } = await params
+    const id = parseInt(idStr, 10)
     if (isNaN(id)) {
       return NextResponse.json({ success: false, message: '无效ID' }, { status: 400 })
     }

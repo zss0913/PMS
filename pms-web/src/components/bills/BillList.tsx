@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import {
   Plus,
   Search,
@@ -129,6 +131,12 @@ export function BillList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     if (paymentOpen) fetchTenantsWithRooms()
   }, [paymentOpen])
 
+  const list = data?.list ?? []
+  const buildings = data?.buildings ?? []
+  const tenants = data?.tenants ?? []
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(list, 15)
+
   if (isSuperAdmin) {
     return (
       <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-6 text-amber-800 dark:text-amber-200">
@@ -153,10 +161,6 @@ export function BillList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       </div>
     )
   }
-
-  const list = data?.list ?? []
-  const buildings = data?.buildings ?? []
-  const tenants = data?.tenants ?? []
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -245,7 +249,7 @@ export function BillList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             </tr>
           </thead>
           <tbody>
-            {list.map((b) => (
+            {paginatedItems.map((b) => (
               <tr
                 key={b.id}
                 className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -305,6 +309,15 @@ export function BillList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <div className="p-12 text-center text-slate-500">
           暂无账单，点击「生成账单」添加
         </div>
+      )}
+      {list.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
 
       {generateOpen && (

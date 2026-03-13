@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
+import { AppLink } from '@/components/AppLink'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { Plus, Pencil, Search } from 'lucide-react'
 
 type Company = {
@@ -20,6 +22,8 @@ export function CompanyList({ companies }: { companies: Company[] }) {
   const filtered = companies.filter(
     (c) => !keyword || c.name.includes(keyword) || c.contact.includes(keyword)
   )
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(filtered, 15)
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -36,13 +40,13 @@ export function CompanyList({ companies }: { companies: Company[] }) {
             />
           </div>
         </div>
-        <Link
+        <AppLink
           href="/companies/new"
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
         >
           <Plus className="w-4 h-4" />
           新建物业公司
-        </Link>
+        </AppLink>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -58,7 +62,7 @@ export function CompanyList({ companies }: { companies: Company[] }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((c) => (
+            {paginatedItems.map((c) => (
               <tr
                 key={c.id}
                 className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -82,12 +86,12 @@ export function CompanyList({ companies }: { companies: Company[] }) {
                   </span>
                 </td>
                 <td className="p-4">
-                  <Link
+                  <AppLink
                     href={`/companies/${c.id}/edit`}
                     className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded inline-block"
                   >
                     <Pencil className="w-4 h-4" />
-                  </Link>
+                  </AppLink>
                 </td>
               </tr>
             ))}
@@ -98,6 +102,15 @@ export function CompanyList({ companies }: { companies: Company[] }) {
         <div className="p-12 text-center text-slate-500">
           暂无数据，点击「新建物业公司」添加
         </div>
+      )}
+      {filtered.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
     </div>
   )

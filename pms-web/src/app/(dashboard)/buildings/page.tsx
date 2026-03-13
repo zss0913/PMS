@@ -12,6 +12,7 @@ export default async function BuildingsPage() {
         where: { companyId },
         include: {
           project: { select: { name: true } },
+          floors: { select: { area: true } },
           _count: { select: { floors: true, rooms: true } },
         },
         orderBy: { id: 'asc' },
@@ -19,6 +20,7 @@ export default async function BuildingsPage() {
     : await prisma.building.findMany({
         include: {
           project: { select: { name: true } },
+          floors: { select: { area: true } },
           _count: { select: { floors: true, rooms: true } },
         },
         orderBy: { id: 'asc' },
@@ -26,13 +28,18 @@ export default async function BuildingsPage() {
   const projects = companyId > 0
     ? await prisma.project.findMany({ where: { companyId } })
     : await prisma.project.findMany()
-  const buildingsData = buildings.map((b) => ({ ...b, area: Number(b.area) }))
+  const buildingsData = buildings.map((b) => {
+    const managedArea = b.floors?.reduce((sum, f) => sum + Number(f.area), 0) ?? 0
+    const { floors, ...rest } = b
+    return { ...rest, area: Number(b.area), managedArea }
+  })
+  const projectsData = projects.map((p) => ({ ...p, area: Number(p.area), greenArea: Number(p.greenArea) }))
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-6">楼宇管理</h1>
       <BuildingList
         buildings={buildingsData}
-        projects={projects}
+        projects={projectsData}
         isSuperAdmin={companyId === 0}
       />
     </div>

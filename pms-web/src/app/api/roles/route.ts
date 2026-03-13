@@ -7,8 +7,8 @@ const createSchema = z.object({
   name: z.string().min(1, '角色名称不能为空'),
   code: z.string().min(1, '角色编码不能为空'),
   dataScope: z.enum(['all', 'project', 'department', 'self']),
-  menuIds: z.array(z.number()).optional().default([]),
-  companyId: z.number().int().min(0),
+  menuIds: z.array(z.coerce.number()).optional().default([]),
+  companyId: z.number().int().min(0).optional(),
 })
 
 export async function GET(request: NextRequest) {
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     const parsed = createSchema.parse(body)
 
     const companyId =
-      user.companyId > 0 ? user.companyId : parsed.companyId
+      user.companyId > 0 ? user.companyId : (parsed.companyId ?? 0)
 
     if (companyId <= 0) {
       return NextResponse.json(

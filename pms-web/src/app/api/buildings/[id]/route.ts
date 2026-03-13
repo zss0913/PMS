@@ -109,3 +109,50 @@ export async function PUT(
     return NextResponse.json({ success: false, message: '服务器错误' }, { status: 500 })
   }
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getAuthUser()
+    if (!user) {
+      return NextResponse.json({ success: false, message: '未登录' }, { status: 401 })
+    }
+    if (user.companyId === 0) {
+      return NextResponse.json(
+        { success: false, message: '超级管理员请使用员工账号登录后操作' },
+        { status: 403 }
+      )
+    }
+    const { id } = await params
+    const buildingId = parseInt(id, 10)
+    if (isNaN(buildingId)) {
+      return NextResponse.json({ success: false, message: '无效的楼宇ID' }, { status: 400 })
+    }
+
+    const building = await prisma.building.findFirst({
+      where: { id: buildingId, companyId: user.companyId },
+      include: { _count: { select: { rooms: true } } },
+    })
+    if (!building) {
+      return NextResponse.json({ success: false, message: '楼宇不存在' }, { status: 404 })
+    }
+
+    if (building._count.rooms > 0) {
+      return NextResponse.json(
+        { success: false, message: '楼宇下存在房源无法删除' },
+        { status: 400 }
+      )
+    }
+
+    await prisma.building.delete({
+      where: { id: buildingId },
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (e) {
+    console.error(e)
+    return NextResponse.json({ success: false, message: '服务器错误' }, { status: 500 })
+  }
+}

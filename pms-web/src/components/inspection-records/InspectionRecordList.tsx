@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { Search } from 'lucide-react'
 
 type InspectionRecord = {
@@ -52,6 +54,19 @@ export function InspectionRecordList({
     if (!isSuperAdmin) fetchData()
   }, [isSuperAdmin])
 
+  const list = data?.list ?? []
+  const filtered = list.filter(
+    (r) =>
+      !keyword ||
+      r.taskCode.includes(keyword) ||
+      r.inspectionType.includes(keyword) ||
+      r.location.includes(keyword) ||
+      r.checkedByName.includes(keyword) ||
+      r.status.includes(keyword)
+  )
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(filtered, 15)
+
   if (isSuperAdmin) {
     return (
       <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-6 text-amber-800 dark:text-amber-200">
@@ -76,17 +91,6 @@ export function InspectionRecordList({
       </div>
     )
   }
-
-  const list = data?.list ?? []
-  const filtered = list.filter(
-    (r) =>
-      !keyword ||
-      r.taskCode.includes(keyword) ||
-      r.inspectionType.includes(keyword) ||
-      r.location.includes(keyword) ||
-      r.checkedByName.includes(keyword) ||
-      r.status.includes(keyword)
-  )
 
   const formatDate = (s: string) => {
     try {
@@ -131,7 +135,7 @@ export function InspectionRecordList({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r) => (
+            {paginatedItems.map((r) => (
               <tr
                 key={r.id}
                 className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -152,6 +156,15 @@ export function InspectionRecordList({
         <div className="p-12 text-center text-slate-500">
           暂无巡检记录
         </div>
+      )}
+      {filtered.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
     </div>
   )

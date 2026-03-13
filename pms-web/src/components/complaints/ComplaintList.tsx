@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { Plus, Search, CheckCircle } from 'lucide-react'
 
 type Complaint = {
@@ -65,6 +67,28 @@ export function ComplaintList({
   useEffect(() => {
     if (!isSuperAdmin) fetchData()
   }, [isSuperAdmin])
+
+  const list = data?.list ?? []
+  const tenants = data?.tenants ?? []
+  const buildings = data?.buildings ?? []
+  const statusLabel: Record<string, string> = {
+    pending: '待处理',
+    processing: '处理中',
+    completed: '已完成',
+  }
+  const complaintCode = (id: number) => 'C' + String(id).padStart(5, '0')
+  const filtered = list.filter(
+    (c) =>
+      !keyword ||
+      complaintCode(c.id).includes(keyword.toUpperCase()) ||
+      c.complainant.includes(keyword) ||
+      c.description.includes(keyword) ||
+      c.buildingName.includes(keyword) ||
+      statusLabel[c.status]?.includes(keyword) ||
+      c.status.includes(keyword)
+  )
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(filtered, 15)
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -136,28 +160,6 @@ export function ComplaintList({
       </div>
     )
   }
-
-  const list = data?.list ?? []
-  const tenants = data?.tenants ?? []
-  const buildings = data?.buildings ?? []
-
-  const statusLabel: Record<string, string> = {
-    pending: '待处理',
-    processing: '处理中',
-    completed: '已完成',
-  }
-  const complaintCode = (id: number) => 'C' + String(id).padStart(5, '0')
-
-  const filtered = list.filter(
-    (c) =>
-      !keyword ||
-      complaintCode(c.id).includes(keyword.toUpperCase()) ||
-      c.complainant.includes(keyword) ||
-      c.description.includes(keyword) ||
-      c.buildingName.includes(keyword) ||
-      statusLabel[c.status]?.includes(keyword) ||
-      c.status.includes(keyword)
-  )
 
   const formatDate = (s: string) => {
     try {
@@ -284,7 +286,7 @@ export function ComplaintList({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((c) => (
+            {paginatedItems.map((c) => (
               <tr
                 key={c.id}
                 className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -330,6 +332,15 @@ export function ComplaintList({
         <div className="p-12 text-center text-slate-500">
           暂无投诉，点击「新增投诉」添加
         </div>
+      )}
+      {filtered.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
     </div>
   )

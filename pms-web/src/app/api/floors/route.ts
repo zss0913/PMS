@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
-import { Decimal } from '@prisma/client/runtime/library'
 
 // 创建单个楼层
 const createSchema = z.object({
@@ -12,11 +11,11 @@ const createSchema = z.object({
   area: z.union([z.number(), z.string()]).transform((v) => Number(v)).default(0),
 })
 
-// 批量创建楼层
+// 批量创建楼层（支持 number/string 自动转换）
 const batchCreateSchema = z.object({
-  buildingId: z.number(),
-  startFloor: z.number().int().min(-10).max(200),
-  endFloor: z.number().int().min(-10).max(200),
+  buildingId: z.coerce.number(),
+  startFloor: z.coerce.number().int().min(-10).max(200),
+  endFloor: z.coerce.number().int().min(-10).max(200),
   prefix: z.string().default(''),
   suffix: z.string().default(''),
 })
@@ -86,6 +85,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: '无权限' }, { status: 403 })
     }
 
+    // 同一楼宇内楼层名称不能重复
+    const existing = await prisma.floor.findFirst({
+      where: { buildingId: parsed.buildingId, name: parsed.name },
+    })
+    if (existing) {
+      return NextResponse.json(
+        { success: false, message: '楼层名称已存在' },
+        { status: 400 }
+      )
+    }
+
     const floor = await prisma.floor.create({
       data: {
         buildingId: parsed.buildingId,
@@ -144,6 +154,13 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, message: '无权限' }, { status: 403 })
     }
 
+    // 获取当前楼宇下已有楼层名称
+    const existingFloors = await prisma.floor.findMany({
+      where: { buildingId: parsed.buildingId },
+      select: { name: true },
+    })
+    const existingNames = new Set(existingFloors.map((f) => f.name))
+
     // 获取当前最大排序值
     const maxSort = await prisma.floor.findFirst({
       where: { buildingId: parsed.buildingId },
@@ -162,24 +179,41 @@ export async function PUT(request: NextRequest) {
         floorName = `${parsed.prefix}G${parsed.suffix}` // 地面层
       }
 
+      // 同一楼宇内楼层名称不能重复
+      if (existingNames.has(floorName)) {
+        return NextResponse.json(
+          { success: false, message: `楼层名称已存在：${floorName}` },
+          { status: 400 }
+        )
+      }
+      existingNames.add(floorName)
+
       floors.push({
         buildingId: parsed.buildingId,
         name: floorName,
         sort: currentSort++,
-        area: new Decimal(0),
+        area: 0,
       })
     }
 
-    // 使用 createMany 批量创建
-    const result = await prisma.floor.createMany({
-      data: floors,
-      skipDuplicates: false,
-    })
+    // 批量创建（SQLite 下 createMany 对 Decimal 可能有问题，改用事务逐条创建）
+    const created = await prisma.$transaction(
+      floors.map((f) =>
+        prisma.floor.create({
+          data: {
+            buildingId: f.buildingId,
+            name: f.name,
+            sort: f.sort,
+            area: f.area,
+          },
+        })
+      )
+    )
 
     return NextResponse.json({
       success: true,
-      message: `成功创建 ${result.count} 个楼层`,
-      count: result.count,
+      message: `成功创建 ${created.length} 个楼层`,
+      count: created.length,
     })
   } catch (e) {
     if (e instanceof z.ZodError) {

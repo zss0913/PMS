@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { formatDate } from '@/lib/utils'
 
 type InspectionTask = {
@@ -67,6 +69,8 @@ export function InspectionTaskList() {
 
   const list = data?.list ?? []
   const statusOptions = data?.statusOptions ?? ['待执行', '执行中', '已完成', '已逾期']
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(list, 15)
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -129,7 +133,7 @@ export function InspectionTaskList() {
                   </td>
                 </tr>
               ) : (
-                list.map((t) => (
+                paginatedItems.map((t) => (
                   <tr
                     key={t.id}
                     className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -152,6 +156,15 @@ export function InspectionTaskList() {
           <div className="p-12 text-center text-slate-500">
             暂无巡检任务。任务由巡检计划自动生成，请先创建巡检计划。
           </div>
+        )}
+        {!loading && list.length > 0 && (
+          <Pagination
+            total={total}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+          />
         )}
       </div>
     </div>

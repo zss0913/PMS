@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { Plus, Pencil, Trash2, Search } from 'lucide-react'
 import { NfcTagForm } from './NfcTagForm'
 
@@ -52,6 +54,8 @@ export function NfcTagList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       t.location.includes(keyword) ||
       t.inspectionType.includes(keyword)
   )
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(filtered, 15)
 
   const handleDelete = async (item: NfcTag) => {
     if (!confirm(`确定删除NFC标签「${item.tagId}」？`)) return
@@ -134,7 +138,7 @@ export function NfcTagList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 </td>
               </tr>
             ) : (
-              filtered.map((t) => (
+              paginatedItems.map((t) => (
                 <tr
                   key={t.id}
                   className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -170,6 +174,15 @@ export function NfcTagList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <div className="p-12 text-center text-slate-500">
           暂无数据，点击「新增NFC标签」添加
         </div>
+      )}
+      {!loading && filtered.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
       {formOpen && (
         <NfcTagForm

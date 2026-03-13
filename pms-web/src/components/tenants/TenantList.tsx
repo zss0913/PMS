@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
+import { AppLink } from '@/components/AppLink'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import {
   Plus,
   Pencil,
@@ -97,6 +99,8 @@ export function TenantList() {
 
   const list = data?.list ?? []
   const buildings = data?.buildings ?? []
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(list, 15)
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -150,13 +154,13 @@ export function TenantList() {
           <Search className="w-4 h-4" />
           筛选
         </button>
-        <Link
+        <AppLink
           href="/tenants/new"
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
         >
           <Plus className="w-4 h-4" />
           新增租客
-        </Link>
+        </AppLink>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -182,19 +186,19 @@ export function TenantList() {
                 </td>
               </tr>
             ) : (
-              list.map((t) => (
+              paginatedItems.map((t) => (
                 <tr
                   key={t.id}
                   className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
                 >
                   <td className="p-4">{t.type}</td>
                   <td className="p-4">
-                    <Link
+                    <AppLink
                       href={`/tenants/${t.id}`}
                       className="font-medium text-blue-600 hover:underline"
                     >
                       {t.companyName}
-                    </Link>
+                    </AppLink>
                   </td>
                   <td className="p-4">{t.building?.name || '-'}</td>
                   <td className="p-4">{t.roomNumbers || '-'}</td>
@@ -207,20 +211,20 @@ export function TenantList() {
                   <td className="p-4">{formatDateTime(t.createdAt)}</td>
                   <td className="p-4">
                     <div className="flex gap-2">
-                      <Link
+                      <AppLink
                         href={`/tenants/${t.id}`}
                         className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded"
                         title="租户详情"
                       >
                         <Eye className="w-4 h-4" />
-                      </Link>
-                      <Link
+                      </AppLink>
+                      <AppLink
                         href={`/tenants/${t.id}/edit`}
                         className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded"
                         title="编辑"
                       >
                         <Pencil className="w-4 h-4" />
-                      </Link>
+                      </AppLink>
                       <button
                         onClick={() => handleDelete(t.id)}
                         disabled={deletingId === t.id}
@@ -241,6 +245,15 @@ export function TenantList() {
         <div className="p-12 text-center text-slate-500">
           暂无数据，点击「新增租客」添加
         </div>
+      )}
+      {!loading && list.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
     </div>
   )

@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { Plus, Pencil, Trash2, Search } from 'lucide-react'
 import { AnnouncementForm } from './AnnouncementForm'
 
@@ -85,6 +87,13 @@ export function AnnouncementList() {
     fetchData()
   }
 
+  const list = data?.list ?? []
+  const filtered = list.filter(
+    (a) => !keyword || a.title.includes(keyword)
+  )
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(filtered, 15)
+
   const getScopeText = (a: Announcement) => {
     if (a.scope === 'all') return '全部楼宇'
     if (a.buildingIds?.length) {
@@ -117,11 +126,6 @@ export function AnnouncementList() {
       </div>
     )
   }
-
-  const list = data?.list ?? []
-  const filtered = list.filter(
-    (a) => !keyword || a.title.includes(keyword)
-  )
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -161,7 +165,7 @@ export function AnnouncementList() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((a) => (
+            {paginatedItems.map((a) => (
               <tr
                 key={a.id}
                 className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -210,6 +214,15 @@ export function AnnouncementList() {
         <div className="p-12 text-center text-slate-500">
           暂无数据，点击「新增公告」添加
         </div>
+      )}
+      {filtered.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
       {formOpen && (
         <AnnouncementForm

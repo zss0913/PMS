@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { Plus, Pencil, Trash2, Search } from 'lucide-react'
 import { RoleForm } from './RoleForm'
 import { DATA_SCOPE_OPTIONS, MENU_OPTIONS } from '@/lib/menu-config'
@@ -55,6 +57,8 @@ export function RoleList({
       r.code.includes(keyword) ||
       r.companyName?.includes(keyword)
   )
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(filtered, 15)
 
   const getDataScopeLabel = (scope: string) =>
     DATA_SCOPE_OPTIONS.find((o) => o.value === scope)?.label ?? scope
@@ -151,7 +155,7 @@ export function RoleList({
                 </td>
               </tr>
             ) : (
-              filtered.map((r) => (
+              paginatedItems.map((r) => (
                 <tr
                   key={r.id}
                   className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -194,6 +198,15 @@ export function RoleList({
         <div className="p-12 text-center text-slate-500">
           暂无数据，点击「新增角色」添加
         </div>
+      )}
+      {!loading && filtered.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
       {formOpen && (
         <RoleForm

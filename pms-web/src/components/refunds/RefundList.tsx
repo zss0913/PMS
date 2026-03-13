@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 
 type Refund = {
   id: number
@@ -45,6 +47,10 @@ export function RefundList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     fetchData()
   }, [])
 
+  const list = data?.list ?? []
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(list, 15)
+
   if (isSuperAdmin) {
     return (
       <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-6 text-amber-800 dark:text-amber-200">
@@ -69,8 +75,6 @@ export function RefundList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       </div>
     )
   }
-
-  const list = data?.list ?? []
 
   const formatDateTime = (s: string) => {
     try {
@@ -103,7 +107,7 @@ export function RefundList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             </tr>
           </thead>
           <tbody>
-            {list.map((r) => (
+            {paginatedItems.map((r) => (
               <tr
                 key={r.id}
                 className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -124,6 +128,15 @@ export function RefundList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <div className="p-12 text-center text-slate-500">
           暂无退费记录
         </div>
+      )}
+      {list.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
     </div>
   )

@@ -1,20 +1,22 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { AppLink } from '@/components/AppLink'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import {
   Plus,
   Pencil,
   Trash2,
-  Building2,
   Search,
 } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
 
 type Building = {
   id: number
   name: string
   area: number
+  managedArea?: number
   manager: string
   phone: string
   location: string | null
@@ -34,10 +36,36 @@ export function BuildingList({
   isSuperAdmin: boolean
 }) {
   const [keyword, setKeyword] = useState('')
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const router = useRouter()
+
+  const handleDelete = async (b: Building) => {
+    if ((b._count?.rooms ?? 0) > 0) {
+      alert('楼宇下存在房源无法删除')
+      return
+    }
+    if (!confirm(`确定要删除楼宇「${b.name}」吗？删除后不可恢复。`)) return
+    setDeletingId(b.id)
+    try {
+      const res = await fetch(`/api/buildings/${b.id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (data.success) {
+        router.refresh()
+      } else {
+        alert(data.message || '删除失败')
+      }
+    } catch {
+      alert('删除失败')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const filtered = buildings.filter(
     (b) => !keyword || b.name.includes(keyword) || b.manager.includes(keyword)
   )
+  const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
+    usePagination(filtered, 15)
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -54,19 +82,20 @@ export function BuildingList({
             />
           </div>
         </div>
-        <Link
+        <AppLink
           href="/buildings/new"
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
         >
           <Plus className="w-4 h-4" />
           新增楼宇
-        </Link>
+        </AppLink>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
               <th className="text-left p-4 font-medium">楼宇名称</th>
+              <th className="text-left p-4 font-medium">管理面积(㎡)</th>
               <th className="text-left p-4 font-medium">面积(㎡)</th>
               <th className="text-left p-4 font-medium">负责人</th>
               <th className="text-left p-4 font-medium">联系电话</th>
@@ -76,16 +105,17 @@ export function BuildingList({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((b) => (
+            {paginatedItems.map((b) => (
               <tr
                 key={b.id}
                 className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
               >
                 <td className="p-4">
-                  <Link href={`/buildings/${b.id}`} className="font-medium text-blue-600 hover:underline">
+                  <AppLink href={`/buildings/${b.id}`} className="font-medium text-blue-600 hover:underline">
                     {b.name}
-                  </Link>
+                  </AppLink>
                 </td>
+                <td className="p-4">{Number(b.managedArea ?? 0)}</td>
                 <td className="p-4">{Number(b.area)}</td>
                 <td className="p-4">{b.manager}</td>
                 <td className="p-4">{b.phone}</td>
@@ -95,12 +125,23 @@ export function BuildingList({
                 </td>
                 <td className="p-4">
                   <div className="flex gap-2">
-                    <Link
-                      href={`/buildings/${b.id}/edit`}
-                      className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded"
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/buildings/${b.id}/edit`)}
+                      className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded cursor-pointer"
+                      title="编辑"
                     >
                       <Pencil className="w-4 h-4" />
-                    </Link>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(b)}
+                      disabled={deletingId === b.id}
+                      className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 rounded disabled:opacity-50"
+                      title={b._count?.rooms ? '楼宇下存在房源无法删除' : '删除'}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -112,6 +153,15 @@ export function BuildingList({
         <div className="p-12 text-center text-slate-500">
           暂无数据，点击「新增楼宇」添加
         </div>
+      )}
+      {filtered.length > 0 && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
       )}
     </div>
   )

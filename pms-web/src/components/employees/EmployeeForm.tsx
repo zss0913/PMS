@@ -17,7 +17,7 @@ export type EmployeeFormData = {
 }
 
 const POSITIONS = ['保安', '维修工', '保洁', '管理员', '其他'] as const
-const BUSINESS_TYPES = ['报修', '巡检', '设备']
+const BUSINESS_TYPES = ['工程', '安保', '绿化', '设备', '保洁']
 
 type Project = { id: number; name: string; companyId: number }
 type Department = { id: number; name: string; companyId: number }
@@ -81,10 +81,22 @@ export function EmployeeForm({
           companyId: initialData.companyId,
         })
       } else {
-        setForm({ ...defaultForm, companyId: companies[0]?.id })
+        // 新增时所有字段都为空，只有密码有默认值
+        setForm({
+          ...defaultForm,
+          companyId: companies[0]?.id,
+        })
       }
+      // 延迟清除浏览器可能自动填充的值
+      setTimeout(() => {
+        const phoneInput = document.getElementById('employee-phone-field') as HTMLInputElement
+        if (phoneInput && phoneInput.value && !isEdit) {
+          setForm((prev) => ({ ...prev, phone: '' }))
+          phoneInput.value = ''
+        }
+      }, 100)
     }
-  }, [open, initialData, companies])
+  }, [open, initialData, companies, isEdit])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -125,8 +137,8 @@ export function EmployeeForm({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto m-4">
-        <div className="sticky top-0 flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div className="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col m-4">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shrink-0">
           <h2 className="text-lg font-semibold">{isEdit ? '编辑员工' : '新增员工'}</h2>
           <button
             type="button"
@@ -136,9 +148,9 @@ export function EmployeeForm({
             <X className="w-5 h-5" />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto flex-1 relative">
           {error && (
-            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+            <div className="sticky top-0 z-10 p-3 mb-4 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm border border-red-200 dark:border-red-800 shadow-sm">
               {error}
             </div>
           )}
@@ -174,17 +186,24 @@ export function EmployeeForm({
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
               placeholder="请输入姓名"
+              autoComplete="new-password"
+              name="employee-name"
+              id="employee-name-field"
             />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">手机号 <span className="text-red-500">*</span></label>
             <input
-              type="tel"
+              type="text"
+              inputMode="numeric"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
               className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
               placeholder="请输入手机号"
               disabled={isEdit}
+              autoComplete="new-password"
+              name="employee-phone"
+              id="employee-phone-field"
             />
             {isEdit && <p className="text-xs text-slate-500 mt-1">手机号不可修改</p>}
           </div>
@@ -198,6 +217,9 @@ export function EmployeeForm({
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
               placeholder={isEdit ? '不修改请留空' : '默认123456'}
+              autoComplete="new-password"
+              name="employee-password"
+              id="employee-password-field"
             />
           </div>
           <div>

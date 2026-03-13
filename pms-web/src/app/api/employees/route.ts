@@ -23,14 +23,19 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ success: false, message: '未登录' }, { status: 401 })
     }
+    // 数据权限控制：超级管理员(companyId=0)查看所有，普通员工只能查看本公司
     const companyId = user.companyId
+    if (user.type !== 'super_admin' && companyId <= 0) {
+      return NextResponse.json({ success: false, message: '您没有所属公司权限' }, { status: 403 })
+    }
     const where = companyId > 0 ? { companyId } : {}
     const employees = await prisma.employee.findMany({
       where,
       include: {
         project: { select: { name: true } },
         department: { select: { name: true } },
-        role: { select: { name: true } },
+        role: { select: { id: true, name: true } },
+        company: { select: { name: true } },
       },
       orderBy: { id: 'asc' },
     })

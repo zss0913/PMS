@@ -23,7 +23,7 @@ export default async function EmployeesPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">员工管理</h1>
+      <h1 className="text-2xl font-bold mb-6">员工账号</h1>
       <EmployeeList
         projects={projects}
         departments={departments}
