@@ -407,13 +407,15 @@ model PaymentReminder {
 
 
 model WorkOrderType {
-  id        Int      @id @default(autoincrement())
-  name      String
-  sort      Int      @default(0)
-  enabled   Boolean  @default(true)
-  companyId Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                    Int      @id @default(autoincrement())
+  name                  String
+  sort                  Int      @default(0)
+  enabled               Boolean  @default(true)
+  responseTimeoutHours  Int?     // 多久没有响应为超时（小时），null 表示不启用
+  notifyLeaderOnTimeout Boolean  @default(false) // 超时时是否提醒组长
+  companyId             Int
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
@@ -575,20 +577,22 @@ model Complaint {
 // ========== 设备 ==========
 
 model Device {
-  id              Int      @id @default(autoincrement())
-  code            String
-  name            String
-  type            String
-  location        String
-  buildingId      Int
-  commissionedDate DateTime
-  supplier        String
-  contactPhone    String?
-  tagId           String?
-  status          String
-  companyId       Int
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                 Int      @id @default(autoincrement())
+  code               String
+  name               String
+  type               String
+  location           String   @default("")
+  buildingId         Int
+  commissionedDate   DateTime
+  supplier           String   @default("")
+  contactPhone       String?
+  maintenanceContact String?
+  brand              String?
+  tagId              String?
+  status             String
+  companyId          Int
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   building    Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)

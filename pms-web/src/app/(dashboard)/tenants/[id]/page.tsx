@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { AppLink } from '@/components/AppLink'
 import { ArrowLeft, Pencil } from 'lucide-react'
 import { formatDate, formatDateTime } from '@/lib/utils'
+import { TenantDetailTabs } from '@/components/tenants/TenantDetailTabs'
 
 export default async function TenantDetailPage({
   params,
@@ -99,34 +100,19 @@ export default async function TenantDetailPage({
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-500 mb-2">租赁房源</label>
-            <div className="border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-700/50">
-                    <th className="text-left p-3 font-medium">房号</th>
-                    <th className="text-left p-3 font-medium">房源名称</th>
-                    <th className="text-left p-3 font-medium">房源面积(㎡)</th>
-                    <th className="text-left p-3 font-medium">租赁面积(㎡)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tenant.tenantRooms.map((tr) => (
-                    <tr
-                      key={tr.id}
-                      className="border-t border-slate-100 dark:border-slate-700"
-                    >
-                      <td className="p-3">{tr.room.roomNumber}</td>
-                      <td className="p-3">{tr.room.name}</td>
-                      <td className="p-3">{Number(tr.room.area)}</td>
-                      <td className="p-3">{Number(tr.leaseArea)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <TenantDetailTabs
+            tenantId={tenant.id}
+            tenantRooms={tenant.tenantRooms.map((tr) => ({
+              id: tr.id,
+              room: {
+                id: tr.room.id,
+                name: tr.room.name,
+                roomNumber: tr.room.roomNumber,
+                area: Number(tr.room.area),
+              },
+              leaseArea: Number(tr.leaseArea),
+            }))}
+          />
         </div>
       </div>
     </div>

@@ -7,6 +7,8 @@ const createSchema = z.object({
   name: z.string().min(1, '类型名称不能为空'),
   sort: z.number().int().optional().default(0),
   enabled: z.boolean().optional().default(true),
+  responseTimeoutHours: z.number().int().min(0).nullable().optional(),
+  notifyLeaderOnTimeout: z.boolean().optional().default(false),
 })
 
 export async function GET(request: NextRequest) {
@@ -43,6 +45,8 @@ export async function GET(request: NextRequest) {
       enabled: t.enabled,
       companyId: t.companyId,
       workOrderCount: countMap[t.name] ?? 0,
+      responseTimeoutHours: t.responseTimeoutHours,
+      notifyLeaderOnTimeout: t.notifyLeaderOnTimeout,
     }))
 
     return NextResponse.json({ success: true, data: list })
@@ -86,6 +90,8 @@ export async function POST(request: NextRequest) {
         name: parsed.name,
         sort: parsed.sort,
         enabled: parsed.enabled,
+        responseTimeoutHours: parsed.responseTimeoutHours ?? null,
+        notifyLeaderOnTimeout: parsed.notifyLeaderOnTimeout ?? false,
         companyId: user.companyId,
       },
     })

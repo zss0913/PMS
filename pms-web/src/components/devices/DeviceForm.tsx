@@ -25,6 +25,10 @@ export function DeviceForm({
   const [type, setType] = useState('')
   const [buildingId, setBuildingId] = useState<number>(0)
   const [status, setStatus] = useState<string>('正常')
+  const [location, setLocation] = useState('')
+  const [maintenanceContact, setMaintenanceContact] = useState('')
+  const [supplier, setSupplier] = useState('')
+  const [brand, setBrand] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -36,11 +40,19 @@ export function DeviceForm({
       setType(device.type)
       setBuildingId(device.buildingId)
       setStatus(device.status)
+      setLocation(device.location ?? '')
+      setMaintenanceContact(device.maintenanceContact ?? '')
+      setSupplier(device.supplier ?? '')
+      setBrand(device.brand ?? '')
     } else {
       setName('')
       setType('')
       setBuildingId(buildings[0]?.id ?? 0)
       setStatus('正常')
+      setLocation('')
+      setMaintenanceContact('')
+      setSupplier('')
+      setBrand('')
     }
   }, [device, buildings])
 
@@ -49,7 +61,16 @@ export function DeviceForm({
     setError('')
     setSubmitting(true)
     try {
-      const body = { name, type, buildingId, status }
+      const body = {
+        name,
+        type,
+        buildingId,
+        status,
+        location: location.trim(),
+        maintenanceContact: maintenanceContact.trim(),
+        supplier: supplier.trim(),
+        brand: brand.trim(),
+      }
       const url = isEdit ? `/api/devices/${device!.id}` : '/api/devices'
       const method = isEdit ? 'PUT' : 'POST'
       const res = await fetch(url, {
@@ -142,6 +163,46 @@ export function DeviceForm({
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">具体位置</label>
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+              placeholder="选填"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">维修联系人</label>
+            <input
+              type="text"
+              value={maintenanceContact}
+              onChange={(e) => setMaintenanceContact(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+              placeholder="选填"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">厂家</label>
+            <input
+              type="text"
+              value={supplier}
+              onChange={(e) => setSupplier(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+              placeholder="选填"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">品牌</label>
+            <input
+              type="text"
+              value={brand}
+              onChange={(e) => setBrand(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+              placeholder="选填"
+            />
           </div>
         </form>
         <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">

@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { Plus, Pencil, Trash2, Search } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, Upload } from 'lucide-react'
 import { DeviceForm } from './DeviceForm'
+import { DeviceBatchImportModal } from './DeviceBatchImportModal'
 
 export type Device = {
   id: number
@@ -14,6 +15,10 @@ export type Device = {
   buildingId: number
   buildingName: string
   status: string
+  location?: string
+  maintenanceContact?: string
+  supplier?: string
+  brand?: string
 }
 
 type Building = { id: number; name: string }
@@ -24,6 +29,7 @@ export function DeviceList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const [loading, setLoading] = useState(true)
   const [keyword, setKeyword] = useState('')
   const [formOpen, setFormOpen] = useState(false)
+  const [showBatchImport, setShowBatchImport] = useState(false)
   const [editingDevice, setEditingDevice] = useState<Device | null>(null)
   const [deleting, setDeleting] = useState<number | null>(null)
 
@@ -131,6 +137,13 @@ export function DeviceList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
           <Plus className="w-4 h-4" />
           新增设备
         </button>
+        <button
+          onClick={() => setShowBatchImport(true)}
+          className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
+        >
+          <Upload className="w-4 h-4" />
+          批量导入
+        </button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -204,6 +217,13 @@ export function DeviceList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
           device={editingDevice}
           buildings={buildings}
           onClose={handleFormClose}
+        />
+      )}
+      {showBatchImport && (
+        <DeviceBatchImportModal
+          buildings={buildings}
+          onClose={() => setShowBatchImport(false)}
+          onSuccess={() => fetchData()}
         />
       )}
     </div>

@@ -43,6 +43,9 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status')
     const paymentStatus = searchParams.get('paymentStatus')
     const overdue = searchParams.get('overdue')
+    const feeType = searchParams.get('feeType')
+    const dueDateStart = searchParams.get('dueDateStart')
+    const dueDateEnd = searchParams.get('dueDateEnd')
 
     const where: Record<string, unknown> = { companyId: user.companyId }
     if (buildingId) {
@@ -55,9 +58,39 @@ export async function GET(request: NextRequest) {
     }
     if (status) where.status = status
     if (paymentStatus) where.paymentStatus = paymentStatus
+    if (feeType?.trim()) where.feeType = feeType.trim()
+    if (paymentStatus) where.paymentStatus = paymentStatus
+    if (dueDateStart || dueDateEnd) {
+      const dateCond: Record<string, Date> = {}
+      if (dueDateStart) {
+        const d = new Date(dueDateStart)
+        d.setHours(0, 0, 0, 0)
+        dateCond.gte = d
+      }
+      if (dueDateEnd) {
+        const d = new Date(dueDateEnd)
+        d.setHours(23, 59, 59, 999)
+        dateCond.lte = d
+      }
+      where.dueDate = dateCond
+    }
     if (overdue === 'true') {
-      where.dueDate = { lt: new Date() }
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
       where.paymentStatus = { not: 'paid' }
+      if (where.dueDate && typeof where.dueDate === 'object') {
+        const d = where.dueDate as Record<string, Date>
+        where.dueDate = { ...d, lt: new Date() }
+      } else {
+        where.dueDate = { lt: new Date() }
+      }
+    } else if (overdue === 'false') {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      where.OR = [
+        { dueDate: { gte: today } },
+        { paymentStatus: 'paid' },
+      ]
     }
 
     const bills = await prisma.bill.findMany({

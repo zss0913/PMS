@@ -11,6 +11,8 @@ import {
   Search,
   Users,
   Upload,
+  Edit3,
+  X,
 } from 'lucide-react'
 import { RoomBatchImportModal } from './RoomBatchImportModal'
 import { formatDateTime } from '@/lib/utils'
@@ -58,6 +60,9 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [showBatchImport, setShowBatchImport] = useState(false)
+  const [showBatchUpdate, setShowBatchUpdate] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [batchUpdating, setBatchUpdating] = useState(false)
   const [filters, setFilters] = useState({
     name: '',
     roomNumber: '',
@@ -221,12 +226,43 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
             <Upload className="w-4 h-4" />
             批量导入
           </button>
+          {selectedIds.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowBatchUpdate(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-500"
+            >
+              <Edit3 className="w-4 h-4" />
+              批量修改状态 ({selectedIds.size})
+            </button>
+          )}
         </div>
       </form>
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
+              <th className="w-12 p-4">
+                <input
+                  type="checkbox"
+                  checked={
+                    paginatedItems.length > 0 &&
+                    paginatedItems.every((r) => selectedIds.has(r.id))
+                  }
+                  disabled={paginatedItems.length === 0}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedIds((prev) => new Set([...prev, ...paginatedItems.map((r) => r.id)]))
+                    } else {
+                      setSelectedIds((prev) => {
+                        const pageIds = new Set(paginatedItems.map((r) => r.id))
+                        return new Set([...prev].filter((id) => !pageIds.has(id)))
+                      })
+                    }
+                  }}
+                  className="rounded"
+                />
+              </th>
               <th className="text-left p-4 font-medium">房源名称</th>
               <th className="text-left p-4 font-medium">房号</th>
               <th className="text-left p-4 font-medium">管理面积(㎡)</th>
@@ -246,6 +282,24 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
                 key={r.id}
                 className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
               >
+                <td className="w-12 p-4">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(r.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds((prev) => new Set([...prev, r.id]))
+                      } else {
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev)
+                          next.delete(r.id)
+                          return next
+                        })
+                      }
+                    }}
+                    className="rounded"
+                  />
+                </td>
                 <td className="p-4 font-medium">{r.name}</td>
                 <td className="p-4">{r.roomNumber}</td>
                 <td className="p-4">{Number(r.area)}</td>
@@ -308,6 +362,138 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
           onSuccess={fetchRooms}
         />
       )}
+      {showBatchUpdate && (
+        <RoomBatchUpdateModal
+          selectedCount={selectedIds.size}
+          onClose={() => setShowBatchUpdate(false)}
+          onSuccess={() => {
+            setShowBatchUpdate(false)
+            setSelectedIds(new Set())
+            fetchRooms()
+          }}
+          selectedIds={Array.from(selectedIds)}
+          batchUpdating={batchUpdating}
+          setBatchUpdating={setBatchUpdating}
+        />
+      )}
+    </div>
+  )
+}
+
+function RoomBatchUpdateModal({
+  selectedCount,
+  onClose,
+  onSuccess,
+  selectedIds,
+  batchUpdating,
+  setBatchUpdating,
+}: {
+  selectedCount: number
+  onClose: () => void
+  onSuccess: () => void
+  selectedIds: number[]
+  batchUpdating: boolean
+  setBatchUpdating: (v: boolean) => void
+}) {
+  const [status, setStatus] = useState('')
+  const [leasingStatus, setLeasingStatus] = useState('')
+  const [error, setError] = useState('')
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    if (!status && !leasingStatus) {
+      setError('请至少选择要修改的房源状态或招商状态')
+      return
+    }
+    setBatchUpdating(true)
+    try {
+      const res = await fetch('/api/rooms/batch-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: selectedIds,
+          ...(status && { status }),
+          ...(leasingStatus && { leasingStatus }),
+        }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        onSuccess()
+      } else {
+        setError(json.message || '更新失败')
+      }
+    } catch {
+      setError('网络错误')
+    } finally {
+      setBatchUpdating(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">批量修改房源状态</h2>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <p className="text-sm text-slate-500">
+            已选择 <span className="font-medium text-slate-700 dark:text-slate-200">{selectedCount}</span> 条房源
+          </p>
+          {error && (
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+              {error}
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium mb-1">房源状态</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+            >
+              <option value="">不修改</option>
+              <option value="空置">空置</option>
+              <option value="已租">已租</option>
+              <option value="自用">自用</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">招商状态</label>
+            <select
+              value={leasingStatus}
+              onChange={(e) => setLeasingStatus(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+            >
+              <option value="">不修改</option>
+              <option value="可招商">可招商</option>
+              <option value="不可招商">不可招商</option>
+            </select>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              disabled={batchUpdating || (!status && !leasingStatus)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50"
+            >
+              {batchUpdating ? '更新中...' : '确认修改'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

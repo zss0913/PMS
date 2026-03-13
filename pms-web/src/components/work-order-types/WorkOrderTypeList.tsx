@@ -12,6 +12,8 @@ export type WorkOrderType = {
   sort: number
   enabled: boolean
   workOrderCount: number
+  responseTimeoutHours?: number | null
+  notifyLeaderOnTimeout?: boolean
 }
 
 export function WorkOrderTypeList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
@@ -112,6 +114,8 @@ export function WorkOrderTypeList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               <th className="text-left p-4 font-medium">类型名称</th>
               <th className="text-left p-4 font-medium">排序</th>
               <th className="text-left p-4 font-medium">是否启用</th>
+              <th className="text-left p-4 font-medium">响应超时</th>
+              <th className="text-left p-4 font-medium">超时提醒组长</th>
               <th className="text-left p-4 font-medium">工单数量</th>
               <th className="text-left p-4 font-medium w-28">操作</th>
             </tr>
@@ -119,7 +123,7 @@ export function WorkOrderTypeList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="p-12 text-center text-slate-500">
+                <td colSpan={7} className="p-12 text-center text-slate-500">
                   加载中...
                 </td>
               </tr>
@@ -141,6 +145,14 @@ export function WorkOrderTypeList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                     >
                       {t.enabled ? '启用' : '停用'}
                     </span>
+                  </td>
+                  <td className="p-4 text-sm">
+                    {t.responseTimeoutHours != null && t.responseTimeoutHours > 0
+                      ? `${t.responseTimeoutHours} 小时`
+                      : '不启用'}
+                  </td>
+                  <td className="p-4 text-sm">
+                    {t.notifyLeaderOnTimeout ? '是' : '否'}
                   </td>
                   <td className="p-4">{t.workOrderCount}</td>
                   <td className="p-4">

@@ -14,6 +14,8 @@ export function WorkOrderTypeForm({
   const [name, setName] = useState('')
   const [sort, setSort] = useState(0)
   const [enabled, setEnabled] = useState(true)
+  const [responseTimeoutHours, setResponseTimeoutHours] = useState<number | ''>('')
+  const [notifyLeaderOnTimeout, setNotifyLeaderOnTimeout] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -24,10 +26,14 @@ export function WorkOrderTypeForm({
       setName(type.name)
       setSort(type.sort)
       setEnabled(type.enabled)
+      setResponseTimeoutHours(type.responseTimeoutHours ?? '')
+      setNotifyLeaderOnTimeout(type.notifyLeaderOnTimeout ?? false)
     } else {
       setName('')
       setSort(0)
       setEnabled(true)
+      setResponseTimeoutHours('')
+      setNotifyLeaderOnTimeout(false)
     }
   }, [type])
 
@@ -36,7 +42,14 @@ export function WorkOrderTypeForm({
     setError('')
     setSubmitting(true)
     try {
-      const body = { name, sort, enabled }
+      const body = {
+        name,
+        sort,
+        enabled,
+        responseTimeoutHours:
+          responseTimeoutHours === '' || Number(responseTimeoutHours) <= 0 ? null : Number(responseTimeoutHours),
+        notifyLeaderOnTimeout,
+      }
       const url = isEdit ? `/api/work-order-types/${type!.id}` : '/api/work-order-types'
       const method = isEdit ? 'PUT' : 'POST'
       const res = await fetch(url, {
@@ -109,6 +122,36 @@ export function WorkOrderTypeForm({
               />
               <span className="text-sm">启用</span>
             </label>
+          </div>
+          <div className="border-t border-slate-200 dark:border-slate-600 pt-4 space-y-4">
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">超时设置</p>
+            <div>
+              <label className="block text-sm font-medium mb-1">响应超时（小时）</label>
+              <input
+                type="number"
+                min={0}
+                value={responseTimeoutHours}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setResponseTimeoutHours(v === '' ? '' : Math.max(0, Number(v)))
+                }}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                placeholder="不填或0表示不启用超时"
+              />
+              <p className="text-xs text-slate-500 mt-1">派单后多久未响应视为超时，留空或0表示不启用</p>
+            </div>
+            <div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={notifyLeaderOnTimeout}
+                  onChange={(e) => setNotifyLeaderOnTimeout(e.target.checked)}
+                  className="rounded border-slate-300"
+                />
+                <span className="text-sm">超时时提醒组长</span>
+              </label>
+              <p className="text-xs text-slate-500 mt-1">超时后是否通知组长</p>
+            </div>
           </div>
         </form>
         <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">

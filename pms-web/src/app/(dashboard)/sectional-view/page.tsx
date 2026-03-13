@@ -56,8 +56,8 @@ export default async function SectionalViewPage() {
   })
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">剖面图</h1>
+    <div className="min-h-full bg-[#0a0e1a] p-6">
+      <h1 className="text-2xl font-bold text-slate-100 mb-6">剖面图</h1>
       <SectionalView buildings={buildings} />
     </div>
   )

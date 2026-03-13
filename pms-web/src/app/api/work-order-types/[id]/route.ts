@@ -7,6 +7,11 @@ const updateSchema = z.object({
   name: z.string().min(1, '类型名称不能为空').optional(),
   sort: z.number().int().optional(),
   enabled: z.boolean().optional(),
+  responseTimeoutHours: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v === null ? null : Number(v)),
+    z.union([z.number().int().min(0), z.null()]).optional()
+  ),
+  notifyLeaderOnTimeout: z.boolean().optional(),
 })
 
 export async function PUT(
@@ -65,6 +70,8 @@ export async function PUT(
         ...(parsed.name && { name: parsed.name }),
         ...(parsed.sort !== undefined && { sort: parsed.sort }),
         ...(parsed.enabled !== undefined && { enabled: parsed.enabled }),
+        ...(parsed.responseTimeoutHours !== undefined && { responseTimeoutHours: parsed.responseTimeoutHours }),
+        ...(parsed.notifyLeaderOnTimeout !== undefined && { notifyLeaderOnTimeout: parsed.notifyLeaderOnTimeout }),
       },
     })
 
@@ -76,9 +83,10 @@ export async function PUT(
         { status: 400 }
       )
     }
-    console.error(e)
+    console.error('工单类型更新失败:', e)
+    const msg = e instanceof Error ? e.message : '服务器错误'
     return NextResponse.json(
-      { success: false, message: '服务器错误' },
+      { success: false, message: process.env.NODE_ENV === 'development' ? msg : '服务器错误' },
       { status: 500 }
     )
   }

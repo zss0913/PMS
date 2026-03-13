@@ -55,7 +55,13 @@ const STATUS_LABELS: Record<string, string> = {
 const PAYMENT_METHODS = ['现金', '转账', '微信支付', '其他'] as const
 const REMINDER_METHODS = ['微信', '短信', '邮件', '线下'] as const
 
-export function BillList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
+export function BillList({
+  isSuperAdmin,
+  initialTenantId = '',
+}: {
+  isSuperAdmin: boolean
+  initialTenantId?: string
+}) {
   const [data, setData] = useState<ApiData | null>(null)
   const [rules, setRules] = useState<BillRule[]>([])
   const [tenantsWithRooms, setTenantsWithRooms] = useState<TenantWithRooms[]>([])
@@ -63,11 +69,16 @@ export function BillList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState({
     buildingId: '',
-    tenantId: '',
+    tenantId: initialTenantId,
     status: '',
     paymentStatus: '',
     overdue: '',
   })
+  useEffect(() => {
+    if (initialTenantId) {
+      setFilters((p) => ({ ...p, tenantId: initialTenantId }))
+    }
+  }, [initialTenantId])
   const [generateOpen, setGenerateOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [refundOpen, setRefundOpen] = useState(false)

@@ -10,6 +10,10 @@ const createSchema = z.object({
   type: z.string().min(1, '设备类型不能为空'),
   buildingId: z.number().int().min(1, '请选择所属楼宇'),
   status: z.enum(DEVICE_STATUSES).default('正常'),
+  location: z.string().optional(),
+  maintenanceContact: z.string().optional(),
+  supplier: z.string().optional(),
+  brand: z.string().optional(),
 })
 
 function generateDeviceCode(): string {
@@ -55,6 +59,8 @@ export async function GET(request: NextRequest) {
       commissionedDate: d.commissionedDate.toISOString().slice(0, 10),
       supplier: d.supplier,
       contactPhone: d.contactPhone,
+      maintenanceContact: d.maintenanceContact,
+      brand: d.brand,
       tagId: d.tagId,
     }))
 
@@ -102,9 +108,11 @@ export async function POST(request: NextRequest) {
         type: parsed.type,
         buildingId: parsed.buildingId,
         status: parsed.status,
-        location: '',
+        location: parsed.location ?? '',
         commissionedDate: new Date(),
-        supplier: '',
+        supplier: parsed.supplier ?? '',
+        maintenanceContact: parsed.maintenanceContact || null,
+        brand: parsed.brand || null,
         companyId: user.companyId,
       },
     })

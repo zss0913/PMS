@@ -2,9 +2,16 @@ import { getAuthUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { BillList } from '@/components/bills/BillList'
 
-export default async function BillsPage() {
+export default async function BillsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tenantId?: string }>
+}) {
   const user = await getAuthUser()
   if (!user) redirect('/login')
+
+  const params = await searchParams
+  const initialTenantId = params.tenantId ?? ''
 
   if (user.companyId === 0) {
     return (
@@ -21,7 +28,7 @@ export default async function BillsPage() {
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-6">账单管理</h1>
-      <BillList isSuperAdmin={user.companyId === 0} />
+      <BillList isSuperAdmin={user.companyId === 0} initialTenantId={initialTenantId} />
     </div>
   )
 }

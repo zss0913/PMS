@@ -10,6 +10,10 @@ const updateSchema = z.object({
   type: z.string().min(1, '设备类型不能为空').optional(),
   buildingId: z.number().int().min(1).optional(),
   status: z.enum(DEVICE_STATUSES).optional(),
+  location: z.string().optional(),
+  maintenanceContact: z.string().optional(),
+  supplier: z.string().optional(),
+  brand: z.string().optional(),
 })
 
 export async function PUT(
@@ -65,10 +69,14 @@ export async function PUT(
     const updated = await prisma.device.update({
       where: { id: deviceId },
       data: {
-        ...(parsed.name && { name: parsed.name }),
-        ...(parsed.type && { type: parsed.type }),
+        ...(parsed.name !== undefined && { name: parsed.name }),
+        ...(parsed.type !== undefined && { type: parsed.type }),
         ...(parsed.buildingId && { buildingId: parsed.buildingId }),
         ...(parsed.status && { status: parsed.status }),
+        ...(parsed.location !== undefined && { location: parsed.location ?? '' }),
+        ...(parsed.maintenanceContact !== undefined && { maintenanceContact: parsed.maintenanceContact || null }),
+        ...(parsed.supplier !== undefined && { supplier: parsed.supplier ?? '' }),
+        ...(parsed.brand !== undefined && { brand: parsed.brand || null }),
       },
     })
 

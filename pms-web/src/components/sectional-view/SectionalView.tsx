@@ -98,20 +98,21 @@ function getExpiryCategory(leaseEndDate: string | null, status: string): string 
   return '一年以上到期'
 }
 
+// 科技感配色：青蓝/紫/深灰系
 const STATUS_COLORS: Record<string, string> = {
-  已租: 'bg-green-500 text-white',
-  自用: 'bg-slate-400 text-white',
-  空置: 'bg-pink-100 dark:bg-pink-900/30 text-pink-800 dark:text-pink-200',
+  已租: 'bg-gradient-to-br from-cyan-500 to-cyan-600 text-white shadow-lg shadow-cyan-500/30',
+  自用: 'bg-gradient-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/30',
+  空置: 'bg-slate-600 text-white border border-slate-500/50',
 }
 
 const EXPIRY_COLORS: Record<string, string> = {
-  已到期: 'bg-red-500 text-white',
-  '30天内到期': 'bg-orange-500 text-white',
-  '90天内到期': 'bg-amber-500 text-white',
-  半年内到期: 'bg-yellow-400 text-slate-900',
-  一年内到期: 'bg-lime-400 text-slate-900',
-  一年以上到期: 'bg-green-400 text-slate-900',
-  无到期: 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200',
+  已到期: 'bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-lg shadow-rose-500/30',
+  '30天内到期': 'bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/25',
+  '90天内到期': 'bg-amber-500/90 text-slate-900',
+  半年内到期: 'bg-yellow-400/90 text-slate-900',
+  一年内到期: 'bg-lime-400/90 text-slate-900',
+  一年以上到期: 'bg-emerald-400/90 text-slate-900',
+  无到期: 'bg-slate-600 text-white border border-slate-500/50',
 }
 
 export function SectionalView({ buildings }: { buildings: Building[] }) {
@@ -211,26 +212,26 @@ export function SectionalView({ buildings }: { buildings: Building[] }) {
   }
 
   const displayFloors = data
-    ? applyRoomOrder(data.floors, data.building.id)
+    ? applyRoomOrder(data.floors, data.building.id).filter((f) => f.rooms.length > 0)
     : []
 
   if (buildings.length === 0) {
     return (
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-12 text-center text-slate-500">
+      <div className="bg-slate-800/50 rounded-xl border border-slate-600/50 p-12 text-center text-slate-400">
         暂无楼宇数据，请先添加楼宇
       </div>
     )
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
-          <label className="text-sm text-slate-600 dark:text-slate-400">楼宇</label>
+          <label className="text-sm text-slate-400">楼宇</label>
           <select
             value={buildingId ?? ''}
             onChange={(e) => setBuildingId(Number(e.target.value) || null)}
-            className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+            className="px-4 py-2 rounded-lg border border-slate-600 bg-slate-800/80 text-slate-200 focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 focus:outline-none transition-all"
           >
             {buildings.map((b) => (
               <option key={b.id} value={b.id}>
@@ -243,10 +244,10 @@ export function SectionalView({ buildings }: { buildings: Building[] }) {
           <button
             onClick={() => setDisplayMode('status')}
             className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium',
+              'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
               displayMode === 'status'
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-500'
+                ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white shadow-lg shadow-cyan-500/30'
+                : 'bg-slate-700/80 text-slate-300 border border-slate-600 hover:border-cyan-500/50 hover:text-cyan-300'
             )}
           >
             按状态
@@ -254,10 +255,10 @@ export function SectionalView({ buildings }: { buildings: Building[] }) {
           <button
             onClick={() => setDisplayMode('expiry')}
             className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium',
+              'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
               displayMode === 'expiry'
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-500'
+                ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white shadow-lg shadow-cyan-500/30'
+                : 'bg-slate-700/80 text-slate-300 border border-slate-600 hover:border-cyan-500/50 hover:text-cyan-300'
             )}
           >
             按到期区间
@@ -266,7 +267,7 @@ export function SectionalView({ buildings }: { buildings: Building[] }) {
       </div>
 
       {loading ? (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-12 text-center text-slate-500">
+        <div className="bg-slate-800/50 rounded-xl border border-slate-600/50 p-12 text-center text-slate-400">
           加载中...
         </div>
       ) : data ? (
@@ -295,39 +296,47 @@ export function SectionalView({ buildings }: { buildings: Building[] }) {
           </div>
 
           {displayMode === 'status' && (
-            <div className="flex flex-wrap gap-4 text-sm">
-              <span className="flex items-center gap-1">
-                <span className="w-4 h-4 rounded bg-green-500" />
+            <div className="flex flex-wrap gap-4 text-sm text-slate-400">
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 rounded bg-gradient-to-br from-cyan-500 to-cyan-600 shadow shadow-cyan-500/30" />
                 已租
               </span>
-              <span className="flex items-center gap-1">
-                <span className="w-4 h-4 rounded bg-slate-400" />
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 rounded bg-gradient-to-br from-violet-500 to-violet-600 shadow shadow-violet-500/30" />
                 自用
               </span>
-              <span className="flex items-center gap-1">
-                <span className="w-4 h-4 rounded bg-pink-100 dark:bg-pink-900/30" />
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 rounded bg-slate-600 border border-slate-500/50" />
                 空置
               </span>
-              <span className="flex items-center gap-1">
-                <span className="w-4 h-4 rounded border-2 border-dashed border-pink-400" />
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 rounded border-2 border-dashed border-cyan-400/70 shadow-[0_0_8px_rgba(34,211,238,0.3)]" />
                 可招商
               </span>
             </div>
           )}
 
           {displayMode === 'expiry' && (
-            <div className="flex flex-wrap gap-3 text-sm">
-              {Object.entries(EXPIRY_COLORS).map(([label, cls]) => (
-                <span key={label} className="flex items-center gap-1">
-                  <span className={cn('w-4 h-4 rounded', cls.split(' ')[0])} />
+            <div className="flex flex-wrap gap-3 text-sm text-slate-400">
+              {[
+                ['已到期', 'bg-rose-500'],
+                ['30天内到期', 'bg-amber-500'],
+                ['90天内到期', 'bg-amber-400'],
+                ['半年内到期', 'bg-yellow-400'],
+                ['一年内到期', 'bg-lime-400'],
+                ['一年以上到期', 'bg-emerald-400'],
+                ['无到期', 'bg-slate-600 border border-slate-500/50'],
+              ].map(([label, cls]) => (
+                <span key={label} className="flex items-center gap-2">
+                  <span className={cn('w-4 h-4 rounded', cls)} />
                   {label}
                 </span>
               ))}
             </div>
           )}
 
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-            <div className="p-4 border-b border-slate-200 dark:border-slate-700 font-medium">
+          <div className="bg-slate-800/40 rounded-xl border border-slate-600/50 overflow-hidden shadow-xl shadow-black/20">
+            <div className="p-4 border-b border-slate-600/50 font-medium text-slate-200 bg-slate-800/60">
               {data.building.name}
             </div>
             <div className="p-4 space-y-4">
@@ -337,13 +346,13 @@ export function SectionalView({ buildings }: { buildings: Building[] }) {
                   <div
                     key={floor.id}
                     className={cn(
-                      'flex items-stretch gap-1 min-h-[80px] rounded-lg transition-colors',
-                      dragOverFloorId === floor.id && 'bg-slate-100 dark:bg-slate-700/50'
+                      'flex items-stretch gap-1 min-h-[80px] rounded-lg transition-all duration-200',
+                      dragOverFloorId === floor.id && 'bg-cyan-500/10 ring-1 ring-cyan-500/30'
                     )}
                     onDragOver={(e) => handleDragOver(e, floor.id)}
                     onDragLeave={handleDragLeave}
                   >
-                    <div className="w-24 shrink-0 flex items-center justify-center text-sm text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-600 pr-2">
+                    <div className="w-24 shrink-0 flex items-center justify-center text-sm text-slate-100 font-medium border-r border-slate-600/50 pr-2">
                       <div>
                         <div className="font-medium">{floor.name}</div>
                         <div className="text-xs">{floor.area.toFixed(0)}㎡</div>
@@ -353,8 +362,8 @@ export function SectionalView({ buildings }: { buildings: Building[] }) {
                       {floor.rooms.map((room, idx) => {
                         const pct = (room.area / totalArea) * 100
                         const expiryCat = getExpiryCategory(room.leaseEndDateForDisplay, room.status)
-                        const statusCls = STATUS_COLORS[room.status] ?? 'bg-slate-300'
-                        const expiryCls = EXPIRY_COLORS[expiryCat] ?? 'bg-slate-300'
+                        const statusCls = STATUS_COLORS[room.status] ?? 'bg-slate-500 text-white'
+                        const expiryCls = EXPIRY_COLORS[expiryCat] ?? 'bg-slate-500 text-white'
                         const cls = displayMode === 'status' ? statusCls : expiryCls
                         const hasAntLine = room.leasingStatus === '可招商'
 
@@ -372,9 +381,9 @@ export function SectionalView({ buildings }: { buildings: Building[] }) {
                             }}
                             onMouseLeave={() => setTooltip(null)}
                             className={cn(
-                              'min-w-0 rounded cursor-pointer transition hover:opacity-90 flex flex-col justify-center p-2 text-xs overflow-hidden border-2',
+                              'min-w-0 rounded-lg cursor-pointer transition-all duration-200 hover:opacity-90 hover:scale-[1.02] flex flex-col justify-center p-2 text-xs overflow-hidden border-2',
                               cls,
-                              hasAntLine ? 'border-dashed border-pink-400 dark:border-pink-500' : 'border-transparent'
+                              hasAntLine ? 'border-dashed border-cyan-400/70 shadow-[0_0_12px_rgba(34,211,238,0.3)]' : 'border-transparent'
                             )}
                             style={{ flex: `${pct} 1 0` }}
                           >
@@ -402,20 +411,20 @@ export function SectionalView({ buildings }: { buildings: Building[] }) {
 
           {tooltip && (
             <div
-              className="fixed z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-xl p-4 max-w-sm text-sm"
+              className="fixed z-50 bg-slate-800/95 backdrop-blur border border-slate-600/50 rounded-lg shadow-xl shadow-cyan-500/10 p-4 max-w-sm text-sm text-slate-200"
               style={{ left: tooltip.x, top: tooltip.y }}
             >
-              <div className="font-medium mb-2">
+              <div className="font-medium mb-2 text-cyan-300">
                 {tooltip.room.roomNumber} {tooltip.room.type}
               </div>
-              <div className="text-slate-500 dark:text-slate-400 mb-2">
+              <div className="text-slate-400 mb-2">
                 管理面积 {tooltip.room.area}㎡ · {tooltip.room.leasingStatus}
               </div>
               {tooltip.room.tenants.length > 0 && (
                 <div className="space-y-2">
                   {tooltip.room.tenants.map((t) => (
-                    <div key={t.id} className="border-t border-slate-100 dark:border-slate-700 pt-2">
-                      <div className="font-medium">{t.companyName}</div>
+                    <div key={t.id} className="border-t border-slate-600/50 pt-2">
+                      <div className="font-medium text-slate-200">{t.companyName}</div>
                       <div className="text-xs text-slate-500">
                         租赁面积 {t.leaseArea}㎡ · {t.leaseStartDate} 至 {t.leaseEndDate}
                       </div>
@@ -427,7 +436,7 @@ export function SectionalView({ buildings }: { buildings: Building[] }) {
           )}
         </>
       ) : (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-12 text-center text-slate-500">
+        <div className="bg-slate-800/50 rounded-xl border border-slate-600/50 p-12 text-center text-slate-400">
           暂无数据
         </div>
       )}
@@ -445,10 +454,10 @@ function SummaryCard({
   sub: string
 }) {
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
-      <div className="text-sm text-slate-500 dark:text-slate-400">{title}</div>
-      <div className="text-lg font-semibold text-slate-800 dark:text-slate-100">{value}</div>
-      <div className="text-xs text-slate-500 dark:text-slate-400">{sub}</div>
+    <div className="bg-slate-800/50 rounded-xl border border-slate-600/50 p-4 backdrop-blur-sm hover:border-cyan-500/30 transition-colors duration-200">
+      <div className="text-sm text-slate-400">{title}</div>
+      <div className="text-lg font-semibold text-cyan-300">{value}</div>
+      <div className="text-xs text-slate-500">{sub}</div>
     </div>
   )
 }
