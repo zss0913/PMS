@@ -25,6 +25,9 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Wallet,
+  FileType,
+  BellRing,
 } from 'lucide-react'
 import type { AuthUser } from '@/lib/auth'
 import { cn } from '@/lib/utils'
@@ -117,10 +120,19 @@ const menuItems = [
     ],
   },
   {
+    label: '财务设置',
+    icon: Wallet,
+    children: [
+      { href: '/accounts', label: '收款账户管理', icon: Wallet },
+      { href: '/bill-rules', label: '账单规则', icon: FileText },
+      { href: '/print-templates', label: '催缴打印模板管理', icon: FileType },
+      { href: '/auto-reminder-settings', label: '自动催缴设置', icon: BellRing },
+    ],
+  },
+  {
     label: '收费管理',
     icon: CreditCard,
     children: [
-      { href: '/bill-rules', label: '账单规则', icon: FileText },
       { href: '/bills', label: '账单管理', icon: Receipt },
       { href: '/payments', label: '缴纳记录', icon: CreditCard },
       { href: '/refunds', label: '退费记录', icon: AlertCircle },

@@ -4,15 +4,14 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { Decimal } from '@prisma/client/runtime/library'
 
-const FEE_TYPE_OPTIONS = ['物业费', '水电费', '租金', '其他'] as const
-
 const createSchema = z.object({
   name: z.string().min(1, '规则名称不能为空'),
   code: z.string().optional(),
-  feeType: z.enum(FEE_TYPE_OPTIONS),
+  feeType: z.string().min(1, '费用类型不能为空'),
   amount: z.union([z.number(), z.string()]).transform((v) => Number(v)),
   discountRate: z.union([z.number(), z.string()]).optional().transform((v) => Number(v ?? 0)),
   discountAmount: z.union([z.number(), z.string()]).optional().transform((v) => Number(v ?? 0)),
+  dueDateOffsetDays: z.union([z.number(), z.string()]).optional().transform((v) => Number(v ?? 0)),
   tenantIds: z.array(z.number()).optional().default([]),
   buildingIds: z.array(z.number()).optional().default([]),
   roomIds: z.array(z.number()).optional().default([]),
@@ -48,7 +47,7 @@ export async function GET(request: NextRequest) {
     const rules = await prisma.billRule.findMany({
       where: { companyId: user.companyId },
       include: {
-        account: { select: { id: true, name: true, bankName: true, accountNumber: true } },
+        account: { select: { id: true, name: true, bankName: true, accountNumber: true, accountHolder: true } },
       },
       orderBy: { id: 'desc' },
     })
@@ -67,13 +66,13 @@ export async function GET(request: NextRequest) {
 
     const rooms = await prisma.room.findMany({
       where: { companyId: user.companyId },
-      select: { id: true, name: true, roomNumber: true, buildingId: true },
+      select: { id: true, name: true, roomNumber: true, buildingId: true, type: true },
       orderBy: { id: 'asc' },
     })
 
     const accounts = await prisma.account.findMany({
       where: { companyId: user.companyId },
-      select: { id: true, name: true, bankName: true, accountNumber: true },
+      select: { id: true, name: true, bankName: true, accountNumber: true, accountHolder: true },
       orderBy: { id: 'asc' },
     })
 
@@ -85,6 +84,7 @@ export async function GET(request: NextRequest) {
       amount: Number(r.amount),
       discountRate: Number(r.discountRate),
       discountAmount: Number(r.discountAmount),
+      dueDateOffsetDays: r.dueDateOffsetDays ?? 0,
       tenantIds: parseJsonIds(r.tenantIds),
       buildingIds: parseJsonIds(r.buildingIds),
       roomIds: parseJsonIds(r.roomIds),
@@ -165,6 +165,7 @@ export async function POST(request: NextRequest) {
         amount: new Decimal(parsed.amount),
         discountRate: new Decimal(parsed.discountRate ?? 0),
         discountAmount: new Decimal(parsed.discountAmount ?? 0),
+        dueDateOffsetDays: parsed.dueDateOffsetDays ?? 0,
         tenantIds: JSON.stringify(parsed.tenantIds ?? []),
         buildingIds: JSON.stringify(parsed.buildingIds ?? []),
         roomIds: JSON.stringify(parsed.roomIds ?? []),

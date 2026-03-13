@@ -185,9 +185,9 @@ export async function POST(request: NextRequest) {
 
     const dueDate = new Date(parsed.dueDate)
     const period = `${rule.periodStartDate.toISOString().slice(0, 10)} ~ ${rule.periodEndDate.toISOString().slice(0, 10)}`
-
-    const amount = Number(rule.amount) * (1 - Number(rule.discountRate)) - Number(rule.discountAmount)
-    const receivable = Math.max(0, amount)
+    const amountPerSqm = Number(rule.amount)
+    const discountRate = Number(rule.discountRate)
+    const discountAmount = Number(rule.discountAmount)
 
     const created: { id: number; code: string }[] = []
     const count = await prisma.bill.count({ where: { companyId: user.companyId } })
@@ -213,6 +213,10 @@ export async function POST(request: NextRequest) {
       if (ruleTenantIds.length > 0 && !ruleTenantIds.includes(tenant.id)) continue
       if (ruleBuildingIds.length > 0 && !ruleBuildingIds.includes(room.buildingId)) continue
       if (ruleRoomIds.length > 0 && !ruleRoomIds.includes(room.id)) continue
+
+      const leaseArea = Number(tr.leaseArea) || 0
+      const amount = amountPerSqm * leaseArea * (1 - discountRate) - discountAmount
+      const receivable = Math.max(0, amount)
 
       let code: string
       let exists = true

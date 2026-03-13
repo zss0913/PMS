@@ -29,7 +29,15 @@ type Bill = {
   remark: string | null
 }
 
-type BillRule = { id: number; name: string; code: string; feeType: string; status: string }
+type BillRule = {
+  id: number
+  name: string
+  code: string
+  feeType: string
+  status: string
+  periodEndDate?: string
+  dueDateOffsetDays?: number
+}
 type TenantWithRooms = {
   id: number
   companyName: string
@@ -392,6 +400,16 @@ function GenerateBillModal({
   const [remark, setRemark] = useState('')
   const [selectedPairs, setSelectedPairs] = useState<Set<string>>(new Set())
 
+  const handleRuleChange = (newRuleId: string) => {
+    setRuleId(newRuleId)
+    const rule = rules.find((r) => String(r.id) === newRuleId)
+    if (rule?.periodEndDate && rule.dueDateOffsetDays != null) {
+      const end = new Date(rule.periodEndDate)
+      end.setDate(end.getDate() + rule.dueDateOffsetDays)
+      setDueDate(end.toISOString().slice(0, 10))
+    }
+  }
+
   const togglePair = (tenantId: number, roomId: number) => {
     const key = `${tenantId}-${roomId}`
     setSelectedPairs((prev) => {
@@ -450,7 +468,7 @@ function GenerateBillModal({
             <label className="block text-sm font-medium mb-1">选择规则 *</label>
             <select
               value={ruleId}
-              onChange={(e) => setRuleId(e.target.value)}
+              onChange={(e) => handleRuleChange(e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
             >
               <option value="">请选择</option>

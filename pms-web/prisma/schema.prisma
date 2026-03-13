@@ -47,8 +47,9 @@ model Company {
   complaints      Complaint[]
   devices         Device[]
   deviceMaintenances DeviceMaintenance[]
-  accounts        Account[]
-  printTemplates  PrintTemplate[]
+  accounts            Account[]
+  autoReminderSetting AutoReminderSetting?
+  printTemplates      PrintTemplate[]
   dictionaries   Dictionary[]
 }
 
@@ -267,37 +268,51 @@ model TenantUserRelation {
 // ========== 收费管理 ==========
 
 model Account {
-  id           Int      @id @default(autoincrement())
-  name         String
-  bankName     String
+  id            Int      @id @default(autoincrement())
+  name          String
+  bankName      String
   accountNumber String
-  companyId    Int
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  accountHolder String?  // 开户名称
+  companyId     Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   billRules BillRule[]
   bills     Bill[]
 }
 
+model AutoReminderSetting {
+  id        Int      @id @default(autoincrement())
+  isEnabled Boolean  @default(false)
+  sendDay   Int      @default(1)   // 每月几号发送
+  sendTime  String   @default("09:00") // 发送时间 HH:mm
+  companyId Int      @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
 model BillRule {
-  id              Int      @id @default(autoincrement())
-  name            String
-  code            String
-  feeType         String
-  amount          Decimal
-  discountRate    Decimal  @default(0)
-  discountAmount  Decimal  @default(0)
-  tenantIds       String?
-  buildingIds     String?
-  roomIds         String?
-  periodStartDate DateTime
-  periodEndDate   DateTime
-  accountId       Int
-  companyId       Int
-  status          String   @default("active")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                 Int      @id @default(autoincrement())
+  name               String
+  code               String
+  feeType            String
+  amount             Decimal  // 每平米应收金额(元/㎡)
+  discountRate       Decimal  @default(0)
+  discountAmount     Decimal  @default(0)
+  dueDateOffsetDays  Int      @default(0) // 应收日期：相对账期结束日提前/延后天数，正数=延后，负数=提前
+  tenantIds          String?
+  buildingIds        String?
+  roomIds            String?
+  periodStartDate    DateTime
+  periodEndDate      DateTime
+  accountId          Int
+  companyId          Int
+  status             String   @default("active")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   account Account @relation(fields: [accountId], references: [id])

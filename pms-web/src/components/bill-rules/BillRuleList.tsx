@@ -21,6 +21,7 @@ export type BillRule = {
   amount: number
   discountRate: number
   discountAmount: number
+  dueDateOffsetDays?: number
   tenantIds: number[]
   buildingIds: number[]
   roomIds: number[]
@@ -208,7 +209,7 @@ export function BillRuleList() {
               <th className="text-left p-4 font-medium">规则编号</th>
               <th className="text-left p-4 font-medium">规则名称</th>
               <th className="text-left p-4 font-medium">费用类型</th>
-              <th className="text-left p-4 font-medium">应收金额</th>
+              <th className="text-left p-4 font-medium">每平米应收(元/㎡)</th>
               <th className="text-left p-4 font-medium">适用范围</th>
               <th className="text-left p-4 font-medium">状态</th>
               <th className="text-left p-4 font-medium w-36">操作</th>
@@ -223,7 +224,7 @@ export function BillRuleList() {
                 <td className="p-4 font-medium">{r.code}</td>
                 <td className="p-4">{r.name}</td>
                 <td className="p-4">{FEE_TYPE_LABELS[r.feeType] ?? r.feeType}</td>
-                <td className="p-4">¥{r.amount.toFixed(2)}</td>
+                <td className="p-4">¥{r.amount.toFixed(2)}/㎡</td>
                 <td className="p-4 text-sm text-slate-600 dark:text-slate-400 max-w-[200px] truncate">
                   {getScopeText(r)}
                 </td>

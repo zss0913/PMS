@@ -4,12 +4,11 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { Decimal } from '@prisma/client/runtime/library'
 
-const FEE_TYPE_OPTIONS = ['物业费', '水电费', '租金', '其他'] as const
-
 const updateSchema = z.object({
   name: z.string().min(1, '规则名称不能为空').optional(),
-  feeType: z.enum(FEE_TYPE_OPTIONS).optional(),
+  feeType: z.string().min(1).optional(),
   amount: z.union([z.number(), z.string()]).optional().transform((v) => (v === undefined ? undefined : Number(v))),
+  dueDateOffsetDays: z.union([z.number(), z.string()]).optional().transform((v) => (v === undefined ? undefined : Number(v ?? 0))),
   discountRate: z.union([z.number(), z.string()]).optional().transform((v) => (v === undefined ? undefined : Number(v))),
   discountAmount: z.union([z.number(), z.string()]).optional().transform((v) => (v === undefined ? undefined : Number(v))),
   tenantIds: z.array(z.number()).optional(),
@@ -82,6 +81,7 @@ export async function PUT(
     if (parsed.name !== undefined) updateData.name = parsed.name
     if (parsed.feeType !== undefined) updateData.feeType = parsed.feeType
     if (parsed.amount !== undefined) updateData.amount = new Decimal(parsed.amount)
+    if (parsed.dueDateOffsetDays !== undefined) updateData.dueDateOffsetDays = parsed.dueDateOffsetDays
     if (parsed.discountRate !== undefined) updateData.discountRate = new Decimal(parsed.discountRate)
     if (parsed.discountAmount !== undefined) updateData.discountAmount = new Decimal(parsed.discountAmount)
     if (parsed.tenantIds !== undefined) updateData.tenantIds = JSON.stringify(parsed.tenantIds)
