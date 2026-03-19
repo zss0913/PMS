@@ -236,7 +236,14 @@ export function TenantDetailTabs({ tenantId, tenantRooms }: Props) {
               <tbody>
                 {tenantRooms.map((tr) => (
                   <tr key={tr.id} className="border-t border-slate-100 dark:border-slate-700">
-                    <td className="p-3">{tr.room.roomNumber}</td>
+                    <td className="p-3">
+                      <AppLink
+                        href={`/rooms/${tr.room.id}?from=tenant&tenantId=${tenantId}`}
+                        className="text-blue-600 hover:text-blue-500 hover:underline"
+                      >
+                        {tr.room.roomNumber}
+                      </AppLink>
+                    </td>
                     <td className="p-3">{tr.room.name}</td>
                     <td className="p-3">{Number(tr.room.area)}</td>
                     <td className="p-3">{Number(tr.leaseArea)}</td>
@@ -356,7 +363,15 @@ export function TenantDetailTabs({ tenantId, tenantRooms }: Props) {
                   ) : bills.length > 0 ? (
                     bills.map((b) => (
                       <tr key={b.id} className="border-t border-slate-100 dark:border-slate-700">
-                        <td className="p-3 font-medium">{b.code}</td>
+                        <td className="p-3 font-medium">
+                          <AppLink
+                            href={`/bills/${b.id}`}
+                            target="_blank"
+                            className="text-blue-600 hover:text-blue-500 hover:underline"
+                          >
+                            {b.code}
+                          </AppLink>
+                        </td>
                         <td className="p-3">{b.room?.roomNumber ?? b.room?.name ?? '-'}</td>
                         <td className="p-3">{b.feeType}</td>
                         <td className="p-3 text-sm">{b.period}</td>
