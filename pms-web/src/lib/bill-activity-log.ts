@@ -9,6 +9,8 @@ export const BILL_ACTION = {
   PAYMENT: 'payment',
   REFUND: 'refund',
   RECEIPT_EXPORT: 'receipt_export',
+  RECEIPT_VOID: 'receipt_void',
+  INVOICE_EXPORT: 'invoice_export',
   DUNNING_EXPORT: 'dunning_export',
   REMINDER_RECORD: 'reminder_record',
 } as const

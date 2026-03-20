@@ -10,6 +10,7 @@ import { formatDateTime } from '@/lib/utils'
 import { safeReturnPath } from '@/lib/safe-return-path'
 import { BillDetailTabs } from '@/components/bills/BillDetailTabs'
 import { BillAttachmentsPanel } from '@/components/bills/BillAttachmentsPanel'
+import { BillLogDescriptionCell } from '@/components/bills/BillLogDescriptionCell'
 import { ArrowLeft } from 'lucide-react'
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
@@ -29,20 +30,10 @@ const ACTION_LABELS: Record<string, string> = {
   payment: '线下缴费',
   refund: '退费',
   receipt_export: '生成收据',
+  receipt_void: '作废收据',
+  invoice_export: '生成发票',
   dunning_export: '生成催缴单',
   reminder_record: '催缴记录',
-}
-
-type ChangeEntry = { field: string; label: string; from: string; to: string }
-
-function parseChanges(json: string | null): ChangeEntry[] {
-  if (!json?.trim()) return []
-  try {
-    const v = JSON.parse(json) as unknown
-    return Array.isArray(v) ? (v as ChangeEntry[]) : []
-  } catch {
-    return []
-  }
 }
 
 export default async function BillDetailPage({
@@ -92,6 +83,7 @@ export default async function BillDetailPage({
   const roomsDisplay = formatBillRoomsDisplay(bill.remark, bill.room)
   const dunningCount = activityLogs.filter((l) => l.action === 'dunning_export').length
   const receiptCount = activityLogs.filter((l) => l.action === 'receipt_export').length
+  const invoiceCount = activityLogs.filter((l) => l.action === 'invoice_export').length
 
   const backHref = safeReturn ?? '/bills'
   const backLabel = safeReturn ? '返回' : '返回账单列表'
@@ -100,9 +92,21 @@ export default async function BillDetailPage({
     ? `/bills/${bill.id}?returnTo=${encodeURIComponent(safeReturn)}`
     : `/bills/${bill.id}`
 
+  const tenantDetailHref = `/tenants/${bill.tenant.id}?returnTo=${encodeURIComponent(billSelfPath)}`
+
   const infoRows: { label: string; value: ReactNode }[] = [
     { label: '账单编号', value: bill.code },
-    { label: '租客', value: bill.tenant.companyName },
+    {
+      label: '租客',
+      value: (
+        <Link
+          href={tenantDetailHref}
+          className="text-blue-600 hover:underline dark:text-blue-400 font-medium"
+        >
+          {bill.tenant.companyName}
+        </Link>
+      ),
+    },
     { label: '楼宇', value: bill.building?.name ?? '—' },
     { label: '房源（汇总）', value: roomsDisplay },
     { label: '费用类型', value: bill.feeType },
@@ -136,6 +140,10 @@ export default async function BillDetailPage({
     {
       label: '已开收据',
       value: `¥${Number(bill.receiptIssuedAmount ?? 0).toFixed(2)}`,
+    },
+    {
+      label: '已开票',
+      value: `¥${Number(bill.invoiceIssuedAmount ?? 0).toFixed(2)}`,
     },
     {
       label: '状态',
@@ -192,7 +200,8 @@ export default async function BillDetailPage({
       <h1 className="text-2xl font-bold mb-2">账单详情</h1>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
         生成催缴单累计 <span className="font-medium text-slate-700 dark:text-slate-200">{dunningCount}</span> 次；
-        生成收据累计 <span className="font-medium text-slate-700 dark:text-slate-200">{receiptCount}</span> 次（以操作日志为准）
+        生成收据累计 <span className="font-medium text-slate-700 dark:text-slate-200">{receiptCount}</span> 次；
+        生成发票累计 <span className="font-medium text-slate-700 dark:text-slate-200">{invoiceCount}</span> 次（以操作日志为准）
       </p>
 
       <BillDetailTabs attachmentsSlot={<BillAttachmentsPanel billId={bill.id} />}>
@@ -300,41 +309,24 @@ export default async function BillDetailPage({
                 </tr>
               </thead>
               <tbody>
-                {activityLogs.map((log) => {
-                  const changes = parseChanges(log.changesJson)
-                  return (
-                    <tr
-                      key={log.id}
-                      className="border-b border-slate-100 dark:border-slate-700/80 align-top"
-                    >
-                      <td className="py-3 pr-3 whitespace-nowrap text-slate-600 dark:text-slate-400">
-                        {formatDateTime(log.createdAt)}
-                      </td>
-                      <td className="py-3 pr-3 whitespace-nowrap">
-                        {ACTION_LABELS[log.action] ?? log.action}
-                      </td>
-                      <td className="py-3 pr-3">{log.operatorName ?? '-'}</td>
-                      <td className="py-3 pr-3 font-mono text-xs">{log.operatorPhone ?? '-'}</td>
-                      <td className="py-3">
-                        {log.summary && (
-                          <p className="text-slate-800 dark:text-slate-200 mb-1">{log.summary}</p>
-                        )}
-                        {changes.length > 0 && (
-                          <ul className="mt-1 space-y-1 text-slate-600 dark:text-slate-400">
-                            {changes.map((c) => (
-                              <li key={c.field}>
-                                <span className="font-medium text-slate-700 dark:text-slate-300">
-                                  {c.label}
-                                </span>
-                                ：{c.from} → {c.to}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
+                {activityLogs.map((log) => (
+                  <tr
+                    key={log.id}
+                    className="border-b border-slate-100 dark:border-slate-700/80 align-top"
+                  >
+                    <td className="py-3 pr-3 whitespace-nowrap text-slate-600 dark:text-slate-400">
+                      {formatDateTime(log.createdAt)}
+                    </td>
+                    <td className="py-3 pr-3 whitespace-nowrap">
+                      {ACTION_LABELS[log.action] ?? log.action}
+                    </td>
+                    <td className="py-3 pr-3">{log.operatorName ?? '-'}</td>
+                    <td className="py-3 pr-3 font-mono text-xs">{log.operatorPhone ?? '-'}</td>
+                    <td className="py-3">
+                      <BillLogDescriptionCell log={log} billId={bill.id} />
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

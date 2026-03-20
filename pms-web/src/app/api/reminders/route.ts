@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
 import { logBillActivity, BILL_ACTION, authUserForLog } from '@/lib/bill-activity-log'
+import { allocateUniqueReminderCode } from '@/lib/reminder-code'
 
 const createSchema = z.object({
   billIds: z.array(z.number().int().min(1)).min(1, '请至少选择一个账单'),
@@ -20,6 +21,16 @@ function parseJsonIds(s: string | null): number[] {
   }
 }
 
+function dayStartLocal(s: string): Date {
+  const [y, m, d] = s.split(/\D/).map(Number)
+  return new Date(y, (m ?? 1) - 1, d ?? 1, 0, 0, 0, 0)
+}
+
+function dayEndLocal(s: string): Date {
+  const [y, m, d] = s.split(/\D/).map(Number)
+  return new Date(y, (m ?? 1) - 1, d ?? 1, 23, 59, 59, 999)
+}
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser()
@@ -33,10 +44,49 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const reminders = await prisma.paymentReminder.findMany({
-      where: { companyId: user.companyId },
+    const { searchParams } = new URL(request.url)
+    const sentAtStart = searchParams.get('sentAtStart')?.trim() ?? ''
+    const sentAtEnd = searchParams.get('sentAtEnd')?.trim() ?? ''
+    const tenantName = searchParams.get('tenantName')?.trim() ?? ''
+    const methodContains = searchParams.get('methodContains')?.trim() ?? ''
+
+    const where: {
+      companyId: number
+      sentAt?: { gte?: Date; lte?: Date }
+      method?: { contains: string }
+    } = { companyId: user.companyId }
+
+    if (sentAtStart && sentAtEnd) {
+      where.sentAt = { gte: dayStartLocal(sentAtStart), lte: dayEndLocal(sentAtEnd) }
+    } else if (sentAtStart) {
+      where.sentAt = { gte: dayStartLocal(sentAtStart) }
+    } else if (sentAtEnd) {
+      where.sentAt = { lte: dayEndLocal(sentAtEnd) }
+    }
+
+    if (methodContains) {
+      where.method = { contains: methodContains }
+    }
+
+    let reminders = await prisma.paymentReminder.findMany({
+      where,
       orderBy: { id: 'desc' },
     })
+
+    if (tenantName) {
+      const tenantBills = await prisma.bill.findMany({
+        where: {
+          companyId: user.companyId,
+          tenant: { companyName: { contains: tenantName } },
+        },
+        select: { id: true },
+      })
+      const idSet = new Set(tenantBills.map((b) => b.id))
+      reminders = reminders.filter((r) => {
+        const ids = parseJsonIds(r.billIds)
+        return ids.some((id) => idSet.has(id))
+      })
+    }
 
     const billIdSets = reminders.map((r) => parseJsonIds(r.billIds))
     const allBillIds = [...new Set(billIdSets.flat())]
@@ -101,21 +151,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: '没有有效的账单' }, { status: 400 })
     }
 
-    const count = await prisma.paymentReminder.count({ where: { companyId: user.companyId } })
-    const code = `REM${new Date().toISOString().slice(0, 10).replace(/-/g, '')}${String(count + 1).padStart(4, '0')}`
-
-    const reminder = await prisma.paymentReminder.create({
-      data: {
-        code,
-        billIds: JSON.stringify(parsed.billIds),
-        method: parsed.method,
-        content: parsed.content ?? null,
-        notifyTargetId: 0,
-        status: 'success',
-        sentAt: new Date(),
-        operatorId: user.id,
-        companyId: user.companyId,
-      },
+    const reminder = await prisma.$transaction(async (tx) => {
+      const code = await allocateUniqueReminderCode(tx)
+      return tx.paymentReminder.create({
+        data: {
+          code,
+          billIds: JSON.stringify(parsed.billIds),
+          method: parsed.method,
+          content: parsed.content ?? null,
+          notifyTargetId: 0,
+          status: 'success',
+          sentAt: new Date(),
+          operatorId: user.id,
+          companyId: user.companyId,
+        },
+      })
     })
 
     const billRows = await prisma.bill.findMany({

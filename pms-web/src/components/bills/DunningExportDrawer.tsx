@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, FileText, Search } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { X, FileText, Search, CheckCircle2 } from 'lucide-react'
+import { DateRangeField } from '@/components/ui/DateRangeField'
 
 type TemplateOpt = { id: number; name: string }
 
@@ -13,27 +15,61 @@ const PAYMENT_STATUS_OPTIONS = [
 
 export type DunningDrawerInitialFilters = {
   buildingId: string
-  tenantId: string
+  tenantKeyword: string
   status: string
   paymentStatus: string
   overdue: string
+  feeTypeKeyword: string
+  dueDateStart: string
+  dueDateEnd: string
+  periodStart: string
+  periodEnd: string
+}
+
+type DunningApiData = {
+  paperWord?: { base64: string; filename: string } | null
+  sms?: { targetCount: number; note: string } | null
+  app?: { messagesCreated: number } | null
+}
+
+/** 成功提示副文案：根据勾选与接口返回拼一句说明 */
+function buildDunningSuccessDetail(
+  data: DunningApiData | undefined,
+  sendSms: boolean,
+  sendApp: boolean,
+  generatePaperWord: boolean
+): string | undefined {
+  if (!data) return undefined
+  const parts: string[] = []
+  if (sendSms && data.sms) {
+    parts.push(`短信催缴已登记（${data.sms.targetCount} 个管理员号码）`)
+  }
+  if (sendApp && data.app) {
+    parts.push(`应用内通知 ${data.app.messagesCreated} 条`)
+  }
+  if (generatePaperWord) {
+    parts.push(data.paperWord ? '纸质催缴单已开始下载' : '纸质催缴单已处理')
+  }
+  if (parts.length === 0) return undefined
+  return parts.join('；')
 }
 
 export function DunningExportDrawer({
   open,
   onClose,
   buildings,
-  tenants,
   initialFilters,
 }: {
   open: boolean
   onClose: () => void
   buildings: { id: number; name: string }[]
-  tenants: { id: number; companyName: string }[]
   initialFilters: DunningDrawerInitialFilters
 }) {
   const [buildingId, setBuildingId] = useState('')
-  const [tenantId, setTenantId] = useState('')
+  const [tenantKeyword, setTenantKeyword] = useState('')
+  const [feeTypeKeyword, setFeeTypeKeyword] = useState('')
+  const [periodStart, setPeriodStart] = useState('')
+  const [periodEnd, setPeriodEnd] = useState('')
   const [status, setStatus] = useState('')
   /** 空数组表示「全部」；否则为所选结清状态（可多选） */
   const [paymentStatuses, setPaymentStatuses] = useState<string[]>([])
@@ -42,25 +78,54 @@ export function DunningExportDrawer({
   const [dueDateEnd, setDueDateEnd] = useState('')
   const [templateId, setTemplateId] = useState('')
   const [templates, setTemplates] = useState<TemplateOpt[]>([])
+  /** 是否短信催缴（默认不勾选） */
+  const [sendSms, setSendSms] = useState(false)
+  /** 是否应用内催缴（默认不勾选） */
+  const [sendApp, setSendApp] = useState(false)
+  /** 是否生成纸质 Word（默认勾选） */
+  const [generatePaperWord, setGeneratePaperWord] = useState(true)
   const [preview, setPreview] = useState<{ billCount: number; tenantCount: number } | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [loadingTemplates, setLoadingTemplates] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  /** 提交成功后顶部提示（抽屉关闭后仍展示） */
+  const [successToast, setSuccessToast] = useState<{ title: string; detail?: string } | null>(null)
+  const [toastMounted, setToastMounted] = useState(false)
 
   useEffect(() => {
     if (!open) return
     setBuildingId(initialFilters.buildingId)
-    setTenantId(initialFilters.tenantId)
+    setTenantKeyword(initialFilters.tenantKeyword)
+    setFeeTypeKeyword(initialFilters.feeTypeKeyword)
+    setPeriodStart(initialFilters.periodStart)
+    setPeriodEnd(initialFilters.periodEnd)
     setStatus(initialFilters.status)
     const ps = initialFilters.paymentStatus?.trim()
     setPaymentStatuses(ps ? ps.split(',').map((s) => s.trim()).filter(Boolean) : [])
     setOverdue(initialFilters.overdue === 'true')
-    setDueDateStart('')
-    setDueDateEnd('')
+    setDueDateStart(initialFilters.dueDateStart)
+    setDueDateEnd(initialFilters.dueDateEnd)
     setPreview(null)
     setError('')
+    setSendSms(false)
+    setSendApp(false)
+    setGeneratePaperWord(true)
   }, [open, initialFilters])
+
+  useEffect(() => {
+    setToastMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (open) setSuccessToast(null)
+  }, [open])
+
+  useEffect(() => {
+    if (!successToast) return
+    const t = window.setTimeout(() => setSuccessToast(null), 4500)
+    return () => window.clearTimeout(t)
+  }, [successToast])
 
   useEffect(() => {
     if (!open) return
@@ -98,12 +163,15 @@ export function DunningExportDrawer({
   const buildQueryParams = () => {
     const params = new URLSearchParams()
     if (buildingId) params.set('buildingId', buildingId)
-    if (tenantId) params.set('tenantId', tenantId)
+    if (tenantKeyword.trim()) params.set('tenantKeyword', tenantKeyword.trim())
+    if (feeTypeKeyword.trim()) params.set('feeTypeKeyword', feeTypeKeyword.trim())
     if (status) params.set('status', status)
     if (paymentStatuses.length > 0) params.set('paymentStatus', paymentStatuses.join(','))
     if (overdue) params.set('overdue', 'true')
     if (dueDateStart) params.set('dueDateStart', dueDateStart)
     if (dueDateEnd) params.set('dueDateEnd', dueDateEnd)
+    if (periodStart) params.set('periodStart', periodStart)
+    if (periodEnd) params.set('periodEnd', periodEnd)
     return params
   }
 
@@ -130,7 +198,11 @@ export function DunningExportDrawer({
   }
 
   const handleGenerate = async () => {
-    if (!templateId) {
+    if (!sendSms && !sendApp && !generatePaperWord) {
+      setError('请至少选择一种催缴方式')
+      return
+    }
+    if (generatePaperWord && !templateId) {
       setError('请选择催缴单模板')
       return
     }
@@ -142,47 +214,78 @@ export function DunningExportDrawer({
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          templateId: Number(templateId),
+          sendSms,
+          sendApp,
+          generatePaperWord,
+          templateId: generatePaperWord && templateId ? Number(templateId) : undefined,
           buildingId: buildingId || undefined,
-          tenantId: tenantId || undefined,
+          tenantKeyword: tenantKeyword.trim() || undefined,
+          feeTypeKeyword: feeTypeKeyword.trim() || undefined,
           status: status || undefined,
           paymentStatus: paymentStatuses.length > 0 ? paymentStatuses.join(',') : undefined,
           overdue: overdue ? 'true' : undefined,
           dueDateStart: dueDateStart || undefined,
           dueDateEnd: dueDateEnd || undefined,
+          periodStart: periodStart || undefined,
+          periodEnd: periodEnd || undefined,
         }),
       })
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        setError((j as { message?: string }).message || '生成失败')
+      const j = (await res.json().catch(() => ({}))) as {
+        success?: boolean
+        message?: string
+        data?: DunningApiData
+      }
+      if (!res.ok || !j.success) {
+        setError(j.message || '提交失败')
         return
       }
-      const blob = await res.blob()
-      const cd = res.headers.get('Content-Disposition')
-      let name = `催缴单_${Date.now()}.docx`
-      const m = cd?.match(/filename\*=UTF-8''(.+)/)
-      if (m) {
-        try {
-          name = decodeURIComponent(m[1].replace(/;$/, '').trim())
-        } catch {
-          /* ignore */
-        }
+      const paper = j.data?.paperWord
+      if (paper?.base64 && paper.filename) {
+        const bin = atob(paper.base64)
+        const bytes = new Uint8Array(bin.length)
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+        const blob = new Blob([bytes], {
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        })
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = paper.filename
+        a.click()
+        URL.revokeObjectURL(a.href)
       }
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = name
-      a.click()
-      URL.revokeObjectURL(a.href)
+      const detail = buildDunningSuccessDetail(j.data, sendSms, sendApp, generatePaperWord)
+      setSuccessToast({ title: '提交成功', detail })
       onClose()
     } finally {
       setSubmitting(false)
     }
   }
 
-  if (!open) return null
-
   return (
     <>
+      {toastMounted &&
+        successToast &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            role="status"
+            aria-live="polite"
+            className="pointer-events-none fixed top-4 left-1/2 z-[100] flex max-w-md -translate-x-1/2 flex-col gap-1 rounded-lg border border-emerald-500/30 bg-emerald-600 px-4 py-3 text-white shadow-lg dark:bg-emerald-700"
+          >
+            <div className="flex items-start gap-2">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-100" aria-hidden />
+              <div className="min-w-0">
+                <p className="font-medium">{successToast.title}</p>
+                {successToast.detail ? (
+                  <p className="mt-1 text-sm text-emerald-50/95">{successToast.detail}</p>
+                ) : null}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+      {open && (
+        <>
       <div
         role="presentation"
         className="fixed inset-0 z-[54] bg-black/40"
@@ -209,7 +312,7 @@ export function DunningExportDrawer({
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <p className="text-sm text-slate-500">
-            按条件筛选账单，同一租客合并为一份催缴内容；多个租客将合并为一个 Word（分页）。
+            按条件筛选账单；同一租客合并为一份催缴内容。勾选「纸质催缴单」时，多个租客将合并为一个 Word（分页）并下载。
           </p>
 
           {error && (
@@ -235,19 +338,25 @@ export function DunningExportDrawer({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">租客</label>
-            <select
-              value={tenantId}
-              onChange={(e) => setTenantId(e.target.value)}
+            <label className="block text-xs font-medium text-slate-500 mb-1">租客（模糊）</label>
+            <input
+              type="search"
+              placeholder="公司名称关键词"
+              value={tenantKeyword}
+              onChange={(e) => setTenantKeyword(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
-            >
-              <option value="">全部租客</option>
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.companyName}
-                </option>
-              ))}
-            </select>
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">费用类型（模糊）</label>
+            <input
+              type="search"
+              placeholder="可选"
+              value={feeTypeKeyword}
+              onChange={(e) => setFeeTypeKeyword(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -270,6 +379,17 @@ export function DunningExportDrawer({
               />
             </div>
           </div>
+
+          <DateRangeField
+            label="账期重叠（与账单账期区间有交集即纳入）"
+            start={periodStart}
+            end={periodEnd}
+            onChange={({ start, end }) => {
+              setPeriodStart(start)
+              setPeriodEnd(end)
+            }}
+            hint="与账单账期（起～止）有任意一天重叠即纳入；需同时填写起止。"
+          />
 
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">账单状态</label>
@@ -318,12 +438,14 @@ export function DunningExportDrawer({
           </label>
 
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">催缴单模板 *</label>
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              催缴单模板{generatePaperWord ? ' *' : ''}
+            </label>
             <select
               value={templateId}
               onChange={(e) => setTemplateId(e.target.value)}
-              disabled={loadingTemplates}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
+              disabled={loadingTemplates || !generatePaperWord}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm disabled:opacity-60"
             >
               {templates.length === 0 ? (
                 <option value="">暂无可用模板，请先到「催缴打印模板管理」上传</option>
@@ -335,6 +457,9 @@ export function DunningExportDrawer({
                 ))
               )}
             </select>
+            {!generatePaperWord && (
+              <p className="text-xs text-slate-400 mt-1">未勾选纸质催缴单时可不选模板</p>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -357,6 +482,37 @@ export function DunningExportDrawer({
               </p>
             </div>
           )}
+
+          <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-600">
+            <span className="block text-xs font-medium text-slate-500">催缴方式</span>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sendSms}
+                onChange={(e) => setSendSms(e.target.checked)}
+                className="rounded"
+              />
+              是否进行短信催缴（向租客管理员手机号发送，需对接短信网关）
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sendApp}
+                onChange={(e) => setSendApp(e.target.checked)}
+                className="rounded"
+              />
+              是否应用内催缴（向该租客管理员账号推送站内消息）
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={generatePaperWord}
+                onChange={(e) => setGeneratePaperWord(e.target.checked)}
+                className="rounded"
+              />
+              是否生成纸质催缴单（合并为 Word 并下载）
+            </label>
+          </div>
         </div>
 
         <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2 shrink-0">
@@ -370,13 +526,19 @@ export function DunningExportDrawer({
           <button
             type="button"
             onClick={handleGenerate}
-            disabled={submitting || !templateId || templates.length === 0}
+            disabled={
+              submitting ||
+              (!sendSms && !sendApp && !generatePaperWord) ||
+              (generatePaperWord && (!templateId || templates.length === 0))
+            }
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50"
           >
-            {submitting ? '生成中…' : '生成并下载 Word'}
+            {submitting ? '提交中…' : '提交'}
           </button>
         </div>
       </aside>
+        </>
+      )}
     </>
   )
 }

@@ -51,7 +51,13 @@ export async function GET(request: NextRequest) {
     const refunds = await prisma.refund.findMany({
       where: { companyId: user.companyId },
       include: {
-        bill: { select: { id: true, code: true }, include: { tenant: { select: { id: true, companyName: true } } } },
+        bill: {
+          select: {
+            id: true,
+            code: true,
+            tenant: { select: { id: true, companyName: true } },
+          },
+        },
       },
       orderBy: { id: 'desc' },
     })
@@ -179,6 +185,7 @@ export async function POST(request: NextRequest) {
           refundCode: refund.code,
           amount: parsed.amount,
           reason: parsed.reason,
+          refunder: parsed.refunder,
         },
         operatorId: op.operatorId,
         operatorName: op.operatorName,

@@ -76,6 +76,7 @@ export async function GET(
         amountPaid: Number(bill.amountPaid),
         amountDue: Number(bill.amountDue),
         receiptIssuedAmount: Number(bill.receiptIssuedAmount ?? 0),
+        invoiceIssuedAmount: Number(bill.invoiceIssuedAmount ?? 0),
         quantityTotal: bill.quantityTotal != null ? Number(bill.quantityTotal) : null,
         unitPrice: bill.unitPrice != null ? Number(bill.unitPrice) : null,
         roomsDisplay: formatBillRoomsDisplay(bill.remark, bill.room),

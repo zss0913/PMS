@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
-import { buildBillWhereClause } from '@/lib/bill-filters'
+import { buildBillWhereClause, filterBillsByPeriodOverlap } from '@/lib/bill-filters'
 import {
   splitBillingPeriod,
   computeMonthlyNetRoom,
@@ -56,18 +56,22 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
+    const periodStart = searchParams.get('periodStart')
+    const periodEnd = searchParams.get('periodEnd')
     const where = buildBillWhereClause(user.companyId, {
       buildingId: searchParams.get('buildingId'),
       tenantId: searchParams.get('tenantId'),
+      tenantKeyword: searchParams.get('tenantKeyword'),
       status: searchParams.get('status'),
       paymentStatus: searchParams.get('paymentStatus'),
       overdue: searchParams.get('overdue'),
       feeType: searchParams.get('feeType'),
+      feeTypeKeyword: searchParams.get('feeTypeKeyword'),
       dueDateStart: searchParams.get('dueDateStart'),
       dueDateEnd: searchParams.get('dueDateEnd'),
     })
 
-    const bills = await prisma.bill.findMany({
+    let bills = await prisma.bill.findMany({
       where,
       include: {
         tenant: { select: { id: true, companyName: true } },
@@ -76,6 +80,8 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { id: 'desc' },
     })
+
+    bills = filterBillsByPeriodOverlap(bills, periodStart, periodEnd)
 
     const buildings = await prisma.building.findMany({
       where: { companyId: user.companyId },
@@ -102,6 +108,7 @@ export async function GET(request: NextRequest) {
       amountPaid: Number(b.amountPaid),
       amountDue: Number(b.amountDue),
       receiptIssuedAmount: Number(b.receiptIssuedAmount ?? 0),
+      invoiceIssuedAmount: Number(b.invoiceIssuedAmount ?? 0),
       status: b.status,
       paymentStatus: b.paymentStatus,
       dueDate: b.dueDate.toISOString().slice(0, 10),

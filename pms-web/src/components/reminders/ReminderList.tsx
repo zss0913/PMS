@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { Plus } from 'lucide-react'
+import { Search, RotateCcw } from 'lucide-react'
 
 type Reminder = {
   id: number
@@ -21,20 +22,34 @@ type ApiData = {
   list: Reminder[]
 }
 
-const REMINDER_METHODS = ['微信', '短信', '邮件', '线下'] as const
-
 export function ReminderList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const [data, setData] = useState<ApiData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [createOpen, setCreateOpen] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
+  /** 筛选用：与请求参数同步，点「查询」后生效 */
+  const [sentAtStart, setSentAtStart] = useState('')
+  const [sentAtEnd, setSentAtEnd] = useState('')
+  const [tenantName, setTenantName] = useState('')
+  const [methodContains, setMethodContains] = useState('')
+  /** 已应用到请求的筛选（用于列表查询） */
+  const [applied, setApplied] = useState({
+    sentAtStart: '',
+    sentAtEnd: '',
+    tenantName: '',
+    methodContains: '',
+  })
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/reminders')
+      const params = new URLSearchParams()
+      if (applied.sentAtStart) params.set('sentAtStart', applied.sentAtStart)
+      if (applied.sentAtEnd) params.set('sentAtEnd', applied.sentAtEnd)
+      if (applied.tenantName.trim()) params.set('tenantName', applied.tenantName.trim())
+      if (applied.methodContains.trim()) params.set('methodContains', applied.methodContains.trim())
+      const q = params.toString()
+      const res = await fetch(`/api/reminders${q ? `?${q}` : ''}`)
       const json = await res.json()
       if (json.success) setData(json.data)
       else setData(null)
@@ -44,11 +59,33 @@ export function ReminderList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [applied])
 
   useEffect(() => {
     fetchData()
-  }, [])
+  }, [fetchData])
+
+  const applyFilters = () => {
+    setApplied({
+      sentAtStart,
+      sentAtEnd,
+      tenantName,
+      methodContains,
+    })
+  }
+
+  const resetFilters = () => {
+    setSentAtStart('')
+    setSentAtEnd('')
+    setTenantName('')
+    setMethodContains('')
+    setApplied({
+      sentAtStart: '',
+      sentAtEnd: '',
+      tenantName: '',
+      methodContains: '',
+    })
+  }
 
   const list = data?.list ?? []
   const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
@@ -96,13 +133,60 @@ export function ReminderList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-      <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-end">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-end gap-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">催缴日期起</label>
+          <input
+            type="date"
+            value={sentAtStart}
+            onChange={(e) => setSentAtStart(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">催缴日期止</label>
+          <input
+            type="date"
+            value={sentAtEnd}
+            onChange={(e) => setSentAtEnd(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
+          />
+        </div>
+        <div className="min-w-[140px] flex-1 max-w-xs">
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">租客名称</label>
+          <input
+            type="text"
+            value={tenantName}
+            onChange={(e) => setTenantName(e.target.value)}
+            placeholder="模糊匹配"
+            className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
+          />
+        </div>
+        <div className="min-w-[140px] flex-1 max-w-xs">
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">催缴方式</label>
+          <input
+            type="text"
+            value={methodContains}
+            onChange={(e) => setMethodContains(e.target.value)}
+            placeholder="模糊匹配，如：短信"
+            className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
+          />
+        </div>
         <button
-          onClick={() => setCreateOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
+          type="button"
+          onClick={applyFilters}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-800 text-white dark:bg-slate-600 hover:bg-slate-700 text-sm"
         >
-          <Plus className="w-4 h-4" />
-          新建催缴
+          <Search className="w-4 h-4" />
+          查询
+        </button>
+        <button
+          type="button"
+          onClick={resetFilters}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm"
+        >
+          <RotateCcw className="w-4 h-4" />
+          重置
         </button>
       </div>
       <div className="overflow-x-auto">
@@ -114,6 +198,7 @@ export function ReminderList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               <th className="text-left p-4 font-medium">催缴方式</th>
               <th className="text-left p-4 font-medium">状态</th>
               <th className="text-left p-4 font-medium">发送时间</th>
+              <th className="text-left p-4 font-medium w-28">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -135,6 +220,14 @@ export function ReminderList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   </span>
                 </td>
                 <td className="p-4">{formatDateTime(r.sentAt)}</td>
+                <td className="p-4">
+                  <Link
+                    href={`/reminders/${r.id}`}
+                    className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+                  >
+                    查看详情
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -142,7 +235,7 @@ export function ReminderList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       </div>
       {list.length === 0 && (
         <div className="p-12 text-center text-slate-500">
-          暂无催缴记录，点击「新建催缴」或从账单管理发起催缴
+          暂无催缴记录，请从账单管理发起催缴
         </div>
       )}
       {list.length > 0 && (
@@ -155,151 +248,6 @@ export function ReminderList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         />
       )}
 
-      {createOpen && (
-        <CreateReminderModal
-          onClose={() => setCreateOpen(false)}
-          onSuccess={() => { setCreateOpen(false); fetchData() }}
-          submitting={submitting}
-          setSubmitting={setSubmitting}
-        />
-      )}
-    </div>
-  )
-}
-
-function CreateReminderModal({
-  onClose,
-  onSuccess,
-  submitting,
-  setSubmitting,
-}: {
-  onClose: () => void
-  onSuccess: () => void
-  submitting: boolean
-  setSubmitting: (v: boolean) => void
-}) {
-  const [bills, setBills] = useState<{ id: number; code: string; amountDue: number; tenant?: { companyName: string } }[]>([])
-  const [selectedBillIds, setSelectedBillIds] = useState<Set<number>>(new Set())
-  const [method, setMethod] = useState('微信')
-  const [content, setContent] = useState('')
-
-  useEffect(() => {
-    fetch('/api/bills')
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.success) {
-          const unpaid = (json.data.list ?? []).filter(
-            (b: { paymentStatus: string }) => b.paymentStatus !== 'paid'
-          )
-          setBills(unpaid)
-          setSelectedBillIds(new Set(unpaid.map((b: { id: number }) => b.id)))
-        }
-      })
-  }, [])
-
-  const toggleBill = (id: number) => {
-    setSelectedBillIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const handleSubmit = async () => {
-    if (selectedBillIds.size === 0) {
-      alert('请至少选择一个账单')
-      return
-    }
-    setSubmitting(true)
-    try {
-      const res = await fetch('/api/reminders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          billIds: Array.from(selectedBillIds),
-          method,
-          content: content || undefined,
-        }),
-      })
-      const json = await res.json()
-      if (json.success) {
-        alert('催缴已发送')
-        onSuccess()
-      } else {
-        alert(json.message || '催缴失败')
-      }
-    } catch {
-      alert('网络错误')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-          <h2 className="text-lg font-semibold">新建催缴</h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded">
-            ×
-          </button>
-        </div>
-        <div className="p-4 overflow-y-auto flex-1 space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">选择账单（待缴）</label>
-            <div className="border border-slate-200 dark:border-slate-600 rounded-lg max-h-48 overflow-y-auto">
-              {bills.map((b) => (
-                <label key={b.id} className="flex items-center gap-2 p-2 border-b border-slate-100 dark:border-slate-700 last:border-0 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedBillIds.has(b.id)}
-                    onChange={() => toggleBill(b.id)}
-                  />
-                  <span className="text-sm">{b.code} - {b.tenant?.companyName} 待缴 ¥{b.amountDue?.toFixed(2)}</span>
-                </label>
-              ))}
-              {bills.length === 0 && (
-                <div className="p-4 text-slate-500 text-sm">暂无待缴账单</div>
-              )}
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">催缴方式 *</label>
-            <select
-              value={method}
-              onChange={(e) => setMethod(e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
-            >
-              {REMINDER_METHODS.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">催缴内容（选填）</label>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="选填"
-              rows={3}
-              className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
-            />
-          </div>
-        </div>
-        <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700">
-            取消
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || selectedBillIds.size === 0}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50"
-          >
-            {submitting ? '发送中...' : '发送催缴'}
-          </button>
-        </div>
-      </div>
     </div>
   )
 }

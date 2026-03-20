@@ -53,6 +53,8 @@ model Company {
   dictionaries   Dictionary[]
   billActivityLogs BillActivityLog[]
   billAttachments  BillAttachment[]
+  tenantAppMessages TenantAppMessage[]
+  receiptIssueRecords ReceiptIssueRecord[]
 }
 
 model Department {
@@ -222,6 +224,7 @@ model Tenant {
   bills       Bill[]
   workOrders  WorkOrder[]
   complaints  Complaint[]
+  appMessages TenantAppMessage[]
 
   @@unique([companyId, companyName])
 }
@@ -270,6 +273,23 @@ model TenantUserRelation {
   @@unique([tenantUserId, tenantId])
 }
 
+/// 租客端应用内消息（催缴等），由物业后台写入，租客管理员在小程序查看
+model TenantAppMessage {
+  id          Int      @id @default(autoincrement())
+  tenantId    Int
+  companyId   Int
+  title       String
+  content     String
+  billIdsJson String   @default("[]")
+  createdAt   DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([companyId])
+}
+
 // Building 需要添加 tenants 关联
 // 在 Building 中通过 Tenant.buildingId 已关联
 
@@ -295,6 +315,8 @@ model AutoReminderSetting {
   isEnabled Boolean  @default(false)
   sendDay   Int      @default(1)   // 每月几号发送
   sendTime  String   @default("09:00") // 发送时间 HH:mm
+  /// 上次自动催缴已执行的公历月份（上海时区 YYYY-MM），用于每月只发一次
+  lastAutoReminderMonth String?
   companyId Int      @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -351,6 +373,8 @@ model Bill {
   companyId         Int
   /// 已开具收据的累计金额（元），不超过已缴；用于避免重复开收据
   receiptIssuedAmount Decimal @default(0)
+  /// 已开具发票的累计金额（元），不超过应收；用于避免超额开票
+  invoiceIssuedAmount Decimal @default(0)
   /// 总量（选填；手工账单可录）
   quantityTotal     Decimal?
   /// 单价（元，选填；手工账单可录）
@@ -370,6 +394,36 @@ model Bill {
   refunds  Refund[]
   activityLogs BillActivityLog[]
   attachments BillAttachment[]
+}
+
+/// 收据开具记录：每生成一张物理收据（Word 中一页/一份）一条；多账单合并开一张仍是一条
+model ReceiptIssueRecord {
+  id              Int      @id @default(autoincrement())
+  companyId       Int
+  /// 同一次「生成并下载」中的多条收据共享
+  batchId         String
+  tenantId        Int
+  tenantName      String
+  mergeMode       String
+  billCount       Int
+  totalAmount     Decimal
+  billIdsJson     String
+  billCodesJson   String
+  lineAmountsJson String
+  templateId      Int?
+  operatorId      Int?
+  operatorName    String?
+  operatorPhone   String?
+  createdAt       DateTime @default(now())
+  /// 作废时间；非空表示该条收据记录已作废，对应金额已从各账单已开收据中冲回
+  voidedAt              DateTime?
+  voidedOperatorId      Int?
+  voidedOperatorName    String?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([companyId, batchId])
 }
 
 /// 账单附件（图片 / PDF / Office / 表格等），不记入操作日志

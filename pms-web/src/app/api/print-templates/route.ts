@@ -11,7 +11,7 @@ const createSchema = z.object({
   status: z.enum(['active', 'inactive']).optional().default('active'),
 })
 
-const TEMPLATE_TYPES = ['催缴单', '收据'] as const
+const TEMPLATE_TYPES = ['催缴单', '收据', '发票'] as const
 
 export async function GET(request: NextRequest) {
   try {

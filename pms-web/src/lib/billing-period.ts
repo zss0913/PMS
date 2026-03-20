@@ -127,6 +127,17 @@ export function formatProrationBreakdown(
     .join('+')
 }
 
+/**
+ * 将规则中的折扣率转为参与 (1−r) 的小数 r。
+ * - 0～1：已为小数（如 0.1 表示 10% 折扣），与部分存量数据一致；
+ * - 大于 1：按「百分数」理解（如 10 表示 10% 折扣），与账单规则表单「折扣率(%)」录入一致。
+ */
+export function normalizeDiscountRateForCalculation(rate: number): number {
+  if (!Number.isFinite(rate) || rate < 0) return 0
+  if (rate <= 1) return rate
+  return rate / 100
+}
+
 /** 单间每月应收（元/月）：max(0, 单价×面积×(1−折扣率)−减免额) */
 export function computeMonthlyNetRoom(
   amountPerSqm: number,
@@ -134,7 +145,8 @@ export function computeMonthlyNetRoom(
   discountRate: number,
   discountAmount: number
 ): { monthlyNet: number; rawMonthly: number } {
-  const rawMonthly = amountPerSqm * leaseArea * (1 - discountRate) - discountAmount
+  const dr = normalizeDiscountRateForCalculation(discountRate)
+  const rawMonthly = amountPerSqm * leaseArea * (1 - dr) - discountAmount
   const monthlyNet = Math.max(0, rawMonthly)
   return { monthlyNet, rawMonthly }
 }

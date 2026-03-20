@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 
@@ -33,8 +34,12 @@ export function RefundList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     try {
       const res = await fetch('/api/refunds')
       const json = await res.json()
-      if (json.success) setData(json.data)
-      else setData(null)
+      if (json.success) {
+        setData(json.data)
+      } else {
+        setData(null)
+        setError(json.message ?? '加载失败')
+      }
     } catch {
       setError('网络错误')
       setData(null)
@@ -104,6 +109,7 @@ export function RefundList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               <th className="text-left p-4 font-medium">退费人</th>
               <th className="text-right p-4 font-medium">金额</th>
               <th className="text-left p-4 font-medium">原因</th>
+              <th className="text-left p-4 font-medium whitespace-nowrap">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -119,6 +125,14 @@ export function RefundList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 <td className="p-4">{r.refunder}</td>
                 <td className="p-4 text-right">¥{r.amount.toFixed(2)}</td>
                 <td className="p-4 max-w-[200px] truncate" title={r.reason}>{r.reason}</td>
+                <td className="p-4">
+                  <Link
+                    href={`/refunds/${r.id}`}
+                    className="text-blue-600 hover:underline dark:text-blue-400 text-sm whitespace-nowrap"
+                  >
+                    查看详情
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>

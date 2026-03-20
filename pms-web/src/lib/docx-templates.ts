@@ -53,7 +53,7 @@ function tableCell(
 }
 
 /**
- * 催缴单模板常用 `{{billList}}`，普通占位符会输出纯文本无法成表。
+ * 催缴单、收据等 Word 模板常用 `{{billList}}`，普通占位符会输出纯文本无法成表。
  * 导出前将 `{{billList}}` / `{{billTableXml}}` 改为 RawXml 形式，并把表格 OOXML 写入对应 data 字段。
  */
 export function prepareDunningTemplateBillListAsRawTable(buffer: Buffer): Buffer {
@@ -125,6 +125,77 @@ export function buildBillTableXml(
     `¥${sumR.due.toFixed(2)}`,
     colW[5]
   )}${tableCell('/', colW[6])}</w:tr>`
+
+  return `<w:tbl>
+  <w:tblPr>
+    <w:tblW w:w="5000" w:type="pct"/>
+    <w:tblBorders>
+      <w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>
+      <w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>
+      <w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>
+      <w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>
+      <w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/>
+      <w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/>
+    </w:tblBorders>
+  </w:tblPr>
+  <w:tblGrid>${grid}</w:tblGrid>
+  ${headerTr}${dataTrs}${footerTr}
+</w:tbl>`
+}
+
+/** 收据「本次开具」账单列表：7 列 + 合计行（前三列合并）；经 prepareDunningTemplateBillListAsRawTable 后可用 {{billList}} */
+export function buildReceiptBillTableXml(
+  rows: Array<{
+    code: string
+    feeType: string
+    period: string
+    accountReceivable: number
+    amountPaid: number
+    receiptLineAmount: number
+    dueDate: string
+  }>
+): string {
+  if (rows.length === 0) {
+    return ''
+  }
+  const colW = [1800, 1400, 2600, 1500, 1500, 1700, 1500]
+  const headers = [
+    '账单编号',
+    '费用类型',
+    '账期',
+    '应收金额',
+    '已缴金额',
+    '本次收据（元）',
+    '应收日期',
+  ]
+  const grid = colW.map((w) => `<w:gridCol w:w="${w}"/>`).join('')
+  const headerTr = `<w:tr>${headers.map((h, i) => tableCell(h, colW[i])).join('')}</w:tr>`
+  const dataTrs = rows
+    .map((b) => {
+      const cells = [
+        b.code,
+        b.feeType,
+        b.period,
+        `¥${b.accountReceivable.toFixed(2)}`,
+        `¥${b.amountPaid.toFixed(2)}`,
+        `¥${b.receiptLineAmount.toFixed(2)}`,
+        b.dueDate,
+      ]
+      return `<w:tr>${cells.map((c, i) => tableCell(c, colW[i])).join('')}</w:tr>`
+    })
+    .join('')
+
+  const sumAr = rows.reduce((s, b) => s + b.accountReceivable, 0)
+  const sumPaid = rows.reduce((s, b) => s + b.amountPaid, 0)
+  const sumReceipt = rows.reduce((s, b) => s + b.receiptLineAmount, 0)
+  const w123 = colW[0] + colW[1] + colW[2]
+  const footerTr = `<w:tr>${tableCell('合计', w123, { gridSpan: 3 })}${tableCell(
+    `¥${sumAr.toFixed(2)}`,
+    colW[3]
+  )}${tableCell(`¥${sumPaid.toFixed(2)}`, colW[4])}${tableCell(
+    `¥${sumReceipt.toFixed(2)}`,
+    colW[5]
+  )}${tableCell('-', colW[6])}</w:tr>`
 
   return `<w:tbl>
   <w:tblPr>

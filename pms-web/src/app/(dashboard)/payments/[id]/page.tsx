@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { formatDateTime } from '@/lib/utils'
+import { safeReturnPath } from '@/lib/safe-return-path'
 import { ArrowLeft } from 'lucide-react'
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
@@ -18,14 +19,20 @@ const BILL_PAYMENT_STATUS: Record<string, string> = {
 
 export default async function PaymentDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ returnTo?: string }>
 }) {
   const user = await getAuthUser()
   if (!user) redirect('/login')
   if (user.companyId === 0) redirect('/payments')
 
   const { id } = await params
+  const { returnTo } = await searchParams
+  const safeReturn = safeReturnPath(returnTo)
+  const backHref = safeReturn ?? '/payments'
+  const backLabel = safeReturn ? '返回' : '返回缴纳记录'
   const paymentId = parseInt(id, 10)
   if (isNaN(paymentId)) notFound()
 
@@ -71,11 +78,11 @@ export default async function PaymentDetailPage({
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6">
         <Link
-          href="/payments"
+          href={backHref}
           className="inline-flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
         >
           <ArrowLeft className="w-4 h-4" />
-          返回缴纳记录
+          {backLabel}
         </Link>
       </div>
 

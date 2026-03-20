@@ -111,7 +111,7 @@ export function AutoReminderSettingForm({ isSuperAdmin }: { isSuperAdmin: boolea
             <span className="font-medium">启用自动催缴</span>
           </label>
           <span className="text-sm text-slate-500">
-            每月定时对逾期账单发送催缴通知
+            每月定时对当前企业下所有逾期账单发送催缴通知（应用内通知，推送至租客端管理员）
           </span>
         </div>
 

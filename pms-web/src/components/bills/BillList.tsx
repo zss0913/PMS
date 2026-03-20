@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef } from 'react'
+import type { ReactNode } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import {
@@ -14,6 +16,11 @@ import {
   Eye,
   FileText,
   Trash2,
+  Landmark,
+  Columns3,
+  GripVertical,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import {
   splitBillingPeriod,
@@ -23,6 +30,7 @@ import {
   buildRoomReceivableFormulaLine,
 } from '@/lib/billing-period'
 import { DunningExportDrawer } from './DunningExportDrawer'
+import { DateRangeField } from '@/components/ui/DateRangeField'
 
 type Bill = {
   id: number
@@ -39,6 +47,8 @@ type Bill = {
   amountDue: number
   /** 已开具收据累计金额，不超过已缴 */
   receiptIssuedAmount?: number
+  /** 已开具发票累计金额，不超过应收 */
+  invoiceIssuedAmount?: number
   status: string
   paymentStatus: string
   dueDate: string
@@ -86,6 +96,208 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
 const STATUS_LABELS: Record<string, string> = {
   open: '开启',
   closed: '关闭',
+}
+
+/** 当前日期晚于应收日期，且结清状态为未缴纳或部分缴纳 → 逾期 */
+function billIsOverdue(b: { dueDate: string; paymentStatus: string }): boolean {
+  if (b.paymentStatus === 'paid') return false
+  const due = b.dueDate.slice(0, 10)
+  const t = new Date()
+  const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+  return due < today
+}
+
+const BILL_LIST_COLUMNS_STORAGE = 'pms.billList.columns.v1'
+
+const BILL_COLUMN_KEYS = [
+  'code',
+  'tenant',
+  'building',
+  'room',
+  'overdue',
+  'invoiceIssued',
+  'feeType',
+  'period',
+  'accountReceivable',
+  'amountPaid',
+  'amountDue',
+  'receiptIssued',
+  'status',
+  'paymentStatus',
+  'dueDate',
+] as const
+
+export type BillColumnKey = (typeof BILL_COLUMN_KEYS)[number]
+
+const BILL_COLUMN_LABELS: Record<BillColumnKey, string> = {
+  code: '账单编号',
+  tenant: '租客',
+  building: '楼宇',
+  room: '房源',
+  overdue: '逾期状态',
+  invoiceIssued: '已开票',
+  feeType: '费用类型',
+  period: '账期',
+  accountReceivable: '应收',
+  amountPaid: '已缴',
+  amountDue: '待缴',
+  receiptIssued: '已开收据',
+  status: '状态',
+  paymentStatus: '结清状态',
+  dueDate: '应收日期',
+}
+
+function defaultBillColumnPrefs(): {
+  order: BillColumnKey[]
+  visible: Record<BillColumnKey, boolean>
+} {
+  const order = [...BILL_COLUMN_KEYS]
+  const visible = Object.fromEntries(BILL_COLUMN_KEYS.map((k) => [k, true])) as Record<
+    BillColumnKey,
+    boolean
+  >
+  return { order, visible }
+}
+
+function loadBillColumnPrefs(): {
+  order: BillColumnKey[]
+  visible: Record<BillColumnKey, boolean>
+} {
+  const defaults = defaultBillColumnPrefs()
+  if (typeof window === 'undefined') return defaults
+  try {
+    const raw = localStorage.getItem(BILL_LIST_COLUMNS_STORAGE)
+    if (!raw) return defaults
+    const p = JSON.parse(raw) as { order?: unknown; visible?: unknown }
+    let order = Array.isArray(p.order)
+      ? p.order.filter((k): k is BillColumnKey => BILL_COLUMN_KEYS.includes(k as BillColumnKey))
+      : [...defaults.order]
+    for (const k of BILL_COLUMN_KEYS) {
+      if (!order.includes(k)) order = [...order, k]
+    }
+    const visible = { ...defaults.visible }
+    if (p.visible && typeof p.visible === 'object' && p.visible !== null) {
+      const vis = p.visible as Record<string, unknown>
+      for (const k of BILL_COLUMN_KEYS) {
+        if (typeof vis[k] === 'boolean') visible[k] = vis[k] as boolean
+      }
+    }
+    if (BILL_COLUMN_KEYS.filter((k) => visible[k]).length < 1) return defaults
+    return { order, visible }
+  } catch {
+    return defaults
+  }
+}
+
+function saveBillColumnPrefs(prefs: { order: BillColumnKey[]; visible: Record<BillColumnKey, boolean> }) {
+  try {
+    localStorage.setItem(BILL_LIST_COLUMNS_STORAGE, JSON.stringify(prefs))
+  } catch {
+    /* ignore */
+  }
+}
+
+function billColumnThClass(key: BillColumnKey): string {
+  const right = new Set<BillColumnKey>([
+    'accountReceivable',
+    'amountPaid',
+    'amountDue',
+    'receiptIssued',
+    'invoiceIssued',
+  ])
+  const base = 'p-4 font-medium'
+  if (key === 'invoiceIssued' || key === 'receiptIssued') return `${base} text-right text-xs whitespace-nowrap`
+  if (right.has(key)) return `${base} text-right`
+  if (key === 'overdue') return `${base} whitespace-nowrap`
+  return `${base} text-left`
+}
+
+function renderBillColumnCell(b: Bill, key: BillColumnKey): ReactNode {
+  switch (key) {
+    case 'code':
+      return <span className="font-medium">{b.code}</span>
+    case 'tenant':
+      return b.tenant?.companyName ?? '-'
+    case 'building':
+      return b.building?.name ?? '-'
+    case 'room':
+      return b.roomsDisplay ?? b.room?.roomNumber ?? b.room?.name ?? '-'
+    case 'overdue':
+      return billIsOverdue(b) ? (
+        <span className="inline-flex px-2 py-0.5 rounded text-xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+          逾期
+        </span>
+      ) : (
+        <span className="inline-flex px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400">
+          未逾期
+        </span>
+      )
+    case 'invoiceIssued':
+      return (
+        <span className="text-xs text-slate-600 dark:text-slate-400">
+          ¥{(b.invoiceIssuedAmount ?? 0).toFixed(2)}
+        </span>
+      )
+    case 'feeType':
+      return b.feeType
+    case 'period':
+      return <span className="text-sm">{b.period}</span>
+    case 'accountReceivable':
+      return `¥${b.accountReceivable.toFixed(2)}`
+    case 'amountPaid':
+      return `¥${b.amountPaid.toFixed(2)}`
+    case 'amountDue':
+      return `¥${b.amountDue.toFixed(2)}`
+    case 'receiptIssued':
+      return (
+        <span className="text-xs text-slate-600 dark:text-slate-400">
+          ¥{(b.receiptIssuedAmount ?? 0).toFixed(2)}
+        </span>
+      )
+    case 'status':
+      return (
+        <span
+          className={`inline-flex px-2 py-0.5 rounded text-xs ${
+            b.status === 'open'
+              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+              : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
+          }`}
+        >
+          {STATUS_LABELS[b.status] ?? b.status}
+        </span>
+      )
+    case 'paymentStatus':
+      return (
+        <span
+          className={`inline-flex px-2 py-0.5 rounded text-xs ${
+            b.paymentStatus === 'paid'
+              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+              : b.paymentStatus === 'partial'
+                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
+                : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
+          }`}
+        >
+          {PAYMENT_STATUS_LABELS[b.paymentStatus] ?? b.paymentStatus}
+        </span>
+      )
+    case 'dueDate':
+      return b.dueDate
+    default:
+      return null
+  }
+}
+
+function billColumnTdClass(key: BillColumnKey): string {
+  const right = new Set<BillColumnKey>([
+    'accountReceivable',
+    'amountPaid',
+    'amountDue',
+    'receiptIssued',
+    'invoiceIssued',
+  ])
+  const base = 'p-4'
+  if (right.has(key)) return `${base} text-right`
+  return base
 }
 const PAYMENT_METHODS = ['现金', '转账', '微信支付', '其他'] as const
 
@@ -405,16 +617,18 @@ export function BillList({
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState({
     buildingId: '',
-    tenantId: initialTenantId,
+    tenantKeyword: '',
     status: '',
     paymentStatus: '',
     overdue: '',
+    feeTypeKeyword: '',
+    dueDateStart: '',
+    dueDateEnd: '',
+    periodStart: '',
+    periodEnd: '',
   })
-  useEffect(() => {
-    if (initialTenantId) {
-      setFilters((p) => ({ ...p, tenantId: initialTenantId }))
-    }
-  }, [initialTenantId])
+  const [filtersExpanded, setFiltersExpanded] = useState(false)
+  const tenantPrefilledRef = useRef(false)
   const [generateOpen, setGenerateOpen] = useState(false)
   const [createManualOpen, setCreateManualOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
@@ -425,14 +639,67 @@ export function BillList({
   const [submitting, setSubmitting] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dunningDrawerOpen, setDunningDrawerOpen] = useState(false)
+  const [columnPrefsOpen, setColumnPrefsOpen] = useState(false)
+  const [columnPrefs, setColumnPrefs] = useState(() => defaultBillColumnPrefs())
+  const columnSaveSkip = useRef(true)
+  const router = useRouter()
+
+  useEffect(() => {
+    setColumnPrefs(loadBillColumnPrefs())
+  }, [])
+
+  useEffect(() => {
+    if (columnSaveSkip.current) {
+      columnSaveSkip.current = false
+      return
+    }
+    saveBillColumnPrefs(columnPrefs)
+  }, [columnPrefs])
+
+  const visibleOrderedKeys = useMemo(
+    () => columnPrefs.order.filter((k) => columnPrefs.visible[k]),
+    [columnPrefs]
+  )
+
+  const toggleBillColumn = (key: BillColumnKey) => {
+    setColumnPrefs((prev) => {
+      if (prev.visible[key]) {
+        const cnt = BILL_COLUMN_KEYS.filter((k) => k !== key && prev.visible[k]).length
+        if (cnt < 1) {
+          alert('请至少保留一列数据字段（勾选列与操作列始终显示）')
+          return prev
+        }
+      }
+      return { ...prev, visible: { ...prev.visible, [key]: !prev.visible[key] } }
+    })
+  }
+
+  const reorderBillColumns = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return
+    setColumnPrefs((prev) => {
+      const order = [...prev.order]
+      const [removed] = order.splice(fromIndex, 1)
+      order.splice(toIndex, 0, removed)
+      return { ...prev, order }
+    })
+  }
+
+  const resetBillColumns = () => {
+    setColumnPrefs(defaultBillColumnPrefs())
+  }
 
   const fetchBills = async () => {
     const params = new URLSearchParams()
     if (filters.buildingId) params.set('buildingId', filters.buildingId)
-    if (filters.tenantId) params.set('tenantId', filters.tenantId)
+    if (filters.tenantKeyword.trim()) params.set('tenantKeyword', filters.tenantKeyword.trim())
     if (filters.status) params.set('status', filters.status)
     if (filters.paymentStatus) params.set('paymentStatus', filters.paymentStatus)
     if (filters.overdue === 'true') params.set('overdue', 'true')
+    if (filters.feeTypeKeyword.trim()) params.set('feeTypeKeyword', filters.feeTypeKeyword.trim())
+    if (filters.dueDateStart) params.set('dueDateStart', filters.dueDateStart)
+    if (filters.dueDateEnd) params.set('dueDateEnd', filters.dueDateEnd)
+    if (filters.periodStart) params.set('periodStart', filters.periodStart)
+    if (filters.periodEnd) params.set('periodEnd', filters.periodEnd)
     const res = await fetch(`/api/bills?${params}`)
     const json = await res.json()
     if (json.success) setData(json.data)
@@ -476,7 +743,27 @@ export function BillList({
       .then(() => {})
       .catch(() => setError('网络错误'))
       .finally(() => setLoading(false))
-  }, [filters.buildingId, filters.tenantId, filters.status, filters.paymentStatus, filters.overdue])
+  }, [
+    filters.buildingId,
+    filters.tenantKeyword,
+    filters.status,
+    filters.paymentStatus,
+    filters.overdue,
+    filters.feeTypeKeyword,
+    filters.dueDateStart,
+    filters.dueDateEnd,
+    filters.periodStart,
+    filters.periodEnd,
+  ])
+
+  useEffect(() => {
+    if (!initialTenantId || !data?.tenants?.length || tenantPrefilledRef.current) return
+    const t = data.tenants.find((x) => String(x.id) === initialTenantId)
+    if (t) {
+      tenantPrefilledRef.current = true
+      setFilters((p) => ({ ...p, tenantKeyword: t.companyName }))
+    }
+  }, [initialTenantId, data])
 
   useEffect(() => {
     if (generateOpen) {
@@ -487,19 +774,34 @@ export function BillList({
 
   const list = data?.list ?? []
   const buildings = data?.buildings ?? []
-  const tenants = data?.tenants ?? []
   const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
     usePagination(list, 15)
 
   const dunningInitialFilters = useMemo(
     () => ({
       buildingId: filters.buildingId,
-      tenantId: filters.tenantId,
+      tenantKeyword: filters.tenantKeyword,
       status: filters.status,
       paymentStatus: filters.paymentStatus,
       overdue: filters.overdue,
+      feeTypeKeyword: filters.feeTypeKeyword,
+      dueDateStart: filters.dueDateStart,
+      dueDateEnd: filters.dueDateEnd,
+      periodStart: filters.periodStart,
+      periodEnd: filters.periodEnd,
     }),
-    [filters.buildingId, filters.tenantId, filters.status, filters.paymentStatus, filters.overdue]
+    [
+      filters.buildingId,
+      filters.tenantKeyword,
+      filters.status,
+      filters.paymentStatus,
+      filters.overdue,
+      filters.feeTypeKeyword,
+      filters.dueDateStart,
+      filters.dueDateEnd,
+      filters.periodStart,
+      filters.periodEnd,
+    ]
   )
 
   const allPageSelected =
@@ -545,14 +847,54 @@ export function BillList({
     })
   }
 
-  const downloadReceiptDoc = async () => {
+  /** 应收 − 已开收据，仍大于 0 时可开具收据 */
+  const receiptRemaining = (b: Bill) => {
+    const ar = Number(b.accountReceivable)
+    const issued = Number(b.receiptIssuedAmount ?? 0)
+    return ar - issued
+  }
+
+  const goToReceiptIssue = () => {
     if (selectedIds.size === 0) {
       alert('请先勾选要开具收据的账单')
       return
     }
+    const selected = list.filter((b) => selectedIds.has(b.id))
+    const issuable = selected.filter((b) => receiptRemaining(b) > 1e-6)
+    const skippedCount = selected.length - issuable.length
+
+    if (issuable.length === 0) {
+      if (skippedCount > 0) {
+        alert(
+          '勾选的账单均已无可开具金额（已开收据已达应收），无法进入开具收据页面。请重新勾选仍有可开额度的账单。'
+        )
+      } else {
+        alert('没有可进入开具收据的账单')
+      }
+      return
+    }
+
+    if (skippedCount > 0) {
+      alert(
+        `勾选中含有 ${skippedCount} 条账单已无可开具金额（已开收据已达应收），已自动排除，仅将剩余 ${issuable.length} 条带入开具收据页面。`
+      )
+    }
+
+    const q = issuable
+      .map((b) => b.id)
+      .sort((a, b) => a - b)
+      .join(',')
+    router.push(`/bills/receipt-issue?ids=${encodeURIComponent(q)}`)
+  }
+
+  const downloadInvoiceDoc = async () => {
+    if (selectedIds.size === 0) {
+      alert('请先勾选要开具发票的账单')
+      return
+    }
     setSubmitting(true)
     try {
-      const res = await fetch('/api/bills/receipt-export', {
+      const res = await fetch('/api/bills/invoice-export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -565,7 +907,7 @@ export function BillList({
       }
       const blob = await res.blob()
       const cd = res.headers.get('Content-Disposition')
-      let name = `收据_${Date.now()}.docx`
+      let name = `发票_${Date.now()}.docx`
       const m = cd?.match(/filename\*=UTF-8''(.+)/)
       if (m) {
         try {
@@ -648,56 +990,70 @@ export function BillList({
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-      <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center gap-4">
-        <select
-          value={filters.buildingId}
-          onChange={(e) => setFilters((p) => ({ ...p, buildingId: e.target.value }))}
-          className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+      <div className="p-4 border-b border-slate-200 dark:border-slate-700 space-y-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">楼宇</label>
+            <select
+              value={filters.buildingId}
+              onChange={(e) => setFilters((p) => ({ ...p, buildingId: e.target.value }))}
+              className="px-6 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 min-w-[8rem]"
+            >
+              <option value="">全部楼宇</option>
+              {buildings.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">租客</label>
+            <input
+              type="search"
+              placeholder="名称模糊查询"
+              value={filters.tenantKeyword}
+              onChange={(e) => setFilters((p) => ({ ...p, tenantKeyword: e.target.value }))}
+              className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 w-44 sm:w-52"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">账单状态</label>
+            <select
+              value={filters.status}
+              onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}
+              className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+            >
+              <option value="">全部状态</option>
+              <option value="open">开启</option>
+              <option value="closed">关闭</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFiltersExpanded((v) => !v)}
+            className="flex items-center gap-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600"
+          >
+            {filtersExpanded ? (
+              <>
+                收起筛选 <ChevronUp className="w-4 h-4" />
+              </>
+            ) : (
+              <>
+                展开筛选 <ChevronDown className="w-4 h-4" />
+              </>
+            )}
+          </button>
+          <div className="flex-1 min-w-[1px]" />
+        <button
+          type="button"
+          onClick={() => setColumnPrefsOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600"
+          title="自定义列表列显示与顺序"
         >
-          <option value="">全部楼宇</option>
-          {buildings.map((b) => (
-            <option key={b.id} value={b.id}>{b.name}</option>
-          ))}
-        </select>
-        <select
-          value={filters.tenantId}
-          onChange={(e) => setFilters((p) => ({ ...p, tenantId: e.target.value }))}
-          className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
-        >
-          <option value="">全部租客</option>
-          {tenants.map((t) => (
-            <option key={t.id} value={t.id}>{t.companyName}</option>
-          ))}
-        </select>
-        <select
-          value={filters.status}
-          onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}
-          className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
-        >
-          <option value="">全部状态</option>
-          <option value="open">开启</option>
-          <option value="closed">关闭</option>
-        </select>
-        <select
-          value={filters.paymentStatus}
-          onChange={(e) => setFilters((p) => ({ ...p, paymentStatus: e.target.value }))}
-          className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
-        >
-          <option value="">全部结清状态</option>
-          <option value="unpaid">未缴纳</option>
-          <option value="partial">部分缴纳</option>
-          <option value="paid">已结清</option>
-        </select>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={filters.overdue === 'true'}
-            onChange={(e) => setFilters((p) => ({ ...p, overdue: e.target.checked ? 'true' : '' }))}
-            className="rounded"
-          />
-          <span className="text-sm">逾期</span>
-        </label>
-        <div className="flex-1" />
+          <Columns3 className="w-4 h-4" />
+          列设置
+        </button>
         <button
           type="button"
           onClick={() => setDunningDrawerOpen(true)}
@@ -708,12 +1064,21 @@ export function BillList({
         </button>
         <button
           type="button"
-          onClick={downloadReceiptDoc}
-          disabled={submitting || selectedIds.size === 0}
+          onClick={goToReceiptIssue}
+          disabled={selectedIds.size === 0}
           className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
         >
           <FileText className="w-4 h-4" />
           生成收据
+        </button>
+        <button
+          type="button"
+          onClick={downloadInvoiceDoc}
+          disabled={submitting || selectedIds.size === 0}
+          className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+        >
+          <Landmark className="w-4 h-4" />
+          开票
         </button>
         <button
           type="button"
@@ -749,6 +1114,91 @@ export function BillList({
           <Banknote className="w-4 h-4" />
           线下缴费
         </button>
+        </div>
+        {filtersExpanded && (
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
+            <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+              <div className="flex flex-col">
+                <label className="block text-xs text-slate-500 mb-1 min-h-[1rem] leading-tight">
+                  结清状态
+                </label>
+                <select
+                  value={filters.paymentStatus}
+                  onChange={(e) => setFilters((p) => ({ ...p, paymentStatus: e.target.value }))}
+                  className="min-h-[2.5rem] px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                >
+                  <option value="">全部结清状态</option>
+                  <option value="unpaid">未缴纳</option>
+                  <option value="partial">部分缴纳</option>
+                  <option value="paid">已结清</option>
+                </select>
+              </div>
+              <div className="flex flex-col">
+                <span className="block text-xs mb-1 min-h-[1rem] leading-tight invisible" aria-hidden>
+                  .
+                </span>
+                <label className="flex items-center gap-2 min-h-[2.5rem] px-0.5">
+                  <input
+                    type="checkbox"
+                    checked={filters.overdue === 'true'}
+                    onChange={(e) =>
+                      setFilters((p) => ({ ...p, overdue: e.target.checked ? 'true' : '' }))
+                    }
+                    className="rounded"
+                  />
+                  <span className="text-sm">仅逾期</span>
+                </label>
+              </div>
+              <div className="flex flex-col">
+                <label className="block text-xs text-slate-500 mb-1 min-h-[1rem] leading-tight">
+                  费用类型
+                </label>
+                <input
+                  type="search"
+                  placeholder="模糊查询"
+                  value={filters.feeTypeKeyword}
+                  onChange={(e) => setFilters((p) => ({ ...p, feeTypeKeyword: e.target.value }))}
+                  className="min-h-[2.5rem] px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 w-36 sm:w-40"
+                />
+              </div>
+              <div className="flex flex-col">
+                <label className="block text-xs text-slate-500 mb-1 min-h-[1rem] leading-tight">
+                  应收日期起
+                </label>
+                <input
+                  type="date"
+                  value={filters.dueDateStart}
+                  onChange={(e) => setFilters((p) => ({ ...p, dueDateStart: e.target.value }))}
+                  className="min-h-[2.5rem] px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                />
+              </div>
+              <div className="flex flex-col">
+                <label className="block text-xs text-slate-500 mb-1 min-h-[1rem] leading-tight">
+                  应收日期止
+                </label>
+                <input
+                  type="date"
+                  value={filters.dueDateEnd}
+                  onChange={(e) => setFilters((p) => ({ ...p, dueDateEnd: e.target.value }))}
+                  className="min-h-[2.5rem] px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                />
+              </div>
+              <DateRangeField
+                label="账期（重叠筛选，含起止日）"
+                start={filters.periodStart}
+                end={filters.periodEnd}
+                onChange={({ start, end }) =>
+                  setFilters((p) => ({ ...p, periodStart: start, periodEnd: end }))
+                }
+                hintMode="none"
+                className="w-full max-w-md"
+              />
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              账期筛选：所选区间与账单账期有任意一天重叠即显示；需同时填写起止才生效。
+            </p>
+          </div>
+        )}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -763,19 +1213,11 @@ export function BillList({
                   title="全选本页"
                 />
               </th>
-              <th className="text-left p-4 font-medium">账单编号</th>
-              <th className="text-left p-4 font-medium">租客</th>
-              <th className="text-left p-4 font-medium">楼宇</th>
-              <th className="text-left p-4 font-medium">房源</th>
-              <th className="text-left p-4 font-medium">费用类型</th>
-              <th className="text-left p-4 font-medium">账期</th>
-              <th className="text-right p-4 font-medium">应收</th>
-              <th className="text-right p-4 font-medium">已缴</th>
-              <th className="text-right p-4 font-medium">待缴</th>
-              <th className="text-right p-4 font-medium text-xs">已开收据</th>
-              <th className="text-left p-4 font-medium">状态</th>
-              <th className="text-left p-4 font-medium">结清状态</th>
-              <th className="text-left p-4 font-medium">应收日期</th>
+              {visibleOrderedKeys.map((key) => (
+                <th key={key} className={billColumnThClass(key)}>
+                  {BILL_COLUMN_LABELS[key]}
+                </th>
+              ))}
               <th className="text-left p-4 font-medium w-28">操作</th>
             </tr>
           </thead>
@@ -793,35 +1235,11 @@ export function BillList({
                     className="rounded"
                   />
                 </td>
-                <td className="p-4 font-medium">{b.code}</td>
-                <td className="p-4">{b.tenant?.companyName ?? '-'}</td>
-                <td className="p-4">{b.building?.name ?? '-'}</td>
-                <td className="p-4">
-                  {b.roomsDisplay ?? b.room?.roomNumber ?? b.room?.name ?? '-'}
-                </td>
-                <td className="p-4">{b.feeType}</td>
-                <td className="p-4 text-sm">{b.period}</td>
-                <td className="p-4 text-right">¥{b.accountReceivable.toFixed(2)}</td>
-                <td className="p-4 text-right">¥{b.amountPaid.toFixed(2)}</td>
-                <td className="p-4 text-right">¥{b.amountDue.toFixed(2)}</td>
-                <td className="p-4 text-right text-xs text-slate-600 dark:text-slate-400">
-                  ¥{(b.receiptIssuedAmount ?? 0).toFixed(2)}
-                </td>
-                <td className="p-4">
-                  <span className={`inline-flex px-2 py-0.5 rounded text-xs ${b.status === 'open' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'}`}>
-                    {STATUS_LABELS[b.status] ?? b.status}
-                  </span>
-                </td>
-                <td className="p-4">
-                  <span className={`inline-flex px-2 py-0.5 rounded text-xs ${
-                    b.paymentStatus === 'paid' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                    b.paymentStatus === 'partial' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
-                    'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
-                  }`}>
-                    {PAYMENT_STATUS_LABELS[b.paymentStatus] ?? b.paymentStatus}
-                  </span>
-                </td>
-                <td className="p-4">{b.dueDate}</td>
+                {visibleOrderedKeys.map((key) => (
+                  <td key={key} className={billColumnTdClass(key)}>
+                    {renderBillColumnCell(b, key)}
+                  </td>
+                ))}
                 <td className="p-4">
                   <div className="flex flex-wrap items-center gap-1">
                     <Link
@@ -913,11 +1331,92 @@ export function BillList({
           setSubmitting={setSubmitting}
         />
       )}
+      {columnPrefsOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bill-column-settings-title"
+          onClick={() => setColumnPrefsOpen(false)}
+        >
+          <div
+            className="bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 max-w-md w-full max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
+              <h2 id="bill-column-settings-title" className="text-lg font-semibold">
+                列设置
+              </h2>
+              <button
+                type="button"
+                onClick={() => setColumnPrefsOpen(false)}
+                className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
+                aria-label="关闭"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="px-4 pt-3 text-sm text-slate-500 dark:text-slate-400">
+              勾选要显示的列，拖拽左侧手柄排序。左侧勾选列与「操作」列固定显示；数据列至少保留一列。
+            </p>
+            <div className="p-4 overflow-y-auto flex-1 space-y-2 min-h-0">
+              {columnPrefs.order.map((key, index) => (
+                <div
+                  key={key}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', String(index))
+                    e.dataTransfer.effectAllowed = 'move'
+                  }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    const from = Number(e.dataTransfer.getData('text/plain'))
+                    if (Number.isNaN(from)) return
+                    reorderBillColumns(from, index)
+                  }}
+                  className="flex items-center gap-3 p-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/40"
+                >
+                  <span className="cursor-grab active:cursor-grabbing text-slate-400 shrink-0" title="拖动排序">
+                    <GripVertical className="w-5 h-5" />
+                  </span>
+                  <label className="flex items-center gap-2 flex-1 cursor-pointer text-sm min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={columnPrefs.visible[key]}
+                      onChange={() => toggleBillColumn(key)}
+                      className="rounded shrink-0"
+                    />
+                    <span className="truncate">{BILL_COLUMN_LABELS[key]}</span>
+                  </label>
+                </div>
+              ))}
+            </div>
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  resetBillColumns()
+                }}
+                className="text-sm text-slate-600 dark:text-slate-400 hover:underline"
+              >
+                恢复默认
+              </button>
+              <button
+                type="button"
+                onClick={() => setColumnPrefsOpen(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
+              >
+                完成
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <DunningExportDrawer
         open={dunningDrawerOpen}
         onClose={() => setDunningDrawerOpen(false)}
         buildings={buildings}
-        tenants={tenants}
         initialFilters={dunningInitialFilters}
       />
     </div>
@@ -2167,6 +2666,10 @@ function PaymentModal({
     const amt = parseFloat(totalAmount)
     if (isNaN(amt) || amt <= 0) {
       alert('缴纳金额必须大于0')
+      return
+    }
+    if (amt > sumDue + 1e-6) {
+      alert('缴纳金额不能大于待缴金额')
       return
     }
     setSubmitting(true)

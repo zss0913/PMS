@@ -28,6 +28,7 @@ import {
   Wallet,
   FileType,
   BellRing,
+  ScrollText,
 } from 'lucide-react'
 import type { AuthUser } from '@/lib/auth'
 import { cn } from '@/lib/utils'
@@ -134,6 +135,7 @@ const menuItems = [
     icon: CreditCard,
     children: [
       { href: '/bills', label: '账单管理', icon: Receipt },
+      { href: '/receipt-records', label: '收据记录', icon: ScrollText },
       { href: '/payments', label: '缴纳记录', icon: CreditCard },
       { href: '/refunds', label: '退费记录', icon: AlertCircle },
       { href: '/reminders', label: '催缴管理', icon: Bell },

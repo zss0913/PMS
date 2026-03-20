@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { AppLink } from '@/components/AppLink'
 import { ArrowLeft, Pencil } from 'lucide-react'
 import { formatDate, formatDateTime } from '@/lib/utils'
+import { safeReturnPath } from '@/lib/safe-return-path'
 import { TenantDetailTabs } from '@/components/tenants/TenantDetailTabs'
 
 export default async function TenantDetailPage({
@@ -22,17 +23,23 @@ export default async function TenantDetailPage({
   const tenantId = parseInt(id, 10)
   if (isNaN(tenantId)) redirect('/tenants')
 
-  const backHref =
-    from === 'room' && roomId
-      ? (() => {
-          const q = new URLSearchParams()
-          if (buildingId) q.set('buildingId', buildingId)
-          if (returnTo) q.set('returnTo', returnTo)
-          const s = q.toString()
-          return `/rooms/${roomId}/tenants${s ? `?${s}` : ''}`
-        })()
-      : '/tenants'
-  const backLabel = from === 'room' && roomId ? '返回房源租客列表' : '返回列表'
+  const safeRt = safeReturnPath(returnTo)
+  let backHref: string
+  let backLabel: string
+  if (safeRt) {
+    backHref = safeRt
+    backLabel = '返回'
+  } else if (from === 'room' && roomId) {
+    const q = new URLSearchParams()
+    if (buildingId) q.set('buildingId', buildingId)
+    if (returnTo) q.set('returnTo', returnTo)
+    const s = q.toString()
+    backHref = `/rooms/${roomId}/tenants${s ? `?${s}` : ''}`
+    backLabel = '返回房源租客列表'
+  } else {
+    backHref = '/tenants'
+    backLabel = '返回列表'
+  }
 
   const tenant = await prisma.tenant.findFirst({
     where: { id: tenantId, companyId: user.companyId },

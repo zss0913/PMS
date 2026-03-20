@@ -146,6 +146,12 @@ export async function POST(request: NextRequest) {
     if (!Number.isFinite(parsed.totalAmount) || parsed.totalAmount <= 0) {
       return NextResponse.json({ success: false, message: '缴纳金额必须大于0' }, { status: 400 })
     }
+    if (parsed.totalAmount > totalDue + 1e-6) {
+      return NextResponse.json(
+        { success: false, message: '缴纳金额不能大于待缴金额' },
+        { status: 400 }
+      )
+    }
 
     const paidAt = parsed.paidAt ? new Date(parsed.paidAt) : new Date()
 

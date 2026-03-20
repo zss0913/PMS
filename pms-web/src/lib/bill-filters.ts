@@ -4,13 +4,46 @@
  */
 export type BillWhereParams = {
   buildingId?: string | null
+  /** 精确租客 ID（如从链接 tenantId= 进入）；与 tenantKeyword 二选一，优先 tenantId */
   tenantId?: string | null
+  /** 租客公司名称模糊（contains） */
+  tenantKeyword?: string | null
   status?: string | null
   paymentStatus?: string | null
   overdue?: string | null
+  /** 费用类型精确（旧参数，兼容） */
   feeType?: string | null
+  /** 费用类型模糊（contains）；若传则优先于 feeType */
+  feeTypeKeyword?: string | null
   dueDateStart?: string | null
   dueDateEnd?: string | null
+}
+
+/** 解析账单 `period` 字段，格式为 `YYYY-MM-DD ~ YYYY-MM-DD` */
+export function parseBillPeriodBounds(period: string): { start: string; end: string } | null {
+  const m = period.trim().match(/^(\d{4}-\d{2}-\d{2})\s*~\s*(\d{4}-\d{2}-\d{2})/)
+  if (!m) return null
+  return { start: m[1]!, end: m[2]! }
+}
+
+/**
+ * 筛选区间 [filterStart, filterEnd]（含首尾，YYYY-MM-DD）与账单账期 [billStart, billEnd] 是否有交集。
+ * 即：账期中任意一天落在筛选区间内 ↔ 两区间重叠。
+ */
+export function filterBillsByPeriodOverlap<T extends { period: string }>(
+  bills: T[],
+  filterStart: string | null | undefined,
+  filterEnd: string | null | undefined
+): T[] {
+  const fs = filterStart?.trim().slice(0, 10)
+  const fe = filterEnd?.trim().slice(0, 10)
+  if (!fs || !fe) return bills
+  if (fs > fe) return []
+  return bills.filter((b) => {
+    const p = parseBillPeriodBounds(b.period)
+    if (!p) return false
+    return p.start <= fe && p.end >= fs
+  })
 }
 
 /** 解析结清状态：逗号分隔，去空 */
@@ -29,9 +62,15 @@ export function buildBillWhereClause(companyId: number, p: BillWhereParams): Rec
   if (p.tenantId) {
     const tid = parseInt(String(p.tenantId), 10)
     if (!isNaN(tid)) where.tenantId = tid
+  } else if (p.tenantKeyword?.trim()) {
+    where.tenant = { companyName: { contains: p.tenantKeyword.trim() } }
   }
   if (p.status) where.status = p.status
-  if (p.feeType?.trim()) where.feeType = p.feeType.trim()
+  if (p.feeTypeKeyword?.trim()) {
+    where.feeType = { contains: p.feeTypeKeyword.trim() }
+  } else if (p.feeType?.trim()) {
+    where.feeType = p.feeType.trim()
+  }
 
   if (p.dueDateStart || p.dueDateEnd) {
     const dateCond: Record<string, Date> = {}
