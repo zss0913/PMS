@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 import { Decimal } from '@prisma/client/runtime/library'
 
 const updateSchema = z.object({
@@ -148,13 +149,28 @@ export async function PUT(
     }
 
     const totalArea = parsed.roomIds.reduce((sum, r) => sum + r.leaseArea, 0)
+    const companyName = parsed.companyName.trim()
+
+    const nameDup = await prisma.tenant.findFirst({
+      where: {
+        companyId: user.companyId,
+        companyName,
+        id: { not: tenantId },
+      },
+    })
+    if (nameDup) {
+      return NextResponse.json(
+        { success: false, message: '该公司名称在当前物业公司下已存在，请勿重复' },
+        { status: 400 }
+      )
+    }
 
     await prisma.$transaction([
       prisma.tenant.update({
         where: { id: tenantId },
         data: {
           type: parsed.type,
-          companyName: parsed.companyName.trim(),
+          companyName,
           buildingId: parsed.buildingId,
           moveInDate: new Date(parsed.moveInDate),
           leaseStartDate: new Date(parsed.leaseStartDate),
@@ -177,6 +193,12 @@ export async function PUT(
     if (e instanceof z.ZodError) {
       return NextResponse.json(
         { success: false, message: '参数错误', errors: e.errors },
+        { status: 400 }
+      )
+    }
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      return NextResponse.json(
+        { success: false, message: '该公司名称在当前物业公司下已存在，请勿重复' },
         { status: 400 }
       )
     }

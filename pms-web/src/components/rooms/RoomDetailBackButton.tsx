@@ -2,8 +2,11 @@
 
 import { useSyncExternalStore } from 'react'
 import { ArrowLeft, X } from 'lucide-react'
+import { safeReturnPath } from '@/lib/safe-return-path'
 
 interface RoomDetailBackButtonProps {
+  /** 站内相对路径，优先返回到此页（如 /bills/123） */
+  returnTo?: string
   from?: string
   tenantId?: string
 }
@@ -17,13 +20,19 @@ function useIsNewTab() {
   )
 }
 
-export function RoomDetailBackButton({ from, tenantId }: RoomDetailBackButtonProps) {
+export function RoomDetailBackButton({ returnTo, from, tenantId }: RoomDetailBackButtonProps) {
   const isNewTab = useIsNewTab()
 
   const handleClick = () => {
     // 如果是新标签页打开的，关闭当前标签
     if (isNewTab) {
       window.close()
+      return
+    }
+
+    const safe = safeReturnPath(returnTo)
+    if (safe) {
+      window.location.href = safe
       return
     }
 

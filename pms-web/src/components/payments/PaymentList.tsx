@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { Search } from 'lucide-react'
@@ -151,6 +152,7 @@ export function PaymentList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               <th className="text-left p-4 font-medium">支付方式</th>
               <th className="text-left p-4 font-medium">状态</th>
               <th className="text-left p-4 font-medium">关联账单数</th>
+              <th className="text-left p-4 font-medium whitespace-nowrap">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -175,6 +177,14 @@ export function PaymentList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   </span>
                 </td>
                 <td className="p-4">{p.billCount}</td>
+                <td className="p-4">
+                  <Link
+                    href={`/payments/${p.id}`}
+                    className="text-blue-600 hover:underline dark:text-blue-400 text-sm whitespace-nowrap"
+                  >
+                    查看详情
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>

@@ -11,13 +11,13 @@ export default async function RoomDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ from?: string; tenantId?: string }>
+  searchParams: Promise<{ from?: string; tenantId?: string; buildingId?: string; returnTo?: string }>
 }) {
   const user = await getAuthUser()
   if (!user) redirect('/login')
 
   const { id } = await params
-  const { from, tenantId } = await searchParams
+  const { from, tenantId, buildingId, returnTo } = await searchParams
   const roomId = parseInt(id, 10)
   if (isNaN(roomId)) redirect('/rooms')
 
@@ -74,20 +74,28 @@ export default async function RoomDetailPage({
     '不可招商': '不可招商',
   }
 
+  const subQuery = new URLSearchParams()
+  if (buildingId) subQuery.set('buildingId', buildingId)
+  if (returnTo) subQuery.set('returnTo', returnTo)
+  const subQs = subQuery.toString()
+  const tenantsHref = `/rooms/${room.id}/tenants${subQs ? `?${subQs}` : ''}`
+  const roomDetailPath = `/rooms/${room.id}${subQs ? `?${subQs}` : ''}`
+  const editHref = `/rooms/${room.id}/edit?returnTo=${encodeURIComponent(roomDetailPath)}`
+
   return (
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
-        <RoomDetailBackButton from={from} tenantId={tenantId} />
+        <RoomDetailBackButton returnTo={returnTo} from={from} tenantId={tenantId} />
         <div className="flex items-center gap-2">
           <AppLink
-            href={`/rooms/${room.id}/tenants`}
+            href={tenantsHref}
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600"
           >
             <Users className="w-4 h-4" />
             租客列表
           </AppLink>
           <AppLink
-            href={`/rooms/${room.id}/edit`}
+            href={editHref}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
           >
             <Pencil className="w-4 h-4" />

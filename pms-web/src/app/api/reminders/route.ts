@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
+import { logBillActivity, BILL_ACTION, authUserForLog } from '@/lib/bill-activity-log'
 
 const createSchema = z.object({
   billIds: z.array(z.number().int().min(1)).min(1, '请至少选择一个账单'),
@@ -116,6 +117,32 @@ export async function POST(request: NextRequest) {
         companyId: user.companyId,
       },
     })
+
+    const billRows = await prisma.bill.findMany({
+      where: {
+        id: { in: parsed.billIds },
+        companyId: user.companyId,
+      },
+      select: { id: true, code: true },
+    })
+    const op = authUserForLog(user)
+    for (const b of billRows) {
+      await logBillActivity(prisma, {
+        billId: b.id,
+        billCode: b.code,
+        companyId: user.companyId,
+        action: BILL_ACTION.REMINDER_RECORD,
+        summary: `登记催缴记录（催缴单号 ${reminder.code}）`,
+        meta: {
+          reminderId: reminder.id,
+          reminderCode: reminder.code,
+          method: parsed.method,
+        },
+        operatorId: op.operatorId,
+        operatorName: op.operatorName,
+        operatorPhone: op.operatorPhone,
+      })
+    }
 
     return NextResponse.json({
       success: true,

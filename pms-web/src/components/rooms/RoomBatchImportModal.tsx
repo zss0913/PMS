@@ -84,6 +84,8 @@ export function RoomBatchImportModal({
     failedRows: FailedRow[]
   } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  /** 防止连点/重复提交导致同一请求多次写入，或第二次请求全部「房号已存在」造成误解 */
+  const importInFlightRef = useRef(false)
 
   const handleDownloadTemplate = () => {
     const header = COLUMNS
@@ -129,6 +131,7 @@ export function RoomBatchImportModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (importInFlightRef.current) return
     setError('')
     if (!buildingId) {
       setError('请选择所属楼宇')
@@ -139,12 +142,12 @@ export function RoomBatchImportModal({
       setError('请选择要导入的 Excel 文件')
       return
     }
+    importInFlightRef.current = true
     setSubmitting(true)
     try {
       const rows = await parseExcelFile(file)
       if (rows.length === 0) {
         setError('未解析到有效数据，请按模板格式填写 Excel')
-        setSubmitting(false)
         return
       }
       const res = await fetch('/api/rooms/batch', {
@@ -162,15 +165,14 @@ export function RoomBatchImportModal({
         if (data.successCount > 0) {
           onSuccess()
         }
-        if (data.failedCount === 0 && data.successCount > 0) {
-          onClose()
-        }
+        // 不再在全部成功时自动关闭弹窗，否则用户看不到「成功多少条」等提示
       } else {
         setError(data.message || '导入失败')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '导入失败')
     } finally {
+      importInFlightRef.current = false
       setSubmitting(false)
     }
   }
@@ -202,11 +204,33 @@ export function RoomBatchImportModal({
             </div>
           )}
           {result && (
-            <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 space-y-2">
-              <p className="text-sm font-medium">
-                导入完成：成功 {result.successCount} 条
-                {result.failedCount > 0 && `，失败 ${result.failedCount} 条`}
+            <div
+              role="status"
+              aria-live="polite"
+              className={`p-3 rounded-lg space-y-2 border ${
+                result.failedCount === 0
+                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800'
+                  : 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800'
+              }`}
+            >
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                {result.successCount === 0 && result.failedCount > 0 && (
+                  <>导入完成：全部失败，共 {result.failedCount} 条未导入</>
+                )}
+                {result.successCount > 0 && result.failedCount === 0 && (
+                  <>导入完成：全部成功，共导入 {result.successCount} 条</>
+                )}
+                {result.successCount > 0 && result.failedCount > 0 && (
+                  <>
+                    导入完成：成功 {result.successCount} 条，失败 {result.failedCount} 条
+                  </>
+                )}
               </p>
+              {result.successCount === 0 && result.failedCount > 0 && (
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  说明：失败原因为「房号已存在」时，表示该楼宇下已有相同房号，本次不会新增任何记录。若列表里已能看到这些房号，通常是此前某次导入已成功写入；请勿连续点击「开始导入」以免重复请求。
+                </p>
+              )}
               {result.failedRows.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">

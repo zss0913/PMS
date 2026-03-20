@@ -18,7 +18,15 @@ const PLACEHOLDERS = [
   { key: '{{buildingName}}', desc: '所属楼宇' },
   { key: '{{leaseArea}}', desc: '租赁面积' },
   { key: '{{roomNumber}}', desc: '房号' },
-  { key: '{{billList}}', desc: '需缴纳账单列表' },
+  {
+    key: '{{billList}}',
+    desc: '需缴纳账单列表（催缴单导出为 Word 表格；收据模板仍为纯文本多行）',
+  },
+  {
+    key: '{{@billTableXml}}',
+    desc:
+      '需缴纳账单列表表格：7 列（账单编号、费用类型、账期、应收、已缴、待缴、应收日期）+ 底部合计行；单独成段',
+  },
   { key: '{{totalAmount}}', desc: '需缴纳合计' },
   { key: '{{bankName}}', desc: '开户行' },
   { key: '{{accountNumber}}', desc: '银行账号' },

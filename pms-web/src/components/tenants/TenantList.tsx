@@ -10,7 +10,9 @@ import {
   Trash2,
   Search,
   Eye,
+  Upload,
 } from 'lucide-react'
+import { TenantBatchImportModal } from '@/components/tenants/TenantBatchImportModal'
 import { formatDate, formatDateTime } from '@/lib/utils'
 
 type Tenant = {
@@ -49,6 +51,7 @@ export function TenantList() {
     buildingId: '',
   })
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [batchImportOpen, setBatchImportOpen] = useState(false)
 
   const loadData = async () => {
     setLoading(true)
@@ -154,6 +157,14 @@ export function TenantList() {
           <Search className="w-4 h-4" />
           筛选
         </button>
+        <button
+          type="button"
+          onClick={() => setBatchImportOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
+        >
+          <Upload className="w-4 h-4" />
+          批量导入
+        </button>
         <AppLink
           href="/tenants/new"
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
@@ -253,6 +264,15 @@ export function TenantList() {
           pageSize={pageSize}
           onPageChange={handlePageChange}
           onPageSizeChange={handlePageSizeChange}
+        />
+      )}
+
+      {batchImportOpen && (
+        <TenantBatchImportModal
+          onClose={() => setBatchImportOpen(false)}
+          onSuccess={() => {
+            loadData()
+          }}
         />
       )}
     </div>

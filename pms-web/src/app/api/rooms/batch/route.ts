@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
 import { Decimal } from '@prisma/client/runtime/library'
+import { normalizeRoomNumber } from '@/lib/room-normalize'
 
 async function recalculateFloorArea(floorId: number) {
   try {
@@ -25,10 +27,16 @@ const ROOM_STATUSES = ['空置', '已租', '自用'] as const
 const LEASING_STATUSES = ['可招商', '不可招商'] as const
 
 const roomItemSchema = z.object({
-  name: z.string().min(1, '房源名称不能为空'),
-  roomNumber: z.string().min(1, '房号不能为空'),
+  name: z.string().min(1, '房源名称不能为空').transform((s) => s.trim()),
+  roomNumber: z
+    .union([z.string(), z.number()])
+    .transform((v) => normalizeRoomNumber(String(v)))
+    .refine((s) => s.length > 0, '房号不能为空'),
   area: z.union([z.number(), z.string()]).transform((v) => Number(v)),
-  floorName: z.string().min(1, '楼层名称不能为空'),
+  floorName: z
+    .string()
+    .transform((s) => s.trim())
+    .refine((s) => s.length > 0, '楼层名称不能为空'),
   type: z.string(),
   status: z.string(),
   leasingStatus: z.string(),
@@ -90,7 +98,7 @@ export async function POST(request: NextRequest) {
       where: { buildingId: parsed.buildingId },
       select: { roomNumber: true },
     })
-    const existingNumbers = new Set(existingRooms.map((r) => r.roomNumber))
+    const existingNumbers = new Set(existingRooms.map((r) => normalizeRoomNumber(r.roomNumber)))
 
     const toCreate: { name: string; roomNumber: string; area: number; floorId: number; type: string; status: string; leasingStatus: string }[] = []
     const failedRows: FailedRow[] = []
@@ -99,10 +107,10 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < parsed.rooms.length; i++) {
       const r = parsed.rooms[i]
       const rowData = {
-        name: r.name.trim(),
-        roomNumber: r.roomNumber.trim(),
+        name: r.name,
+        roomNumber: r.roomNumber,
         area: r.area,
-        floorName: r.floorName.trim(),
+        floorName: r.floorName,
         type: r.type,
         status: r.status,
         leasingStatus: r.leasingStatus,
@@ -196,6 +204,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, message: e.errors[0]?.message ?? '参数错误', errors: e.errors },
         { status: 400 }
+      )
+    }
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            '房号与数据库已有记录冲突（可能因并发导入）。请刷新列表后核对，勿重复点击「开始导入」。',
+        },
+        { status: 409 }
       )
     }
     console.error(e)

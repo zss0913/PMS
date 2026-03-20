@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { AppLink } from '@/components/AppLink'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { Plus, Pencil, Search } from 'lucide-react'
+import { Plus, Pencil, Search, Trash2 } from 'lucide-react'
 
 type Company = {
   id: number
@@ -13,17 +14,48 @@ type Company = {
   phone: string
   address: string | null
   status: string
-  _count?: { employees: number; buildings: number }
+  _count?: { employees: number; buildings: number; rooms: number }
 }
 
 export function CompanyList({ companies }: { companies: Company[] }) {
+  const router = useRouter()
   const [keyword, setKeyword] = useState('')
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const filtered = companies.filter(
     (c) => !keyword || c.name.includes(keyword) || c.contact.includes(keyword)
   )
   const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
     usePagination(filtered, 15)
+
+  const handleDelete = async (c: Company) => {
+    const roomCount = c._count?.rooms ?? 0
+    if (roomCount > 0) {
+      alert(`该公司下存在 ${roomCount} 条房源，无法删除`)
+      return
+    }
+    if (
+      !confirm(
+        `确定删除物业公司「${c.name}」？将同时删除该公司下所有员工账号、部门、楼宇及关联业务数据，且不可恢复。`
+      )
+    ) {
+      return
+    }
+    setDeletingId(c.id)
+    try {
+      const res = await fetch(`/api/companies/${c.id}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.success) {
+        router.refresh()
+      } else {
+        alert(json.message || '删除失败')
+      }
+    } catch {
+      alert('网络错误')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -58,7 +90,7 @@ export function CompanyList({ companies }: { companies: Company[] }) {
               <th className="text-left p-4 font-medium">地址</th>
               <th className="text-left p-4 font-medium">员工/楼宇数</th>
               <th className="text-left p-4 font-medium">状态</th>
-              <th className="text-left p-4 font-medium w-28">操作</th>
+              <th className="text-left p-4 font-medium w-36">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -86,12 +118,27 @@ export function CompanyList({ companies }: { companies: Company[] }) {
                   </span>
                 </td>
                 <td className="p-4">
-                  <AppLink
-                    href={`/companies/${c.id}/edit`}
-                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded inline-block"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </AppLink>
+                  <div className="flex items-center gap-1">
+                    <AppLink
+                      href={`/companies/${c.id}/edit`}
+                      className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded inline-block"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </AppLink>
+                    <button
+                      type="button"
+                      title={
+                        (c._count?.rooms ?? 0) > 0
+                          ? '该公司下存在房源，无法删除'
+                          : '删除物业公司'
+                      }
+                      disabled={deletingId === c.id || (c._count?.rooms ?? 0) > 0}
+                      onClick={() => handleDelete(c)}
+                      className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-slate-500"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

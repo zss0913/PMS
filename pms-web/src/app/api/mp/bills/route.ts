@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getMpAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { formatBillRoomsDisplay } from '@/lib/bill-merged-rooms'
 
 /** 租客端：获取当前租客的账单列表（仅租客管理员可看） */
 export async function GET(request: NextRequest) {
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
     status: b.status,
     paymentStatus: b.paymentStatus,
     dueDate: b.dueDate,
-    room: b.room?.name || b.room?.roomNumber,
+    room: formatBillRoomsDisplay(b.remark, b.room),
     tenantName: b.tenant?.companyName,
   }))
 

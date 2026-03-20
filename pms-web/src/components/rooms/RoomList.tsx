@@ -54,7 +54,18 @@ const LEASING_STATUSES = [
   { value: '不可招商', label: '不可招商' },
 ]
 
-export function RoomList({ buildings, initialBuildingId }: { buildings: Building[]; initialBuildingId?: number }) {
+export function RoomList({
+  buildings,
+  initialBuildingId,
+  /** 锁定为某一楼宇时：不显示楼宇筛选与「所属楼宇」列，仅查询该楼宇下房源 */
+  lockedBuildingId,
+}: {
+  buildings: Building[]
+  initialBuildingId?: number
+  lockedBuildingId?: number
+}) {
+  const effectiveBuilding =
+    lockedBuildingId != null ? lockedBuildingId : initialBuildingId ?? undefined
   const [rooms, setRooms] = useState<Room[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -66,7 +77,7 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
   const [filters, setFilters] = useState({
     name: '',
     roomNumber: '',
-    buildingId: initialBuildingId != null ? String(initialBuildingId) : '',
+    buildingId: effectiveBuilding != null ? String(effectiveBuilding) : '',
     status: '',
     leasingStatus: '',
   })
@@ -100,6 +111,12 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
   useEffect(() => {
     fetchRooms()
   }, [])
+
+  useEffect(() => {
+    if (lockedBuildingId != null) {
+      setFilters((p) => ({ ...p, buildingId: String(lockedBuildingId) }))
+    }
+  }, [lockedBuildingId])
 
   const handleDelete = async (id: number) => {
     if (!confirm('确定要删除该房源吗？')) return
@@ -167,19 +184,23 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
               className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
             />
           </div>
-          <div className="min-w-[140px]">
-            <label className="block text-xs text-slate-500 mb-1">所属楼宇</label>
-            <select
-              value={filters.buildingId}
-              onChange={(e) => setFilters((p) => ({ ...p, buildingId: e.target.value }))}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
-            >
-              <option value="">全部</option>
-              {buildings.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
-          </div>
+          {lockedBuildingId == null && (
+            <div className="min-w-[140px]">
+              <label className="block text-xs text-slate-500 mb-1">所属楼宇</label>
+              <select
+                value={filters.buildingId}
+                onChange={(e) => setFilters((p) => ({ ...p, buildingId: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+              >
+                <option value="">全部</option>
+                {buildings.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="min-w-[100px]">
             <label className="block text-xs text-slate-500 mb-1">房源状态</label>
             <select
@@ -212,7 +233,11 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
             筛选
           </button>
           <AppLink
-            href="/rooms/new"
+            href={
+              lockedBuildingId != null
+                ? `/rooms/new?buildingId=${lockedBuildingId}`
+                : '/rooms/new'
+            }
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
           >
             <Plus className="w-4 h-4" />
@@ -266,7 +291,9 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
               <th className="text-left p-4 font-medium">房源名称</th>
               <th className="text-left p-4 font-medium">房号</th>
               <th className="text-left p-4 font-medium">管理面积(㎡)</th>
-              <th className="text-left p-4 font-medium">所属楼宇</th>
+              {lockedBuildingId == null && (
+                <th className="text-left p-4 font-medium">所属楼宇</th>
+              )}
               <th className="text-left p-4 font-medium">所属楼层</th>
               <th className="text-left p-4 font-medium">房源类型</th>
               <th className="text-left p-4 font-medium">房源状态</th>
@@ -303,7 +330,9 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
                 <td className="p-4 font-medium">{r.name}</td>
                 <td className="p-4">{r.roomNumber}</td>
                 <td className="p-4">{Number(r.area)}</td>
-                <td className="p-4">{r.building?.name ?? '-'}</td>
+                {lockedBuildingId == null && (
+                  <td className="p-4">{r.building?.name ?? '-'}</td>
+                )}
                 <td className="p-4">{r.floor?.name ?? '-'}</td>
                 <td className="p-4">{r.type}</td>
                 <td className="p-4">{r.status}</td>
@@ -320,7 +349,11 @@ export function RoomList({ buildings, initialBuildingId }: { buildings: Building
                       <Pencil className="w-4 h-4" />
                     </AppLink>
                     <AppLink
-                      href={`/rooms/${r.id}/tenants`}
+                      href={
+                        lockedBuildingId != null
+                          ? `/rooms/${r.id}/tenants?buildingId=${lockedBuildingId}`
+                          : `/rooms/${r.id}/tenants`
+                      }
                       className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
                       title="查看该房源租客列表"
                     >

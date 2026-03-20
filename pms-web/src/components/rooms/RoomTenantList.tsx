@@ -7,6 +7,7 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { ArrowLeft, Eye } from 'lucide-react'
 import { formatDate, formatDateTime } from '@/lib/utils'
+import { safeReturnPath } from '@/lib/safe-return-path'
 
 type Room = {
   id: number
@@ -41,6 +42,27 @@ type ApiData = {
 export function RoomTenantList({ roomId }: { roomId: number }) {
   const searchParams = useSearchParams()
   const fromSectionalView = searchParams.get('from') === 'sectional-view'
+  const buildingIdParam = searchParams.get('buildingId')
+  const buildingIdFromQuery = buildingIdParam ? parseInt(buildingIdParam, 10) : NaN
+  const returnToRaw = searchParams.get('returnTo')
+  const safeReturn = safeReturnPath(returnToRaw)
+  const backToBuildingRooms =
+    !fromSectionalView && !Number.isNaN(buildingIdFromQuery) && buildingIdFromQuery > 0
+
+  const backHref = safeReturn
+    ? safeReturn
+    : fromSectionalView
+      ? '/sectional-view'
+      : backToBuildingRooms
+        ? `/buildings/${buildingIdFromQuery}/rooms`
+        : '/rooms'
+  const backLabel = safeReturn
+    ? '返回'
+    : fromSectionalView
+      ? '返回剖面图'
+      : backToBuildingRooms
+        ? '返回楼宇房源列表'
+        : '返回房源列表'
 
   const [data, setData] = useState<ApiData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -93,11 +115,11 @@ export function RoomTenantList({ roomId }: { roomId: number }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <AppLink
-          href={fromSectionalView ? '/sectional-view' : '/rooms'}
+          href={backHref}
           className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600"
         >
           <ArrowLeft className="w-5 h-5" />
-          {fromSectionalView ? '返回剖面图' : '返回房源列表'}
+          {backLabel}
         </AppLink>
       </div>
 
@@ -147,7 +169,9 @@ export function RoomTenantList({ roomId }: { roomId: number }) {
                     <td className="p-4">{formatDateTime(t.createdAt)}</td>
                     <td className="p-4">
                       <AppLink
-                        href={`/tenants/${t.id}?from=room&roomId=${roomId}`}
+                        href={`/tenants/${t.id}?from=room&roomId=${roomId}${
+                          backToBuildingRooms ? `&buildingId=${buildingIdFromQuery}` : ''
+                        }${returnToRaw ? `&returnTo=${encodeURIComponent(returnToRaw)}` : ''}`}
                         className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-500 text-sm"
                       >
                         <Eye className="w-4 h-4" />

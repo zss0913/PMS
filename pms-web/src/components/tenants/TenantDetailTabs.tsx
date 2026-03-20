@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { AppLink } from '@/components/AppLink'
 import { Receipt, Upload, UserMinus, UserCheck, UserX, Shield, X, Plus, Search } from 'lucide-react'
 import { formatDate, formatDateTime } from '@/lib/utils'
@@ -22,6 +23,7 @@ type Bill = {
   id: number
   code: string
   room: { roomNumber: string; name: string } | null
+  roomsDisplay?: string
   feeType: string
   period: string
   accountReceivable: number
@@ -86,6 +88,7 @@ const TABS = [
 ] as const
 
 export function TenantDetailTabs({ tenantId, tenantRooms }: Props) {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<(typeof TABS)[number]['key']>('rooms')
   const [users, setUsers] = useState<TenantUserItem[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
@@ -131,23 +134,29 @@ export function TenantDetailTabs({ tenantId, tenantRooms }: Props) {
     }
   }, [tenantId, billFilters.feeType, billFilters.paymentStatus, billFilters.overdue, billFilters.dueDateStart, billFilters.dueDateEnd])
 
-  const fetchUsers = useCallback(async () => {
-    setUsersLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (userFilters.name) params.set('name', userFilters.name)
-      if (userFilters.phone) params.set('phone', userFilters.phone)
-      if (userFilters.isAdmin) params.set('isAdmin', userFilters.isAdmin)
-      const qs = params.toString()
-      const res = await fetch(`/api/tenants/${tenantId}/users${qs ? `?${qs}` : ''}`)
-      const json = await res.json()
-      if (json.success) {
-        setUsers(json.data)
+  const fetchUsers = useCallback(
+    async (filtersOverride?: { name: string; phone: string; isAdmin: string }) => {
+      const f = filtersOverride ?? userFilters
+      setUsersLoading(true)
+      try {
+        const params = new URLSearchParams()
+        if (f.name) params.set('name', f.name)
+        if (f.phone) params.set('phone', f.phone)
+        if (f.isAdmin) params.set('isAdmin', f.isAdmin)
+        const qs = params.toString()
+        const res = await fetch(`/api/tenants/${tenantId}/users${qs ? `?${qs}` : ''}`, {
+          cache: 'no-store',
+        })
+        const json = await res.json()
+        if (json.success) {
+          setUsers(json.data)
+        }
+      } finally {
+        setUsersLoading(false)
       }
-    } finally {
-      setUsersLoading(false)
-    }
-  }, [tenantId, userFilters.name, userFilters.phone, userFilters.isAdmin])
+    },
+    [tenantId, userFilters]
+  )
 
   useEffect(() => {
     if (activeTab === 'users') fetchUsers()
@@ -372,7 +381,9 @@ export function TenantDetailTabs({ tenantId, tenantRooms }: Props) {
                             {b.code}
                           </AppLink>
                         </td>
-                        <td className="p-3">{b.room?.roomNumber ?? b.room?.name ?? '-'}</td>
+                        <td className="p-3">
+                          {b.roomsDisplay ?? b.room?.roomNumber ?? b.room?.name ?? '-'}
+                        </td>
                         <td className="p-3">{b.feeType}</td>
                         <td className="p-3 text-sm">{b.period}</td>
                         <td className="p-3 text-right">¥{Number(b.accountReceivable).toFixed(2)}</td>
@@ -590,7 +601,9 @@ export function TenantDetailTabs({ tenantId, tenantRooms }: Props) {
           onClose={() => setShowBatchImport(false)}
           onSuccess={() => {
             setShowBatchImport(false)
-            fetchUsers()
+            setUserFilters({ name: '', phone: '', isAdmin: '' })
+            fetchUsers({ name: '', phone: '', isAdmin: '' })
+            router.refresh()
           }}
         />
       )}
@@ -600,7 +613,9 @@ export function TenantDetailTabs({ tenantId, tenantRooms }: Props) {
           onClose={() => setShowAddOne(false)}
           onSuccess={() => {
             setShowAddOne(false)
-            fetchUsers()
+            setUserFilters({ name: '', phone: '', isAdmin: '' })
+            fetchUsers({ name: '', phone: '', isAdmin: '' })
+            router.refresh()
           }}
         />
       )}
@@ -644,7 +659,7 @@ function TenantUserAddOneModal({
       if (json.success) {
         onSuccess()
       } else {
-        setError(json.message || '添加失败')
+        setError(json.message || json.data?.errors?.join('；') || '添加失败')
       }
     } catch {
       setError('网络错误')

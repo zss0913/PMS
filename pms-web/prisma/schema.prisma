@@ -51,6 +51,8 @@ model Company {
   autoReminderSetting AutoReminderSetting?
   printTemplates      PrintTemplate[]
   dictionaries   Dictionary[]
+  billActivityLogs BillActivityLog[]
+  billAttachments  BillAttachment[]
 }
 
 model Department {
@@ -194,6 +196,8 @@ model Room {
   tenantRooms TenantRoom[]
   bills       Bill[]
   workOrders  WorkOrder[]
+
+  @@unique([buildingId, roomNumber])
 }
 
 // ========== 租客管理 ==========
@@ -218,6 +222,8 @@ model Tenant {
   bills       Bill[]
   workOrders  WorkOrder[]
   complaints  Complaint[]
+
+  @@unique([companyId, companyName])
 }
 
 model TenantRoom {
@@ -235,7 +241,7 @@ model TenantRoom {
 
 model TenantUser {
   id        Int      @id @default(autoincrement())
-  phone     String   @unique
+  phone     String
   password  String
   name      String
   companyId Int
@@ -246,6 +252,8 @@ model TenantUser {
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   relations TenantUserRelation[]
+
+  // 租客端账号：手机号不按物业公司唯一；同一手机号可在多个租客下各有一条记录（与 Employee 表无关）
 }
 
 model TenantUserRelation {
@@ -322,11 +330,13 @@ model BillRule {
 model Bill {
   id                Int      @id @default(autoincrement())
   code              String   @unique
-  ruleId            Int
+  /// 规则生成账单必填；手工账单可为空
+  ruleId            Int?
   ruleName          String
   projectId         Int?
-  buildingId        Int
-  roomId            Int
+  /// 手工账单可无关联楼宇/房源
+  buildingId        Int?
+  roomId            Int?
   tenantId          Int
   feeType           String
   period            String
@@ -339,17 +349,67 @@ model Bill {
   accountId         Int
   remark            String?
   companyId         Int
+  /// 已开具收据的累计金额（元），不超过已缴；用于避免重复开收据
+  receiptIssuedAmount Decimal @default(0)
+  /// 总量（选填；手工账单可录）
+  quantityTotal     Decimal?
+  /// 单价（元，选填；手工账单可录）
+  unitPrice         Decimal?
+  /// rule=规则生成, manual=手工新建
+  billSource        String   @default("rule")
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   tenant   Tenant   @relation(fields: [tenantId], references: [id])
-  building Building @relation(fields: [buildingId], references: [id])
-  room     Room     @relation(fields: [roomId], references: [id])
+  building Building? @relation(fields: [buildingId], references: [id])
+  room     Room?     @relation(fields: [roomId], references: [id])
   account  Account  @relation(fields: [accountId], references: [id])
-  rule     BillRule @relation(fields: [ruleId], references: [id])
+  rule     BillRule? @relation(fields: [ruleId], references: [id])
   payments PaymentBill[]
   refunds  Refund[]
+  activityLogs BillActivityLog[]
+  attachments BillAttachment[]
+}
+
+/// 账单附件（图片 / PDF / Office / 表格等），不记入操作日志
+model BillAttachment {
+  id           Int      @id @default(autoincrement())
+  billId       Int
+  companyId    Int
+  originalName String
+  storedName   String
+  mimeType     String
+  sizeBytes    Int
+  createdAt    DateTime @default(now())
+
+  bill    Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([billId])
+  @@index([companyId, billId])
+}
+
+/// 账单操作日志：增删改、缴费、退费、生成催缴单/收据、催缴记录等
+model BillActivityLog {
+  id             Int      @id @default(autoincrement())
+  billId         Int?
+  billCode       String
+  companyId      Int
+  action         String
+  summary        String?
+  changesJson    String?
+  operatorId     Int?
+  operatorName   String?
+  operatorPhone  String?
+  metaJson       String?
+  createdAt      DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bill    Bill?   @relation(fields: [billId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, billId])
+  @@index([companyId, billCode])
 }
 
 model Payment {

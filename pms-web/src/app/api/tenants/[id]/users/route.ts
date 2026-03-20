@@ -133,35 +133,27 @@ export async function POST(
 
     for (const u of parsed.users) {
       try {
-        let tenantUser = await prisma.tenantUser.findUnique({
-          where: { phone: u.phone },
-        })
-        if (tenantUser && tenantUser.companyId !== user.companyId) {
-          errors.push(`${u.phone} 属于其他物业公司，无法添加`)
-          continue
-        }
-        if (!tenantUser) {
-          const hash = u.password ? await bcrypt.hash(u.password, 10) : hashedDefault
-          tenantUser = await prisma.tenantUser.create({
-            data: {
-              phone: u.phone,
-              password: hash,
-              name: u.name,
-              companyId: user.companyId,
-              status: 'active',
-            },
-          })
-        }
-
-        const existing = await prisma.tenantUserRelation.findUnique({
+        const existingInThisTenant = await prisma.tenantUserRelation.findFirst({
           where: {
-            tenantUserId_tenantId: { tenantUserId: tenantUser.id, tenantId },
+            tenantId,
+            tenantUser: { phone: u.phone },
           },
         })
-        if (existing) {
+        if (existingInThisTenant) {
           errors.push(`${u.phone} 已是该租客员工`)
           continue
         }
+
+        const hash = u.password ? await bcrypt.hash(u.password, 10) : hashedDefault
+        const tenantUser = await prisma.tenantUser.create({
+          data: {
+            phone: u.phone,
+            password: hash,
+            name: u.name,
+            companyId: user.companyId,
+            status: 'active',
+          },
+        })
 
         await prisma.tenantUserRelation.create({
           data: {
@@ -177,10 +169,13 @@ export async function POST(
       }
     }
 
+    const nothingAdded = created.length === 0 && errors.length > 0
     return NextResponse.json({
-      success: true,
+      success: !nothingAdded,
       data: { created: created.length, errors },
-      message: `成功添加 ${created.length} 人${errors.length ? `，${errors.length} 条失败` : ''}`,
+      message: nothingAdded
+        ? errors.join('；')
+        : `成功添加 ${created.length} 人${errors.length ? `，${errors.length} 条失败` : ''}`,
     })
   } catch (e) {
     if (e instanceof z.ZodError) {

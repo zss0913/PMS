@@ -123,3 +123,50 @@ export async function PUT(
     return NextResponse.json({ success: false, message: '服务器错误' }, { status: 500 })
   }
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getAuthUser()
+    if (!user) {
+      return NextResponse.json({ success: false, message: '未登录' }, { status: 401 })
+    }
+    if (user.type !== 'super_admin') {
+      return NextResponse.json(
+        { success: false, message: '仅超级管理员可删除物业公司' },
+        { status: 403 }
+      )
+    }
+    const { id } = await params
+    const companyId = parseInt(id, 10)
+    if (isNaN(companyId)) {
+      return NextResponse.json({ success: false, message: '无效的公司ID' }, { status: 400 })
+    }
+
+    const existing = await prisma.company.findUnique({ where: { id: companyId } })
+    if (!existing) {
+      return NextResponse.json({ success: false, message: '公司不存在' }, { status: 404 })
+    }
+
+    const roomCount = await prisma.room.count({ where: { companyId } })
+    if (roomCount > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `该公司下存在 ${roomCount} 条房源，请先处理房源后再删除`,
+        },
+        { status: 400 }
+      )
+    }
+
+    // 级联删除：员工账号、部门、角色、项目、楼宇、租客端用户等所有 companyId 关联数据
+    await prisma.company.delete({ where: { id: companyId } })
+
+    return NextResponse.json({ success: true })
+  } catch (e) {
+    console.error(e)
+    return NextResponse.json({ success: false, message: '服务器错误' }, { status: 500 })
+  }
+}

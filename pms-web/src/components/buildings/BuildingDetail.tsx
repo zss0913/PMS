@@ -352,8 +352,8 @@ export function BuildingDetail({ building }: { building: Building }) {
               添加楼层
             </button>
             <AppLink
-              href={`/rooms?buildingId=${building.id}`}
-              className="text-sm text-blue-600 hover:underline px-3 py-1.5"
+              href={`/buildings/${building.id}/rooms`}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               查看房源
             </AppLink>

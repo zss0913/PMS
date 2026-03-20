@@ -148,14 +148,13 @@ export function BillRuleList() {
         .filter(Boolean)
       if (names.length) parts.push(`租客: ${names.slice(0, 2).join('、')}${names.length > 2 ? '等' + names.length + '个' : ''}`)
     }
-    if (rule.buildingIds?.length) {
-      const names = rule.buildingIds
-        .map((id) => data?.buildings.find((b) => b.id === id)?.name)
-        .filter(Boolean)
-      if (names.length) parts.push(`楼宇: ${names.slice(0, 2).join('、')}${names.length > 2 ? '等' + names.length + '栋' : ''}`)
-    }
-    if (rule.roomIds?.length) {
-      parts.push(`房源${rule.roomIds.length}间`)
+    if (rule.buildingIds?.length || rule.roomIds?.length) {
+      const btxt =
+        rule.buildingIds?.length &&
+        `楼宇${rule.buildingIds.length}栋（整栋）`
+      const rtxt = rule.roomIds?.length && `房源${rule.roomIds.length}间`
+      const merged = [btxt, rtxt].filter(Boolean).join('，')
+      if (merged) parts.push(merged)
     }
     return parts.length ? parts.join('；') : '全部'
   }

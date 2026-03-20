@@ -97,9 +97,18 @@ export async function DELETE(
       return NextResponse.json({ success: false, message: '记录不存在' }, { status: 404 })
     }
 
+    const tenantUserId = relation.tenantUserId
+
     await prisma.tenantUserRelation.delete({
       where: { id: relationId },
     })
+
+    const remaining = await prisma.tenantUserRelation.count({
+      where: { tenantUserId },
+    })
+    if (remaining === 0) {
+      await prisma.tenantUser.delete({ where: { id: tenantUserId } }).catch(() => {})
+    }
 
     return NextResponse.json({ success: true })
   } catch (e) {

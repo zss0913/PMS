@@ -11,18 +11,27 @@ export default async function TenantDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ from?: string; roomId?: string }>
+  searchParams: Promise<{ from?: string; roomId?: string; buildingId?: string; returnTo?: string }>
 }) {
   const user = await getAuthUser()
   if (!user) redirect('/login')
   if (user.companyId === 0) redirect('/tenants')
 
   const { id } = await params
-  const { from, roomId } = await searchParams
+  const { from, roomId, buildingId, returnTo } = await searchParams
   const tenantId = parseInt(id, 10)
   if (isNaN(tenantId)) redirect('/tenants')
 
-  const backHref = from === 'room' && roomId ? `/rooms/${roomId}/tenants` : '/tenants'
+  const backHref =
+    from === 'room' && roomId
+      ? (() => {
+          const q = new URLSearchParams()
+          if (buildingId) q.set('buildingId', buildingId)
+          if (returnTo) q.set('returnTo', returnTo)
+          const s = q.toString()
+          return `/rooms/${roomId}/tenants${s ? `?${s}` : ''}`
+        })()
+      : '/tenants'
   const backLabel = from === 'room' && roomId ? '返回房源租客列表' : '返回列表'
 
   const tenant = await prisma.tenant.findFirst({

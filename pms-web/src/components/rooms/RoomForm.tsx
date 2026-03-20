@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppLink } from '@/components/AppLink'
 import { ArrowLeft } from 'lucide-react'
+import { safeReturnPath } from '@/lib/safe-return-path'
 
 type Building = { id: number; name: string }
 type Floor = { id: number; name: string }
@@ -39,13 +40,20 @@ export function RoomForm({
   id,
   buildings,
   initialData,
+  /** 新增时从 URL ?buildingId= 预选楼宇 */
+  defaultBuildingId,
+  /** 保存/取消后返回的站内路径（如从账单详情进编辑时传回房源详情 URL） */
+  returnTo,
 }: {
   mode: 'new' | 'edit'
   id?: number
   buildings: Building[]
   initialData?: FormData | null
+  defaultBuildingId?: number
+  returnTo?: string
 }) {
   const router = useRouter()
+  const cancelHref = safeReturnPath(returnTo) ?? '/rooms'
   const [floors, setFloors] = useState<Floor[]>([])
   const [loadingFloors, setLoadingFloors] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -53,7 +61,7 @@ export function RoomForm({
     name: initialData?.name ?? '',
     roomNumber: initialData?.roomNumber ?? '',
     area: initialData?.area ?? '',
-    buildingId: initialData?.buildingId ?? null,
+    buildingId: initialData?.buildingId ?? defaultBuildingId ?? null,
     floorId: initialData?.floorId ?? null,
     type: initialData?.type ?? '商铺',
     status: initialData?.status ?? '空置',
@@ -143,7 +151,7 @@ export function RoomForm({
       })
       const json = await res.json()
       if (json.success) {
-        router.push('/rooms')
+        router.push(cancelHref)
         router.refresh()
       } else {
         alert(json.message || '保存失败')
@@ -159,11 +167,11 @@ export function RoomForm({
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700">
         <AppLink
-          href="/rooms"
+          href={cancelHref}
           className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600"
         >
           <ArrowLeft className="w-4 h-4" />
-          返回列表
+          返回
         </AppLink>
       </div>
       <form onSubmit={handleSubmit} className="p-6 max-w-2xl space-y-6">
@@ -290,7 +298,7 @@ export function RoomForm({
             {submitting ? '保存中...' : '保存'}
           </button>
           <AppLink
-            href="/rooms"
+            href={cancelHref}
             className="px-6 py-2 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
           >
             取消

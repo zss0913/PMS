@@ -2,7 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
-import { Decimal } from '@prisma/client/runtime/library'
+import { Decimal, PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
+import {
+  logBillActivity,
+  BILL_ACTION,
+  authUserForLog,
+  formatMoneyYuan,
+  paymentStatusZh,
+} from '@/lib/bill-activity-log'
+import type { Prisma } from '@prisma/client'
 
 const createSchema = z.object({
   tenantId: z.number().int().min(1, '请选择租客'),
@@ -12,6 +20,23 @@ const createSchema = z.object({
   payer: z.string().min(1, '缴纳人必填'),
   paidAt: z.string().optional(),
 })
+
+/** code 全局唯一，不能按公司 count+1；删除记录后序号也会回退导致冲突。循环探测直至可用。 */
+async function allocateUniquePaymentCode(
+  tx: Prisma.TransactionClient
+): Promise<string> {
+  const dayPrefix = `PAY${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`
+  let n = (await tx.payment.count()) + 1
+  let attempts = 0
+  while (attempts < 50000) {
+    const code = `${dayPrefix}${String(n).padStart(4, '0')}`
+    const exists = await tx.payment.findUnique({ where: { code } })
+    if (!exists) return code
+    n++
+    attempts++
+  }
+  throw new Error('无法生成唯一缴费单号，请稍后重试')
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -118,13 +143,11 @@ export async function POST(request: NextRequest) {
     }
 
     const totalDue = bills.reduce((sum, b) => sum + Number(b.amountDue), 0)
-    if (parsed.totalAmount <= 0) {
+    if (!Number.isFinite(parsed.totalAmount) || parsed.totalAmount <= 0) {
       return NextResponse.json({ success: false, message: '缴纳金额必须大于0' }, { status: 400 })
     }
 
     const paidAt = parsed.paidAt ? new Date(parsed.paidAt) : new Date()
-    const count = await prisma.payment.count({ where: { companyId: user.companyId } })
-    const code = `PAY${new Date().toISOString().slice(0, 10).replace(/-/g, '')}${String(count + 1).padStart(4, '0')}`
 
     let remaining = parsed.totalAmount
     const allocations: { billId: number; billCode: string; amount: number; amountDueBefore: number; amountDueAfter: number }[] = []
@@ -155,7 +178,21 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    if (paymentBillData.length === 0) {
+      return NextResponse.json(
+        { success: false, message: '所选账单当前无可缴金额，请刷新后重试' },
+        { status: 400 }
+      )
+    }
+
+    const op = authUserForLog(user)
+
+    /** 操作日志在事务外写入：SQLite 下事务内写 BillActivityLog（含 raw 回退）易导致整笔缴费失败 */
+    type PendingPaymentLog = Parameters<typeof logBillActivity>[1]
+    const pendingLogs: PendingPaymentLog[] = []
+
     const payment = await prisma.$transaction(async (tx) => {
+      const code = await allocateUniquePaymentCode(tx)
       const pay = await tx.payment.create({
         data: {
           code,
@@ -182,24 +219,69 @@ export async function POST(request: NextRequest) {
           },
         })
 
-        const bill = await tx.bill.findUnique({ where: { id: pb.billId } })
-        if (bill) {
-          const newPaid = Number(bill.amountPaid) + pb.amount
-          const newDue = Number(bill.amountDue) - pb.amount
-          const paymentStatus = newDue <= 0 ? 'paid' : 'partial'
-          await tx.bill.update({
-            where: { id: pb.billId },
-            data: {
-              amountPaid: new Decimal(newPaid),
-              amountDue: new Decimal(newDue),
-              paymentStatus,
-            },
-          })
+        const billBefore = await tx.bill.findUnique({ where: { id: pb.billId } })
+        if (!billBefore) {
+          throw new Error(`账单 ${pb.billId} 不存在，已中止缴费`)
         }
+        const newPaid = Number(billBefore.amountPaid) + pb.amount
+        const newDue = pb.amountDueAfter
+        const paymentStatus = newDue <= 0 ? 'paid' : 'partial'
+        await tx.bill.update({
+          where: { id: pb.billId },
+          data: {
+            amountPaid: new Decimal(newPaid),
+            amountDue: new Decimal(newDue),
+            paymentStatus,
+          },
+        })
+        pendingLogs.push({
+          billId: pb.billId,
+          billCode: pb.billCode,
+          companyId: user.companyId,
+          action: BILL_ACTION.PAYMENT,
+          summary: `线下缴费入账（缴费单 ${pay.code}）`,
+          changes: [
+            {
+              field: 'amountPaid',
+              label: '已缴金额',
+              from: formatMoneyYuan(Number(billBefore.amountPaid)),
+              to: formatMoneyYuan(newPaid),
+            },
+            {
+              field: 'amountDue',
+              label: '待缴金额',
+              from: formatMoneyYuan(Number(billBefore.amountDue)),
+              to: formatMoneyYuan(newDue),
+            },
+            {
+              field: 'paymentStatus',
+              label: '结清状态',
+              from: paymentStatusZh(billBefore.paymentStatus ?? ''),
+              to: paymentStatusZh(paymentStatus),
+            },
+          ],
+          meta: {
+            paymentId: pay.id,
+            paymentCode: pay.code,
+            allocatedAmount: pb.amount,
+            paymentMethod: parsed.paymentMethod,
+          },
+          operatorId: op.operatorId,
+          operatorName: op.operatorName,
+          operatorPhone: op.operatorPhone,
+        })
       }
 
       return pay
     })
+
+    for (const log of pendingLogs) {
+      try {
+        await logBillActivity(prisma, log)
+      } catch (logErr) {
+        console.error('[payments] 缴费已成功，操作日志写入失败', logErr)
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -217,6 +299,12 @@ export async function POST(request: NextRequest) {
       )
     }
     console.error(e)
-    return NextResponse.json({ success: false, message: '服务器错误' }, { status: 500 })
+    let message = '服务器错误'
+    if (e instanceof PrismaClientKnownRequestError) {
+      message = e.code === 'P2002' ? '缴费单编号冲突，请重试' : `${e.code}: ${e.message}`
+    } else if (e instanceof Error && e.message) {
+      message = e.message
+    }
+    return NextResponse.json({ success: false, message }, { status: 500 })
   }
 }

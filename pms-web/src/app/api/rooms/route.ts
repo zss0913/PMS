@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
+import { normalizeRoomNumber } from '@/lib/room-normalize'
 
 // 自动计算楼层面积（根据该楼层所有房源的面积总和）
 async function recalculateFloorArea(floorId: number) {
@@ -22,7 +24,7 @@ async function recalculateFloorArea(floorId: number) {
 
 const createSchema = z.object({
   name: z.string().min(1, '请输入房源名称'),
-  roomNumber: z.string().min(1, '请输入房号'),
+  roomNumber: z.string().min(1, '请输入房号').transform((s) => normalizeRoomNumber(s)),
   area: z.number().min(0, '管理面积不能为负'),
   buildingId: z.number(),
   floorId: z.number(),
@@ -112,6 +114,9 @@ export async function POST(request: NextRequest) {
         { success: false, message: e.errors[0]?.message ?? '参数错误', errors: e.errors },
         { status: 400 }
       )
+    }
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      return NextResponse.json({ success: false, message: '该楼宇下房号已存在' }, { status: 409 })
     }
     console.error(e)
     return NextResponse.json({ success: false, message: '服务器错误' }, { status: 500 })

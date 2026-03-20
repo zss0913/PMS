@@ -5,11 +5,14 @@ import { RoomForm } from '@/components/rooms/RoomForm'
 
 export default async function EditRoomPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ returnTo?: string }>
 }) {
   const user = await getAuthUser()
   if (!user) redirect('/login')
+  const { returnTo } = await searchParams
   const id = parseInt((await params).id, 10)
   if (isNaN(id)) notFound()
   const companyId = user.companyId
@@ -46,6 +49,7 @@ export default async function EditRoomPage({
         id={id}
         buildings={buildings}
         initialData={initialData}
+        returnTo={returnTo}
       />
     </div>
   )
