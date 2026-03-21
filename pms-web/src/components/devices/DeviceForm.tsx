@@ -12,6 +12,14 @@ const DEVICE_STATUSES = [
 
 type Building = { id: number; name: string }
 
+function localDateISO() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export function DeviceForm({
   device,
   buildings,
@@ -21,6 +29,7 @@ export function DeviceForm({
   buildings: Building[]
   onClose: () => void
 }) {
+  const [code, setCode] = useState('')
   const [name, setName] = useState('')
   const [type, setType] = useState('')
   const [buildingId, setBuildingId] = useState<number>(0)
@@ -29,6 +38,7 @@ export function DeviceForm({
   const [maintenanceContact, setMaintenanceContact] = useState('')
   const [supplier, setSupplier] = useState('')
   const [brand, setBrand] = useState('')
+  const [commissionedDate, setCommissionedDate] = useState(() => localDateISO())
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -36,6 +46,7 @@ export function DeviceForm({
 
   useEffect(() => {
     if (device) {
+      setCode(device.code)
       setName(device.name)
       setType(device.type)
       setBuildingId(device.buildingId)
@@ -44,7 +55,9 @@ export function DeviceForm({
       setMaintenanceContact(device.maintenanceContact ?? '')
       setSupplier(device.supplier ?? '')
       setBrand(device.brand ?? '')
+      setCommissionedDate(device.commissionedDate ?? localDateISO())
     } else {
+      setCode('')
       setName('')
       setType('')
       setBuildingId(buildings[0]?.id ?? 0)
@@ -53,6 +66,7 @@ export function DeviceForm({
       setMaintenanceContact('')
       setSupplier('')
       setBrand('')
+      setCommissionedDate(localDateISO())
     }
   }, [device, buildings])
 
@@ -62,10 +76,12 @@ export function DeviceForm({
     setSubmitting(true)
     try {
       const body = {
+        code: code.trim(),
         name,
         type,
         buildingId,
         status,
+        commissionedDate,
         location: location.trim(),
         maintenanceContact: maintenanceContact.trim(),
         supplier: supplier.trim(),
@@ -111,6 +127,17 @@ export function DeviceForm({
               {error}
             </div>
           )}
+          <div>
+            <label className="block text-sm font-medium mb-1">设备编号</label>
+            <input
+              type="text"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+              placeholder="同一物业公司内唯一，不可与其他设备重复"
+              required
+            />
+          </div>
           <div>
             <label className="block text-sm font-medium mb-1">设备名称</label>
             <input
@@ -163,6 +190,17 @@ export function DeviceForm({
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">投用日期</label>
+            <input
+              type="date"
+              value={commissionedDate}
+              onChange={(e) => setCommissionedDate(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+              required
+            />
+            <p className="text-xs text-slate-500 mt-1">默认当天，可按实际投用时间修改</p>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">具体位置</label>

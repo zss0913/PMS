@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
+import type { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
 const JWT_SECRET = new TextEncoder().encode(
@@ -83,10 +84,28 @@ export async function getAuthUser(): Promise<AuthUser | null> {
   return user
 }
 
-/** 小程序端：从 Authorization: Bearer token 获取用户 */
+/** 小程序 / H5：Bearer token；H5 同域还可带 Cookie（pms_token） */
 export async function getMpAuthUser(request: Request): Promise<AuthUser | null> {
   const auth = request.headers.get('Authorization')
-  const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null
-  if (!token) return null
-  return verifyToken(token)
+  const bearer = auth?.startsWith('Bearer ') ? auth.slice(7) : null
+  if (bearer) {
+    const u = await verifyToken(bearer)
+    if (u) return u
+  }
+  const cookieStore = await cookies()
+  const c = cookieStore.get('pms_token')?.value
+  if (c) return verifyToken(c)
+  return null
+}
+
+/**
+ * API 路由：优先 Bearer（小程序），否则读 Cookie（H5 与 PC 共用 pms_token）
+ */
+export async function getRequestAuthUser(request: NextRequest): Promise<AuthUser | null> {
+  const auth = request.headers.get('Authorization')
+  if (auth?.startsWith('Bearer ')) {
+    const u = await verifyToken(auth.slice(7))
+    if (u) return u
+  }
+  return getAuthUser()
 }

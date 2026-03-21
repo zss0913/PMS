@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
+import { enrichReceiptLinesForRecords } from '@/lib/issue-record-lines'
 import { prisma } from '@/lib/prisma'
 
 /** 解析 YYYY-MM-DD，无效则返回 null */
@@ -36,7 +37,8 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = request.nextUrl
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1)
-    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') ?? '20', 10) || 20))
+    const rawSize = parseInt(searchParams.get('pageSize') ?? '15', 10)
+    const pageSize = rawSize === 30 || rawSize === 100 ? rawSize : 15
     const skip = (page - 1) * pageSize
 
     let from = parseDateStart(searchParams.get('issuedFrom'))
@@ -93,7 +95,12 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const list = rows.map((r) => ({
+    const linesPerRecord = await enrichReceiptLinesForRecords(
+      rows.map((r) => r.lineAmountsJson),
+      user.companyId
+    )
+
+    const list = rows.map((r, i) => ({
       id: r.id,
       batchId: r.batchId,
       tenantId: r.tenantId,
@@ -104,6 +111,7 @@ export async function GET(request: NextRequest) {
       billIdsJson: r.billIdsJson,
       billCodesJson: r.billCodesJson,
       lineAmountsJson: r.lineAmountsJson,
+      lines: linesPerRecord[i] ?? [],
       templateId: r.templateId,
       operatorName: r.operatorName,
       operatorPhone: r.operatorPhone,

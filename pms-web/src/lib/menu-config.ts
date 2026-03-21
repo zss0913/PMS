@@ -10,6 +10,7 @@ export const MENU_OPTIONS = [
   { id: 8, label: '催缴打印模板管理', path: '/print-templates' },
   { id: 9, label: '自动催缴设置', path: '/auto-reminder-settings' },
   { id: 10, label: '账单管理', path: '/bills' },
+  { id: 27, label: '开票记录', path: '/invoice-records' },
   { id: 11, label: '缴纳记录', path: '/payments' },
   { id: 12, label: '退费记录', path: '/refunds' },
   { id: 13, label: '催缴管理', path: '/reminders' },

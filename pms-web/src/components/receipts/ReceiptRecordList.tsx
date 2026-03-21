@@ -1,9 +1,22 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { ChevronDown, ChevronUp, Search, RotateCcw, Ban } from 'lucide-react'
 
-type Line = { billId: number; code: string; amount: number }
+const RETURN_TO_RECEIPT_RECORDS = '/receipt-records'
+
+type LineDetail = {
+  billId: number
+  code: string
+  lineAmount: number
+  accountReceivable: number
+  amountPaid: number
+  amountDue: number
+  receiptIssuedTotal: number
+  feeType: string
+  dueDate: string
+}
 
 type Row = {
   id: number
@@ -14,6 +27,7 @@ type Row = {
   totalAmount: number
   billCodesJson: string
   lineAmountsJson: string
+  lines?: LineDetail[]
   operatorName: string | null
   operatorPhone: string | null
   createdAt: string
@@ -24,13 +38,16 @@ const MERGE_LABEL: Record<string, string> = {
   perBill: '不合并（逐账单）',
 }
 
+const PAGE_SIZE_OPTIONS = [15, 30, 100] as const
+type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number]
+
 export function ReceiptRecordList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [list, setList] = useState<Row[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const pageSize = 20
+  const [pageSize, setPageSize] = useState<PageSizeOption>(15)
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set())
   const [notice, setNotice] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<number>>(() => new Set())
@@ -90,11 +107,17 @@ export function ReceiptRecordList() {
     } finally {
       setLoading(false)
     }
-  }, [page, applied])
+  }, [page, pageSize, applied])
 
   useEffect(() => {
     fetchList()
   }, [fetchList])
+
+  useEffect(() => {
+    if (total <= 0) return
+    const maxPage = Math.max(1, Math.ceil(total / pageSize))
+    if (page > maxPage) setPage(maxPage)
+  }, [total, pageSize, page])
 
   const handleQuery = () => {
     setApplied({
@@ -180,17 +203,36 @@ export function ReceiptRecordList() {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
-  function parseLines(json: string): Line[] {
+  function linesForRow(r: Row): LineDetail[] {
+    if (r.lines && r.lines.length > 0) return r.lines
     try {
-      const a = JSON.parse(json) as unknown
+      const a = JSON.parse(r.lineAmountsJson) as unknown
       if (!Array.isArray(a)) return []
-      return a.filter(
-        (x): x is Line =>
-          typeof x === 'object' &&
-          x !== null &&
-          typeof (x as Line).code === 'string' &&
-          typeof (x as Line).amount === 'number'
-      )
+      return a
+        .map((x) => {
+          if (typeof x !== 'object' || x === null) return null
+          const o = x as Record<string, unknown>
+          const billId = Number(o.billId)
+          const code = String(o.code ?? '')
+          const amount = Number(o.amount)
+          if (!Number.isFinite(billId) || !Number.isFinite(amount)) return null
+          const ar = Number(o.accountReceivable)
+          const paid = Number(o.amountPaid)
+          const due = Number(o.amountDue)
+          const rec = Number(o.receiptIssuedTotalAfter)
+          return {
+            billId,
+            code,
+            lineAmount: amount,
+            accountReceivable: Number.isFinite(ar) ? ar : 0,
+            amountPaid: Number.isFinite(paid) ? paid : 0,
+            amountDue: Number.isFinite(due) ? due : 0,
+            receiptIssuedTotal: Number.isFinite(rec) ? rec : 0,
+            feeType: typeof o.feeType === 'string' ? o.feeType : '—',
+            dueDate: typeof o.dueDate === 'string' ? o.dueDate : '—',
+          } satisfies LineDetail
+        })
+        .filter((x): x is LineDetail => x !== null)
     } catch {
       return []
     }
@@ -322,7 +364,7 @@ export function ReceiptRecordList() {
               </tr>
             ) : (
               list.flatMap((r) => {
-                const lines = parseLines(r.lineAmountsJson)
+                const lines = linesForRow(r)
                 const open = expanded.has(r.id)
                 const main = (
                   <tr key={r.id} className="border-b border-slate-100 dark:border-slate-700/80">
@@ -373,26 +415,57 @@ export function ReceiptRecordList() {
                       <div className="font-medium text-slate-600 dark:text-slate-400 mb-2">
                         同一批次 ID：{r.batchId.slice(0, 8)}…
                       </div>
-                      <table className="w-full text-xs border border-slate-200 dark:border-slate-600 rounded">
-                        <thead>
-                          <tr className="bg-slate-100 dark:bg-slate-800">
-                            <th className="p-2 text-left">账单编号</th>
-                            <th className="p-2 text-right">本次开具</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {lines.map((ln) => (
-                            <tr key={ln.billId}>
-                              <td className="p-2 border-t border-slate-200 dark:border-slate-700">
-                                {ln.code}
-                              </td>
-                              <td className="p-2 text-right border-t border-slate-200 dark:border-slate-700">
-                                ¥{ln.amount.toFixed(2)}
-                              </td>
+                      <div className="overflow-x-auto max-w-full">
+                        <table className="w-full min-w-[56rem] text-xs border border-slate-200 dark:border-slate-600 rounded">
+                          <thead>
+                            <tr className="bg-slate-100 dark:bg-slate-800">
+                              <th className="p-2 text-left whitespace-nowrap">账单编号</th>
+                              <th className="p-2 text-left whitespace-nowrap">费用类型</th>
+                              <th className="p-2 text-right whitespace-nowrap">应收金额</th>
+                              <th className="p-2 text-right whitespace-nowrap">已缴纳金额</th>
+                              <th className="p-2 text-right whitespace-nowrap">未缴纳金额</th>
+                              <th className="p-2 text-right whitespace-nowrap">已开收据（开具后累计）</th>
+                              <th className="p-2 text-right whitespace-nowrap">本次开具金额</th>
+                              <th className="p-2 text-left whitespace-nowrap">应收日期</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {lines.map((ln) => (
+                              <tr key={ln.billId}>
+                                <td className="p-2 border-t border-slate-200 dark:border-slate-700 font-mono">
+                                  <Link
+                                    href={`/bills/${ln.billId}?returnTo=${encodeURIComponent(RETURN_TO_RECEIPT_RECORDS)}`}
+                                    className="text-blue-600 hover:underline dark:text-blue-400"
+                                  >
+                                    {ln.code}
+                                  </Link>
+                                </td>
+                                <td className="p-2 border-t border-slate-200 dark:border-slate-700">
+                                  {ln.feeType}
+                                </td>
+                                <td className="p-2 text-right border-t border-slate-200 dark:border-slate-700">
+                                  ¥{ln.accountReceivable.toFixed(2)}
+                                </td>
+                                <td className="p-2 text-right border-t border-slate-200 dark:border-slate-700">
+                                  ¥{ln.amountPaid.toFixed(2)}
+                                </td>
+                                <td className="p-2 text-right border-t border-slate-200 dark:border-slate-700">
+                                  ¥{ln.amountDue.toFixed(2)}
+                                </td>
+                                <td className="p-2 text-right border-t border-slate-200 dark:border-slate-700">
+                                  ¥{ln.receiptIssuedTotal.toFixed(2)}
+                                </td>
+                                <td className="p-2 text-right border-t border-slate-200 dark:border-slate-700 font-medium">
+                                  ¥{ln.lineAmount.toFixed(2)}
+                                </td>
+                                <td className="p-2 border-t border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                                  {ln.dueDate}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -404,32 +477,51 @@ export function ReceiptRecordList() {
       </div>
       {total > 0 && (
         <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center gap-3 text-sm">
-          <span className="text-slate-500">
+          <span className="text-slate-500 dark:text-slate-400">
             共 {total} 条（每张收据一条）
           </span>
-          {total > pageSize && (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={page <= 1 || loading}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1 rounded border border-slate-300 dark:border-slate-600 disabled:opacity-50"
-              >
-                上一页
-              </button>
-              <span>
-                {page} / {totalPages}
-              </span>
-              <button
-                type="button"
-                disabled={page >= totalPages || loading}
-                onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-1 rounded border border-slate-300 dark:border-slate-600 disabled:opacity-50"
-              >
-                下一页
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <label htmlFor="receipt-page-size" className="text-slate-500 dark:text-slate-400 whitespace-nowrap">
+              每页
+            </label>
+            <select
+              id="receipt-page-size"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value) as PageSizeOption)
+                setPage(1)
+              }}
+              disabled={loading}
+              className="px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm disabled:opacity-50"
+            >
+              {PAGE_SIZE_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n} 条
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-1 flex-wrap items-center justify-end gap-2 min-w-[12rem]">
+            <button
+              type="button"
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-1 rounded border border-slate-300 dark:border-slate-600 disabled:opacity-50 hover:bg-slate-50 dark:hover:bg-slate-700"
+            >
+              上一页
+            </button>
+            <span className="text-slate-600 dark:text-slate-300 tabular-nums">
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={page >= totalPages || loading}
+              onClick={() => setPage((p) => p + 1)}
+              className="px-3 py-1 rounded border border-slate-300 dark:border-slate-600 disabled:opacity-50 hover:bg-slate-50 dark:hover:bg-slate-700"
+            >
+              下一页
+            </button>
+          </div>
         </div>
       )}
     </div>

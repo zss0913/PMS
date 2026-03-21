@@ -4,11 +4,7 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Plus, Pencil, Trash2, Copy, Check, X } from 'lucide-react'
 import { PrintTemplateForm } from './PrintTemplateForm'
-import {
-  DUNNING_PLACEHOLDERS,
-  RECEIPT_PLACEHOLDERS,
-  INVOICE_PLACEHOLDERS,
-} from './print-placeholder-docs'
+import { DUNNING_PLACEHOLDERS, RECEIPT_PLACEHOLDERS } from './print-placeholder-docs'
 
 export type PrintTemplate = {
   id: number
@@ -225,31 +221,6 @@ export function PrintTemplateList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                         type="button"
                         onClick={() => copyPlaceholder(p.key)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-emerald-200/80 dark:border-emerald-800 hover:border-emerald-500 text-sm font-mono text-left max-w-full"
-                      >
-                        {copiedKey === p.key ? (
-                          <Check className="w-3.5 h-3.5 shrink-0 text-green-600" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-                        )}
-                        <span className="break-all">{p.key}</span>
-                        <span className="text-slate-600 dark:text-slate-400 font-sans text-xs">({p.desc})</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/80 dark:bg-amber-950/20 p-4">
-                  <h3 className="font-semibold text-amber-900 dark:text-amber-100 mb-1">发票模板</h3>
-                  <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mb-3">
-                    当前 <code className="font-mono">{'{{billList}}'}</code> 为<strong>纯文本多行</strong>（非表格）；其它占位符与收据类似。
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {INVOICE_PLACEHOLDERS.map((p) => (
-                      <button
-                        key={`invoice-${p.key}`}
-                        type="button"
-                        onClick={() => copyPlaceholder(p.key)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-amber-200/80 dark:border-amber-800 hover:border-amber-500 text-sm font-mono text-left max-w-full"
                       >
                         {copiedKey === p.key ? (
                           <Check className="w-3.5 h-3.5 shrink-0 text-green-600" />

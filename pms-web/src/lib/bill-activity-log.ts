@@ -11,6 +11,9 @@ export const BILL_ACTION = {
   RECEIPT_EXPORT: 'receipt_export',
   RECEIPT_VOID: 'receipt_void',
   INVOICE_EXPORT: 'invoice_export',
+  INVOICE_ISSUE: 'invoice_issue',
+  INVOICE_VOID: 'invoice_void',
+  INVOICE_REVERSAL: 'invoice_reversal',
   DUNNING_EXPORT: 'dunning_export',
   REMINDER_RECORD: 'reminder_record',
 } as const

@@ -4,10 +4,17 @@ import { AppLink } from '@/components/AppLink'
 import { ArrowLeft } from 'lucide-react'
 import { WorkOrderForm } from '@/components/work-orders/WorkOrderForm'
 
-export default async function NewWorkOrderPage() {
+export default async function NewWorkOrderPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ source?: string }>
+}) {
   const user = await getAuthUser()
   if (!user) redirect('/login')
   if (user.companyId === 0) redirect('/')
+  const sp = await searchParams
+  const defaultSource = sp.source === '巡检发现' ? '巡检发现' : 'PC自建'
+
   return (
     <div className="p-6">
       <div className="flex items-center gap-4 mb-6">
@@ -20,7 +27,7 @@ export default async function NewWorkOrderPage() {
         </AppLink>
         <h1 className="text-2xl font-bold">新建工单</h1>
       </div>
-      <WorkOrderForm />
+      <WorkOrderForm defaultSource={defaultSource} />
     </div>
   )
 }

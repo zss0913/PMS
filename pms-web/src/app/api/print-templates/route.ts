@@ -5,13 +5,11 @@ import { z } from 'zod'
 
 const createSchema = z.object({
   name: z.string().min(1, '模板名称不能为空'),
-  type: z.string().min(1, '模板类型不能为空'),
+  type: z.enum(['催缴单', '收据'], { message: '模板类型须为催缴单或收据' }),
   templateUrl: z.string().optional(),
   fields: z.string().optional(),
   status: z.enum(['active', 'inactive']).optional().default('active'),
 })
-
-const TEMPLATE_TYPES = ['催缴单', '收据', '发票'] as const
 
 export async function GET(request: NextRequest) {
   try {

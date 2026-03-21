@@ -281,11 +281,23 @@ export async function POST(request: NextRequest) {
             billIdsJson: JSON.stringify(group.map((b) => b.id)),
             billCodesJson: JSON.stringify(group.map((b) => b.code)),
             lineAmountsJson: JSON.stringify(
-              group.map((b) => ({
-                billId: b.id,
-                code: b.code,
-                amount: b.receiptLineAmount,
-              }))
+              group.map((b) => {
+                const issuedBefore = Number(b.receiptIssuedAmount ?? 0)
+                const receiptIssuedTotalAfter = Number(
+                  (issuedBefore + b.receiptLineAmount).toFixed(2)
+                )
+                return {
+                  billId: b.id,
+                  code: b.code,
+                  amount: b.receiptLineAmount,
+                  accountReceivable: Number(b.accountReceivable),
+                  amountPaid: Number(b.amountPaid ?? 0),
+                  amountDue: Number(b.amountDue),
+                  receiptIssuedTotalAfter,
+                  feeType: b.feeType,
+                  dueDate: b.dueDate.toISOString().slice(0, 10),
+                }
+              })
             ),
             templateId: template.id,
             operatorId: op.operatorId,

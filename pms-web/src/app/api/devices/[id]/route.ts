@@ -5,16 +5,27 @@ import { z } from 'zod'
 
 const DEVICE_STATUSES = ['正常', '维修中', '报废'] as const
 
+const dateStr = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, '投用日期格式须为 YYYY-MM-DD')
+
 const updateSchema = z.object({
+  code: z.string().min(1, '设备编号不能为空').optional(),
   name: z.string().min(1, '设备名称不能为空').optional(),
   type: z.string().min(1, '设备类型不能为空').optional(),
   buildingId: z.number().int().min(1).optional(),
   status: z.enum(DEVICE_STATUSES).optional(),
+  commissionedDate: dateStr.optional(),
   location: z.string().optional(),
   maintenanceContact: z.string().optional(),
   supplier: z.string().optional(),
   brand: z.string().optional(),
 })
+
+function parseCommissionedDate(s: string): Date {
+  const d = new Date(s.trim() + 'T12:00:00')
+  return Number.isNaN(d.getTime()) ? new Date() : d
+}
 
 export async function PUT(
   request: NextRequest,
@@ -66,9 +77,25 @@ export async function PUT(
       }
     }
 
+    if (parsed.code !== undefined) {
+      const nextCode = parsed.code.trim()
+      if (nextCode !== existing.code) {
+        const codeTaken = await prisma.device.findFirst({
+          where: { companyId: user.companyId, code: nextCode, id: { not: deviceId } },
+        })
+        if (codeTaken) {
+          return NextResponse.json(
+            { success: false, message: '该设备编号已存在，同一物业公司下设备编号不能重复' },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
     const updated = await prisma.device.update({
       where: { id: deviceId },
       data: {
+        ...(parsed.code !== undefined && { code: parsed.code.trim() }),
         ...(parsed.name !== undefined && { name: parsed.name }),
         ...(parsed.type !== undefined && { type: parsed.type }),
         ...(parsed.buildingId && { buildingId: parsed.buildingId }),
@@ -77,6 +104,9 @@ export async function PUT(
         ...(parsed.maintenanceContact !== undefined && { maintenanceContact: parsed.maintenanceContact || null }),
         ...(parsed.supplier !== undefined && { supplier: parsed.supplier ?? '' }),
         ...(parsed.brand !== undefined && { brand: parsed.brand || null }),
+        ...(parsed.commissionedDate !== undefined && {
+          commissionedDate: parseCommissionedDate(parsed.commissionedDate),
+        }),
       },
     })
 

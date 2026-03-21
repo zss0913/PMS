@@ -131,6 +131,130 @@ export function BillLogDescriptionCell({
         )}
       </div>
     )
+  } else if (log.action === 'invoice_export' && meta) {
+    const line =
+      meta.invoiceLineAmount != null && meta.invoiceLineAmount !== ''
+        ? Number(meta.invoiceLineAmount)
+        : NaN
+    const after =
+      meta.invoiceIssuedTotalAfter != null && meta.invoiceIssuedTotalAfter !== ''
+        ? Number(meta.invoiceIssuedTotalAfter)
+        : NaN
+    const hasDetail = Number.isFinite(line) || Number.isFinite(after)
+    head = (
+      <div className="space-y-1 mb-1">
+        <p className="text-slate-800 dark:text-slate-200">生成发票（导出 Word，历史）</p>
+        {hasDetail ? (
+          <>
+            {Number.isFinite(line) && (
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                本次开票金额：¥{line.toFixed(2)}
+              </p>
+            )}
+            {Number.isFinite(after) && (
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                操作后已开票累计：¥{after.toFixed(2)}
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-slate-600 dark:text-slate-400">{log.summary}</p>
+        )}
+      </div>
+    )
+  } else if (log.action === 'invoice_issue' && meta) {
+    const line =
+      meta.invoiceLineAmount != null && meta.invoiceLineAmount !== ''
+        ? Number(meta.invoiceLineAmount)
+        : NaN
+    const after =
+      meta.invoiceIssuedTotalAfter != null && meta.invoiceIssuedTotalAfter !== ''
+        ? Number(meta.invoiceIssuedTotalAfter)
+        : NaN
+    const hasDetail = Number.isFinite(line) || Number.isFinite(after)
+    head = (
+      <div className="space-y-1 mb-1">
+        <p className="text-slate-800 dark:text-slate-200">开票登记</p>
+        {hasDetail ? (
+          <>
+            {Number.isFinite(line) && (
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                本次开票金额：¥{line.toFixed(2)}
+              </p>
+            )}
+            {Number.isFinite(after) && (
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                操作后已开票累计：¥{after.toFixed(2)}
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-slate-600 dark:text-slate-400">{log.summary}</p>
+        )}
+      </div>
+    )
+  } else if (log.action === 'invoice_void' && meta) {
+    const cancelAmt =
+      meta.invoiceCancelAmount != null && meta.invoiceCancelAmount !== ''
+        ? Number(meta.invoiceCancelAmount)
+        : NaN
+    const after =
+      meta.invoiceIssuedTotalAfter != null && meta.invoiceIssuedTotalAfter !== ''
+        ? Number(meta.invoiceIssuedTotalAfter)
+        : NaN
+    const hasDetail = Number.isFinite(cancelAmt) || Number.isFinite(after)
+    head = (
+      <div className="space-y-1 mb-1">
+        <p className="text-slate-800 dark:text-slate-200">作废开票</p>
+        {hasDetail ? (
+          <>
+            {Number.isFinite(cancelAmt) && (
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                本次冲回金额：¥{cancelAmt.toFixed(2)}
+              </p>
+            )}
+            {Number.isFinite(after) && (
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                冲回后本账单已开票累计：¥{after.toFixed(2)}
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-slate-600 dark:text-slate-400">{log.summary}</p>
+        )}
+      </div>
+    )
+  } else if (log.action === 'invoice_reversal' && meta) {
+    const cancelAmt =
+      meta.invoiceCancelAmount != null && meta.invoiceCancelAmount !== ''
+        ? Number(meta.invoiceCancelAmount)
+        : NaN
+    const after =
+      meta.invoiceIssuedTotalAfter != null && meta.invoiceIssuedTotalAfter !== ''
+        ? Number(meta.invoiceIssuedTotalAfter)
+        : NaN
+    const hasDetail = Number.isFinite(cancelAmt) || Number.isFinite(after)
+    head = (
+      <div className="space-y-1 mb-1">
+        <p className="text-slate-800 dark:text-slate-200">红冲开票</p>
+        {hasDetail ? (
+          <>
+            {Number.isFinite(cancelAmt) && (
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                本次冲回金额：¥{cancelAmt.toFixed(2)}
+              </p>
+            )}
+            {Number.isFinite(after) && (
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                冲回后本账单已开票累计：¥{after.toFixed(2)}
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-slate-600 dark:text-slate-400">{log.summary}</p>
+        )}
+      </div>
+    )
   } else if (log.action === 'receipt_void' && meta) {
     const voidAmt =
       meta.receiptVoidAmount != null && meta.receiptVoidAmount !== ''

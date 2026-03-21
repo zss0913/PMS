@@ -209,6 +209,14 @@ async function main() {
         companyId: company.id,
       },
     })
+    await prisma.workOrderType.create({
+      data: {
+        name: '报事',
+        sort: 2,
+        enabled: true,
+        companyId: company.id,
+      },
+    })
   }
 
   const workOrderCount = await prisma.workOrder.count({ where: { companyId: company.id } })
@@ -220,7 +228,7 @@ async function main() {
         roomId: room.id,
         tenantId: tenant.id,
         reporterId: employee.id,
-        source: 'PC端',
+        source: 'PC自建',
         type: '报修',
         title: '测试工单-空调不制冷',
         description: '101室空调不制冷，需要维修',

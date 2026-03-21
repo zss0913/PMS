@@ -1,0 +1,63 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+
+type Task = {
+  id: number
+  code: string
+  planName: string
+  inspectionType: string
+  scheduledDate: string
+  status: string
+}
+
+export default function StaffInspectionPage() {
+  const [list, setList] = useState<Task[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const r = await fetch('/api/mp/inspection-tasks', { credentials: 'include' })
+        const j = await r.json()
+        setList(j.list ?? [])
+      } catch {
+        setList([])
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [])
+
+  return (
+    <div className="p-4 max-w-lg mx-auto space-y-4">
+      <h1 className="text-lg font-semibold">巡检任务</h1>
+      <p className="text-xs text-slate-500">
+        展示分配给我的任务；NFC 执行与详情请在 PC 端或后续版本完善
+      </p>
+      {loading ? (
+        <p className="text-sm text-slate-500 text-center py-8">加载中…</p>
+      ) : list.length === 0 ? (
+        <p className="text-sm text-slate-500 text-center py-8">暂无任务</p>
+      ) : (
+        <ul className="space-y-2">
+          {list.map((t) => (
+            <li
+              key={t.id}
+              className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4"
+            >
+              <div className="flex justify-between gap-2">
+                <span className="font-mono text-xs text-slate-500">{t.code}</span>
+                <span className="text-xs shrink-0">{t.status}</span>
+              </div>
+              <p className="font-medium mt-1">{t.planName}</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {t.inspectionType} · {new Date(t.scheduledDate).toLocaleString('zh-CN')}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}

@@ -132,7 +132,10 @@ export async function DELETE(
     })
     if (workOrderCount > 0) {
       return NextResponse.json(
-        { success: false, message: `该类型下有 ${workOrderCount} 个工单，无法删除` },
+        {
+          success: false,
+          message: `该工单类型下已存在 ${workOrderCount} 条工单，不允许删除`,
+        },
         { status: 400 }
       )
     }

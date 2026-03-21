@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import { AppLink } from '@/components/AppLink'
 import { ArrowLeft } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
+import { fetchWorkOrderActivityLogs } from '@/lib/work-order-activity-log-db'
 import { WorkOrderDetail } from '@/components/work-orders/WorkOrderDetail'
 
 export default async function WorkOrderDetailPage({
@@ -30,11 +31,14 @@ export default async function WorkOrderDetailPage({
 
   if (!workOrder) notFound()
 
-  const employees = await prisma.employee.findMany({
-    where: { companyId: user.companyId, status: 'active' },
-    select: { id: true, name: true },
-    orderBy: { id: 'asc' },
-  })
+  const [employees, activityLogs] = await Promise.all([
+    prisma.employee.findMany({
+      where: { companyId: user.companyId, status: 'active' },
+      select: { id: true, name: true, phone: true },
+      orderBy: { id: 'asc' },
+    }),
+    fetchWorkOrderActivityLogs(prisma, user.companyId, workOrderId),
+  ])
 
   return (
     <div className="p-6">
@@ -56,17 +60,27 @@ export default async function WorkOrderDetailPage({
           type: workOrder.type,
           source: workOrder.source,
           description: workOrder.description,
+          images: workOrder.images,
+          location: workOrder.location,
           status: workOrder.status,
+          facilityScope: workOrder.facilityScope,
+          feeNoticeAcknowledged: workOrder.feeNoticeAcknowledged,
+          feeRemark: workOrder.feeRemark,
+          feeConfirmedAt: workOrder.feeConfirmedAt?.toISOString() ?? null,
           building: workOrder.building,
           room: workOrder.room,
           tenant: workOrder.tenant,
           assignedTo: workOrder.assignedTo,
           assignedEmployee: workOrder.assignedEmployee,
           assignedAt: workOrder.assignedAt?.toISOString() ?? null,
+          respondedAt: workOrder.respondedAt?.toISOString() ?? null,
+          completedAt: workOrder.completedAt?.toISOString() ?? null,
+          evaluatedAt: workOrder.evaluatedAt?.toISOString() ?? null,
           createdAt: workOrder.createdAt.toISOString(),
           updatedAt: workOrder.updatedAt.toISOString(),
         }}
         employees={employees}
+        activityLogs={activityLogs}
       />
     </div>
   )

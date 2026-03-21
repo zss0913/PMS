@@ -5,7 +5,7 @@ import { z } from 'zod'
 
 const updateSchema = z.object({
   name: z.string().min(1, '模板名称不能为空').optional(),
-  type: z.string().min(1, '模板类型不能为空').optional(),
+  type: z.enum(['催缴单', '收据'], { message: '模板类型须为催缴单或收据' }).optional(),
   templateUrl: z.string().optional(),
   fields: z.string().optional(),
   status: z.enum(['active', 'inactive']).optional(),

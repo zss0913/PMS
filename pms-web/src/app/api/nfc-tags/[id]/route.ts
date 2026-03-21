@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { routeReferencesNfcTagId } from '@/lib/inspection-route-nfc'
 import { z } from 'zod'
 
 const INSPECTION_TYPES = ['工程', '安保', '设备', '绿化'] as const
@@ -134,6 +135,53 @@ export async function DELETE(
       return NextResponse.json(
         { success: false, message: 'NFC标签不存在' },
         { status: 404 }
+      )
+    }
+
+    const nfcCode = existing.tagId
+    const companyId = user.companyId
+
+    const plans = await prisma.inspectionPlan.findMany({
+      where: { companyId, route: { not: null } },
+      select: { route: true },
+    })
+    if (plans.some((p) => p.route && routeReferencesNfcTagId(p.route, nfcCode))) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            '该NFC标签已出现在巡检计划路线中，请先调整计划后再删除',
+        },
+        { status: 400 }
+      )
+    }
+
+    const tasks = await prisma.inspectionTask.findMany({
+      where: { companyId, route: { not: null } },
+      select: { route: true },
+    })
+    if (tasks.some((t) => t.route && routeReferencesNfcTagId(t.route, nfcCode))) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            '该NFC标签已出现在巡检任务路线中，请先调整相关任务后再删除',
+        },
+        { status: 400 }
+      )
+    }
+
+    const recordHit = await prisma.inspectionRecord.findFirst({
+      where: { companyId, tagId: nfcCode },
+      select: { id: true },
+    })
+    if (recordHit) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: '该NFC标签已有巡检记录，无法删除',
+        },
+        { status: 400 }
       )
     }
 

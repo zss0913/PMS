@@ -24,6 +24,17 @@ const tenantLoginInclude = {
 
 type TenantUserWithLogin = Prisma.TenantUserGetPayload<{ include: typeof tenantLoginInclude }>
 
+function jsonWithAuthCookie(body: object, token: string) {
+  const res = NextResponse.json(body)
+  res.cookies.set('pms_token', token, {
+    httpOnly: true,
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7,
+    sameSite: 'lax',
+  })
+  return res
+}
+
 async function buildTenantTokenResponse(tenantUser: TenantUserWithLogin) {
   const relations = tenantUser.relations.map((r) => ({
     tenantId: r.tenantId,
@@ -166,11 +177,7 @@ export async function POST(request: NextRequest) {
       }
 
       const { token, user } = await buildTenantTokenResponse(tenantUser)
-      return NextResponse.json({
-        success: true,
-        token,
-        user,
-      })
+      return jsonWithAuthCookie({ success: true, token, user }, token)
     }
 
     const employee = await prisma.employee.findUnique({
@@ -208,18 +215,21 @@ export async function POST(request: NextRequest) {
       dataScope: employee.role?.dataScope ?? 'all',
       isLeader: employee.isLeader,
     })
-    return NextResponse.json({
-      success: true,
-      token,
-      user: {
-        id: employee.id,
-        name: employee.name,
-        phone: employee.phone,
-        type: 'employee',
-        companyId: employee.companyId,
-        roleId: employee.roleId,
+    return jsonWithAuthCookie(
+      {
+        success: true,
+        token,
+        user: {
+          id: employee.id,
+          name: employee.name,
+          phone: employee.phone,
+          type: 'employee',
+          companyId: employee.companyId,
+          roleId: employee.roleId,
+        },
       },
-    })
+      token
+    )
   } catch (e) {
     if (e instanceof z.ZodError) {
       return NextResponse.json(

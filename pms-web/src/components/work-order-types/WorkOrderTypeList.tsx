@@ -46,6 +46,12 @@ export function WorkOrderTypeList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     usePagination(filtered, 15)
 
   const handleDelete = async (item: WorkOrderType) => {
+    if (item.workOrderCount > 0) {
+      alert(
+        `该工单类型下已存在 ${item.workOrderCount} 条工单，不允许删除。请先处理或调整相关工单后再试。`
+      )
+      return
+    }
     if (!confirm(`确定删除工单类型「${item.name}」？`)) return
     setDeleting(item.id)
     try {
@@ -165,9 +171,9 @@ export function WorkOrderTypeList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                       </button>
                       <button
                         onClick={() => handleDelete(t)}
-                        disabled={deleting === t.id || t.workOrderCount > 0}
-                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={t.workOrderCount > 0 ? '该类型下有工单，无法删除' : '删除'}
+                        disabled={deleting === t.id}
+                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded disabled:opacity-50"
+                        title={t.workOrderCount > 0 ? '该类型下已有工单，点击将提示无法删除' : '删除'}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

@@ -7,7 +7,6 @@ import type { PrintTemplate } from './PrintTemplateList'
 const TEMPLATE_TYPES = [
   { value: '催缴单', label: '催缴单' },
   { value: '收据', label: '收据' },
-  { value: '发票', label: '发票' },
 ]
 
 const DOCX_ACCEPT = '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -41,7 +40,7 @@ export function PrintTemplateForm({
   useEffect(() => {
     if (template) {
       setName(template.name)
-      setType(template.type)
+      setType(template.type === '发票' ? '催缴单' : template.type)
       setTemplateUrl(template.templateUrl ?? '')
       setDisplayFileName(template.templateUrl ? displayNameFromStoredPath(template.templateUrl) : '')
       setStatus(template.status)
@@ -171,9 +170,12 @@ export function PrintTemplateForm({
               {type === '催缴单' && '账单列表占位符请使用 {{billList}}（导出为 7 列待缴表格）。完整说明见列表页「打印占位符」→ 催缴单模板。'}
               {type === '收据' &&
                 '账单列表请使用 {{billList}}（导出为含应收金额、已缴金额、本次收据等列的表格）。完整说明见列表页「打印占位符」→ 收据模板。'}
-              {type === '发票' &&
-                '当前 {{billList}} 为多行文本。说明见列表页「打印占位符」→ 发票模板。'}
             </p>
+            {isEdit && template?.type === '发票' && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5">
+                该记录原为「发票」类型（已下线）。请选择「催缴单」或「收据」后保存。
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">模板文件（Word）</label>

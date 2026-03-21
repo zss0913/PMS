@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx'
 type Building = { id: number; name: string }
 
 type FailedRow = {
+  code: string
   name: string
   type: string
   status: string
@@ -17,9 +18,19 @@ type FailedRow = {
   reason: string
 }
 
-const COLUMNS = ['设备名称', '设备类型', '状态', '具体位置', '维修联系人', '厂家', '品牌']
+const COLUMNS = [
+  '设备编号',
+  '设备名称',
+  '设备类型',
+  '状态',
+  '具体位置',
+  '维修联系人',
+  '厂家',
+  '品牌',
+] as const
 
 type PreviewRow = {
+  code: string
   name: string
   type: string
   status: string
@@ -45,13 +56,14 @@ function parseExcelFile(file: File): Promise<PreviewRow[]> {
         const result: PreviewRow[] = []
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i]
-          if (!row || row.length < 3) continue
-          const [name, type, status, location, maintenanceContact, supplier, brand] = row
-            .slice(0, 7)
+          if (!row || row.length < 4) continue
+          const [code, name, type, status, location, maintenanceContact, supplier, brand] = row
+            .slice(0, 8)
             .map((c) => String(c ?? '').trim())
-          if (!name || !type || !status) continue
-          if (name === '设备名称' || name === '设备类型') continue
+          if (!code || !name || !type || !status) continue
+          if (code === '设备编号' || name === '设备名称') continue
           result.push({
+            code,
             name,
             type,
             status,
@@ -74,6 +86,7 @@ function parseExcelFile(file: File): Promise<PreviewRow[]> {
 function downloadFailedExcel(failedRows: FailedRow[]) {
   const header = [...COLUMNS, '失败原因']
   const rows = failedRows.map((r) => [
+    r.code,
     r.name,
     r.type,
     r.status,
@@ -111,9 +124,9 @@ export function DeviceBatchImportModal({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleDownloadTemplate = () => {
-    const header = COLUMNS
-    const example1 = ['1号电梯', '电梯', '正常', '1号楼1单元', '张师傅', '三菱', '三菱']
-    const example2 = ['中央空调A', '空调', '正常', '地下机房', '', '', '']
+    const header = [...COLUMNS]
+    const example1 = ['EQ-001', '1号电梯', '电梯', '正常', '1号楼1单元', '张师傅', '三菱', '三菱']
+    const example2 = ['EQ-002', '中央空调A', '空调', '正常', '地下机房', '', '', '']
     const ws = XLSX.utils.aoa_to_sheet([header, example1, example2])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, '设备导入模板')
@@ -136,7 +149,9 @@ export function DeviceBatchImportModal({
       const rows = await parseExcelFile(file)
       setPreviewRows(rows)
       if (rows.length === 0) {
-        setError('未解析到有效数据，请按模板格式填写 Excel（设备名称、设备类型、状态为必填，状态需为：正常、维修中、报废）')
+        setError(
+          '未解析到有效数据，请按模板填写：设备编号、设备名称、设备类型、状态为必填；状态为：正常、维修中、报废；设备编号在同一物业公司内不可重复'
+        )
       }
     } catch {
       setError('文件解析失败')
@@ -173,6 +188,7 @@ export function DeviceBatchImportModal({
         return
       }
       const devices = rows.map((r) => ({
+        code: r.code,
         name: r.name,
         type: r.type,
         status: r.status,
@@ -279,6 +295,7 @@ export function DeviceBatchImportModal({
                       <tbody>
                         {result.failedRows.map((r, i) => (
                           <tr key={i} className="border-t border-slate-200 dark:border-slate-600">
+                            <td className="p-2 font-mono text-[11px]">{r.code}</td>
                             <td className="p-2">{r.name}</td>
                             <td className="p-2">{r.type}</td>
                             <td className="p-2">{r.status}</td>
@@ -292,7 +309,9 @@ export function DeviceBatchImportModal({
                       </tbody>
                     </table>
                   </div>
-                  <p className="text-xs text-slate-500">请下载失败表格，根据失败原因修改后重新导入</p>
+                  <p className="text-xs text-slate-500">
+                    请下载失败表格，按失败原因修改后重新上传；导入时只需保留与模板相同的列（可删除「失败原因」列）
+                  </p>
                 </div>
               )}
             </div>
@@ -330,7 +349,7 @@ export function DeviceBatchImportModal({
                   </button>
                 </div>
                 <p className="text-xs text-slate-500 mb-2">
-                  请上传 Excel 文件（.xlsx 或 .xls），列顺序：{COLUMNS.join('、')}。设备名称、设备类型、状态为必填，状态需为：正常、维修中、报废
+                  请上传 Excel（.xlsx / .xls），列顺序：{COLUMNS.join('、')}。设备编号、设备名称、设备类型、状态为必填；状态：正常、维修中、报废；设备编号在本公司内唯一，名称等可重复
                 </p>
                 <input
                   ref={fileInputRef}
@@ -382,6 +401,7 @@ export function DeviceBatchImportModal({
                             <tbody>
                               {previewRows.slice(0, 10).map((r, i) => (
                                 <tr key={i} className="border-t border-slate-200 dark:border-slate-600">
+                                  <td className="p-2 font-mono text-[11px]">{r.code}</td>
                                   <td className="p-2">{r.name}</td>
                                   <td className="p-2">{r.type}</td>
                                   <td className="p-2">{r.status}</td>

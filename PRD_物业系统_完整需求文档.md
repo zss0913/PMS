@@ -21,6 +21,20 @@
 - **员工端** (pms-staff)：uni-app Vue3 + TypeScript，登录、首页待办、工单、巡检任务、公告、个人中心
 - **后端 API**：`/api/mp/login`、`/api/mp/me`、`/api/mp/bills`、`/api/mp/work-orders`、`/api/mp/announcements`、`/api/mp/complaints`、`/api/mp/my-todos`、`/api/mp/inspection-tasks`
 
+### 移动端 H5（与 PC 同站，2025-03-21）
+- **技术**：Next.js App Router 页面（`/m/...`），复用上述 `/api/mp/*` 及工单推进、图片上传等接口；`/api/mp/login` 成功后会写入 `pms_token` Cookie，`getMpAuthUser` 支持 **Bearer** 与 **Cookie** 两种方式。
+- **访问地址（本地默认端口 5000，请按实际部署域名替换主机名）**：
+  | 说明 | URL |
+  |------|-----|
+  | H5 总入口（选端） | `http://localhost:5000/m` |
+  | 租客端登录 | `http://localhost:5000/m/tenant/login` |
+  | 租客端首页（需登录） | `http://localhost:5000/m/tenant` |
+  | 员工端登录 | `http://localhost:5000/m/staff/login` |
+  | 员工端首页（需登录） | `http://localhost:5000/m/staff` |
+  | PC 管理端登录（对照测试） | `http://localhost:5000/login` |
+- **租客端 H5 功能**：登录（多公司/多账号选择）、首页、报事报修（新建/列表/详情）、待确认费用确认、账单列表与详情、公告、卫生吐槽、我的/退出。
+- **员工端 H5 功能**：登录、首页待办统计、工单列表与详情（开始处理、费用待确认、办结待评价、评价完成、取消）、巡检任务列表、公告、我的/退出。
+
 ---
 
 ## 目录
@@ -1195,45 +1209,59 @@ NFC 标签数量：百到千个
 **3.1.7.7 工单管理**
 
 **功能列表：**
-- 工单列表：查看工单列表，支持按时间、工单类型、处理人筛选，支持导出
-- 工单详情：查看工单详情，支持派单、重新派单、取消
-- 多状态展示：不同状态工单在不同table中展示（待派单/待响应/处理中/待评价/评价完成/已取消）
-- 工单操作日志：查看工单操作日志
+- 工单列表：按状态 Tab 筛选；可按创建时间范围、类型、来源、租客/处理人模糊查询；**来源**口径：**PC自建**、**员工端自建**、**租客自建**、**巡检发现**（列表/详情展示时将历史值 `租客端`→租客自建、`PC端`→PC自建）；展示设施范围（租客端）等字段
+- 新建工单（PC）：楼宇**必填**；房源、租客**选填**；来源自动识别为「PC自建」，若新建页 URL 带 `?source=巡检发现` 则为巡检发现；工单类型取自「工单类型」配置；**描述必填**；图片**选填**（图片 URL，每行一条，存 JSON 数组）
+- 工单详情：派单；流程操作（开始处理、提交费用待确认、办结待评价、标记评价完成、取消）
+- 租客端报事报修：见下「租客端规则」；相关 API：`POST /api/mp/work-orders`、`GET /api/mp/work-order-submit-context`、`POST /api/mp/work-orders/{id}/confirm-fee`
+- 员工端列表：`GET /api/mp/work-orders`（与小程序共用，按登录类型过滤）
+- 多状态：**待派单 / 待响应 / 处理中 / 待确认费用（可选）/ 待评价 / 评价完成 / 已取消**
+- 状态推进（PC）：`POST /api/work-orders/{id}/advance`，`action` 取值：`start_processing` | `request_fee_confirmation` | `complete_for_evaluation` | `mark_evaluated` | `cancel`（`request_fee_confirmation` 可带 `feeRemark`）
 
-**工单字段：**
+**租客端报事报修规则：**
+1. 类型仅为 **报事**、**报修**（写入工单 `type` 字段）。
+2. 必选 **公共设施 / 套内设施**（`facilityScope`）。选择**套内设施**时，须勾选已阅读「可能产生费用、具体金额以工程师上门评估为准」类提示（`feeNoticeAcknowledged=true`）方可提交。
+3. **描述必填**；**图片选填**（URL 数组，最多 9 条）；可选填 `location` 文字说明位置。
+4. **楼宇、房源、租客不展示**：由当前登录租客账号关联自动解析（默认：关联的第一个租客主体 + 该租客下第一张绑定房源；无绑定房源时 `roomId` 可为空）。
+5. 来源固定为 **租客自建**（历史数据可能仍为 `租客端`，筛选与展示时与租客自建等价）；创建后状态为 **待派单**。
+6. **待确认费用**：员工在 PC 端提交后，租客在小程序调用 **确认费用** 接口，工单回到 **处理中** 继续维修。
+
+**员工端（PC）自建规则：**
+1. 楼宇必填；房源、租客选填（若同时选择，系统校验租客是否绑定该房源）。
+2. 来源无需手选：默认 **PC自建**；巡检等入口跳转新建页时带 `source=巡检发现`。
+3. 描述必填；图片选填。
+
+**工单字段（核心，与实现一致）：**
 ```typescript
 {
-  id: number;                    // 工单ID
-  code: string;                  // 工单编号（系统生成）
-  projectId: number;             // 所属项目ID
-  buildingId: number;            // 所属楼宇ID
-  roomId: number;                // 所属房源ID
-  tenantId: number;              // 所属租客ID
-  reporterId: number;            // 提报人ID
-  source: string;                // 工单来源（报事报修/巡检发现）
-  type: string;                  // 工单类型
-  title: string;                 // 问题标题
-  description: string;           // 问题描述
-  images: string[];              // 问题图片（可多张）
-  location: string;              // 位置信息
-  severity?: string;             // 异常严重级别（巡检发现特有）
-  taskId?: number;               // 巡检任务ID（巡检发现特有）
-  tagId?: string;                // NFC标签ID（巡检发现特有）
-  status: string;                // 工单状态（待派单/待响应/处理中/待评价/评价完成/已取消）
-  assignedAt?: Date;             // 派单时间
-  assignedTo?: number;           // 被派单人ID
-  assignedHistory: Array<{       // 派单历史
-    assignedBy: number;          // 派单人ID
-    assignedTo: number;          // 被派单人ID
-    assignedAt: Date;            // 派单时间
-    reason?: string;             // 重新派单原因
-  }>;
-  respondedAt?: Date;            // 响应时间
-  completedAt?: Date;            // 完成时间
-  evaluatedAt?: Date;            // 评价时间
-  companyId: number;             // 所属物业公司ID
-  createdAt: Date;               // 创建时间
-  updatedAt: Date;               // 更新时间
+  id: number;
+  code: string;
+  projectId?: number;
+  buildingId: number;
+  roomId?: number | null;       // 可选：公区工单等
+  tenantId?: number | null;
+  reporterId: number;           // 员工ID 或 租客用户ID
+  source: string;               // PC自建 | 员工端自建 | 租客自建 | 巡检发现（兼容旧值 租客端、PC端）
+  type: string;                 // 租客端为报事/报修；PC 为工单类型配置名称
+  title: string;
+  description: string;
+  images?: string | null;       // JSON 字符串：图片 URL 数组
+  location?: string | null;
+  facilityScope?: string | null;        // 公共设施 | 套内设施
+  feeNoticeAcknowledged: boolean;
+  feeRemark?: string | null;            // 待确认费用说明
+  feeConfirmedAt?: Date | null;
+  severity?: string;
+  taskId?: number;
+  tagId?: string;
+  status: string;               // 含 待确认费用
+  assignedAt?: Date;
+  assignedTo?: number;
+  respondedAt?: Date;
+  completedAt?: Date;
+  evaluatedAt?: Date;
+  companyId: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 ```
 
@@ -1275,12 +1303,14 @@ NFC 标签数量：百到千个
 ```
 
 **工单流转流程：**
-1. 工单创建 → 待派单状态
-2. 组长收到新工单通知 → 手动派单给师傅 → 待响应状态
-3. 师傅收到工单通知 → 师傅开始处理 → 处理中状态
-4. 师傅处理工单 → 填写处理记录 → 待评价状态
-5. 租客验收/评价 → 评价完成状态
-6. 超时未响应 → 系统提醒组长 → 组长重新派单或催促师傅处理
+1. 工单创建 → **待派单**
+2. 派单给处理人 → **待响应**
+3. 处理人「开始处理」→ **处理中**
+4. （可选）涉及有偿且需租客确认：「提交费用待确认」→ **待确认费用** → 租客小程序确认 → **处理中**
+5. 「办结并进入待评价」→ **待评价**
+6. 「标记评价完成」→ **评价完成**
+7. 待派单/待响应/处理中可 **取消** → **已取消**
+8. 超时未响应 → 系统提醒组长 → 组长重新派单或催促（与工单类型超时配置配合）
 
 **工单超时机制：**
 - 默认响应超时时间：2小时

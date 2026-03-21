@@ -11,7 +11,8 @@ export async function POST(
     if (!user) {
       return NextResponse.json({ success: false, message: '未登录' }, { status: 401 })
     }
-    const id = parseInt(params.id, 10)
+    const { id: rawId } = await params
+    const id = parseInt(rawId, 10)
     if (isNaN(id)) {
       return NextResponse.json({ success: false, message: '无效ID' }, { status: 400 })
     }

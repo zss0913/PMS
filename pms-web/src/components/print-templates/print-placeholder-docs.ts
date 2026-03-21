@@ -43,22 +43,3 @@ export const RECEIPT_PLACEHOLDERS: { key: string; desc: string }[] = [
   { key: '{{propertyName}}', desc: '物业公司名称' },
   { key: '{{notifyTime}}', desc: '生成时间' },
 ]
-
-/** 发票模板占位符（当前导出为纯文本多行 billList，非表格） */
-export const INVOICE_PLACEHOLDERS: { key: string; desc: string }[] = [
-  { key: '{{tenantName}}', desc: '租客名称' },
-  { key: '{{buildingName}}', desc: '所属楼宇' },
-  { key: '{{leaseArea}}', desc: '租赁面积（㎡）' },
-  { key: '{{roomNumber}}', desc: '房号' },
-  {
-    key: '{{billList}}',
-    desc: '本次开票账单列表（当前为纯文本多行，非表格）。每行含账单编号、费用类型、账期、本次开票金额',
-  },
-  { key: '{{billTableXml}}', desc: '预留；发票导出当前未写入表格 XML，可留空' },
-  { key: '{{totalAmount}}', desc: '本次开票金额合计' },
-  { key: '{{bankName}}', desc: '收款账户开户行' },
-  { key: '{{accountNumber}}', desc: '银行账号' },
-  { key: '{{accountHolder}}', desc: '开户名称' },
-  { key: '{{propertyName}}', desc: '物业公司名称' },
-  { key: '{{notifyTime}}', desc: '生成时间' },
-]

@@ -29,6 +29,7 @@ import {
   FileType,
   BellRing,
   ScrollText,
+  Landmark,
 } from 'lucide-react'
 import type { AuthUser } from '@/lib/auth'
 import { cn } from '@/lib/utils'
@@ -135,6 +136,7 @@ const menuItems = [
     icon: CreditCard,
     children: [
       { href: '/bills', label: '账单管理', icon: Receipt },
+      { href: '/invoice-records', label: '开票记录', icon: Landmark },
       { href: '/receipt-records', label: '收据记录', icon: ScrollText },
       { href: '/payments', label: '缴纳记录', icon: CreditCard },
       { href: '/refunds', label: '退费记录', icon: AlertCircle },

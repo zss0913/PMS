@@ -34,5 +34,6 @@ export function usePagination<T>(items: T[], defaultPageSize: PageSize = 15) {
     paginatedItems,
     handlePageChange,
     handlePageSizeChange,
+    setPage,
   }
 }

@@ -6,6 +6,7 @@ import { z } from 'zod'
 const DEVICE_STATUSES = ['正常', '维修中', '报废'] as const
 
 const deviceItemSchema = z.object({
+  code: z.string().min(1, '设备编号不能为空'),
   name: z.string().min(1, '设备名称不能为空'),
   type: z.string().min(1, '设备类型不能为空'),
   status: z.enum(DEVICE_STATUSES),
@@ -21,6 +22,7 @@ const batchSchema = z.object({
 })
 
 type FailedRow = {
+  code: string
   name: string
   type: string
   status: string
@@ -29,10 +31,6 @@ type FailedRow = {
   supplier: string
   brand: string
   reason: string
-}
-
-function generateDeviceCode(): string {
-  return `DEV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6)}`
 }
 
 export async function POST(request: NextRequest) {
@@ -61,6 +59,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const existingCodes = new Set(
+      (
+        await prisma.device.findMany({
+          where: { companyId: user.companyId },
+          select: { code: true },
+        })
+      ).map((d) => d.code)
+    )
+
     const toCreate: {
       code: string
       name: string
@@ -74,10 +81,12 @@ export async function POST(request: NextRequest) {
       companyId: number
     }[] = []
     const failedRows: FailedRow[] = []
+    const seenInBatch = new Set<string>()
 
-    for (let i = 0; i < parsed.devices.length; i++) {
-      const d = parsed.devices[i]
+    for (const d of parsed.devices) {
+      const code = d.code.trim()
       const rowData: FailedRow = {
+        code,
         name: d.name.trim(),
         type: d.type.trim(),
         status: d.status,
@@ -88,14 +97,35 @@ export async function POST(request: NextRequest) {
         reason: '',
       }
 
+      if (!code) {
+        rowData.reason = '设备编号不能为空'
+        failedRows.push(rowData)
+        continue
+      }
+
       if (!DEVICE_STATUSES.includes(d.status as (typeof DEVICE_STATUSES)[number])) {
         rowData.reason = `状态「${d.status}」无效，应为：${DEVICE_STATUSES.join('、')}`
         failedRows.push(rowData)
         continue
       }
 
+      if (seenInBatch.has(code)) {
+        rowData.reason = '导入文件中设备编号重复'
+        failedRows.push(rowData)
+        continue
+      }
+
+      if (existingCodes.has(code)) {
+        rowData.reason = '设备编号已存在（同一物业公司下不可重复）'
+        failedRows.push(rowData)
+        continue
+      }
+
+      seenInBatch.add(code)
+      existingCodes.add(code)
+
       toCreate.push({
-        code: generateDeviceCode(),
+        code,
         name: rowData.name,
         type: rowData.type,
         status: rowData.status,

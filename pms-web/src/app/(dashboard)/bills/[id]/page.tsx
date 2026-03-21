@@ -31,7 +31,10 @@ const ACTION_LABELS: Record<string, string> = {
   refund: '退费',
   receipt_export: '生成收据',
   receipt_void: '作废收据',
-  invoice_export: '生成发票',
+  invoice_export: '生成发票（历史导出）',
+  invoice_issue: '开票登记',
+  invoice_void: '作废开票',
+  invoice_reversal: '红冲开票',
   dunning_export: '生成催缴单',
   reminder_record: '催缴记录',
 }
@@ -83,7 +86,9 @@ export default async function BillDetailPage({
   const roomsDisplay = formatBillRoomsDisplay(bill.remark, bill.room)
   const dunningCount = activityLogs.filter((l) => l.action === 'dunning_export').length
   const receiptCount = activityLogs.filter((l) => l.action === 'receipt_export').length
-  const invoiceCount = activityLogs.filter((l) => l.action === 'invoice_export').length
+  const invoiceCount = activityLogs.filter((l) =>
+    ['invoice_export', 'invoice_issue'].includes(l.action)
+  ).length
 
   const backHref = safeReturn ?? '/bills'
   const backLabel = safeReturn ? '返回' : '返回账单列表'
@@ -201,7 +206,7 @@ export default async function BillDetailPage({
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
         生成催缴单累计 <span className="font-medium text-slate-700 dark:text-slate-200">{dunningCount}</span> 次；
         生成收据累计 <span className="font-medium text-slate-700 dark:text-slate-200">{receiptCount}</span> 次；
-        生成发票累计 <span className="font-medium text-slate-700 dark:text-slate-200">{invoiceCount}</span> 次（以操作日志为准）
+        开票相关操作累计 <span className="font-medium text-slate-700 dark:text-slate-200">{invoiceCount}</span> 次（含历史导出与登记，以操作日志为准）
       </p>
 
       <BillDetailTabs attachmentsSlot={<BillAttachmentsPanel billId={bill.id} />}>

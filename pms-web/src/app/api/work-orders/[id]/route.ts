@@ -2,11 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
+import {
+  WORK_ORDER_ACTION,
+  buildWorkOrderEditChanges,
+  logWorkOrderActivity,
+  operatorFromAuthUser,
+} from '@/lib/work-order-activity-log'
+
+const imagesJson = z
+  .string()
+  .refine((s) => {
+    try {
+      const a = JSON.parse(s) as unknown
+      return Array.isArray(a) && a.every((x) => typeof x === 'string')
+    } catch {
+      return false
+    }
+  }, 'images 须为 URL 字符串的 JSON 数组')
 
 const updateSchema = z.object({
-  status: z.string().optional(),
   title: z.string().min(1).optional(),
   description: z.string().optional(),
+  images: z.union([imagesJson, z.null()]).optional(),
 })
 
 export async function GET(
@@ -47,7 +64,7 @@ export async function GET(
 
     const employees = await prisma.employee.findMany({
       where: { companyId: user.companyId, status: 'active' },
-      select: { id: true, name: true },
+      select: { id: true, name: true, phone: true },
       orderBy: { id: 'asc' },
     })
 
@@ -61,13 +78,22 @@ export async function GET(
           type: workOrder.type,
           source: workOrder.source,
           description: workOrder.description,
+          images: workOrder.images,
+          location: workOrder.location,
           status: workOrder.status,
+          facilityScope: workOrder.facilityScope,
+          feeNoticeAcknowledged: workOrder.feeNoticeAcknowledged,
+          feeRemark: workOrder.feeRemark,
+          feeConfirmedAt: workOrder.feeConfirmedAt?.toISOString() ?? null,
           building: workOrder.building,
           room: workOrder.room,
           tenant: workOrder.tenant,
           assignedTo: workOrder.assignedTo,
           assignedEmployee: workOrder.assignedEmployee,
           assignedAt: workOrder.assignedAt?.toISOString() ?? null,
+          respondedAt: workOrder.respondedAt?.toISOString() ?? null,
+          completedAt: workOrder.completedAt?.toISOString() ?? null,
+          evaluatedAt: workOrder.evaluatedAt?.toISOString() ?? null,
           createdAt: workOrder.createdAt.toISOString(),
           updatedAt: workOrder.updatedAt.toISOString(),
         },
@@ -113,14 +139,52 @@ export async function PUT(
     const parsed = updateSchema.parse(body)
 
     const updateData: Record<string, unknown> = {}
-    if (parsed.status !== undefined) updateData.status = parsed.status
     if (parsed.title !== undefined) updateData.title = parsed.title
     if (parsed.description !== undefined) updateData.description = parsed.description
+    if (parsed.images !== undefined) {
+      if (parsed.images === null) {
+        updateData.images = null
+      } else {
+        const arr = JSON.parse(parsed.images) as string[]
+        updateData.images = arr.length > 0 ? parsed.images : null
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ success: true })
+    }
 
     await prisma.workOrder.update({
       where: { id: workOrderId },
       data: updateData,
     })
+
+    const newRow = {
+      title: updateData.title !== undefined ? updateData.title : existing.title,
+      description:
+        updateData.description !== undefined ? updateData.description : existing.description,
+      images: updateData.images !== undefined ? updateData.images : existing.images,
+    }
+    const oldRow = {
+      title: existing.title,
+      description: existing.description,
+      images: existing.images,
+    }
+    const changes = buildWorkOrderEditChanges(oldRow, newRow, {
+      title: '标题',
+      description: '描述',
+      images: '图片附件',
+    })
+    if (changes.length > 0) {
+      await logWorkOrderActivity(prisma, {
+        workOrderId,
+        workOrderCode: existing.code,
+        companyId: user.companyId,
+        action: WORK_ORDER_ACTION.UPDATE,
+        changes,
+        ...operatorFromAuthUser(user),
+      })
+    }
 
     return NextResponse.json({ success: true })
   } catch (e) {

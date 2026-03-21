@@ -21,6 +21,7 @@ import {
   GripVertical,
   ChevronDown,
   ChevronUp,
+  Download,
 } from 'lucide-react'
 import {
   splitBillingPeriod,
@@ -637,6 +638,7 @@ export function BillList({
   const [refundOpen, setRefundOpen] = useState(false)
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dunningDrawerOpen, setDunningDrawerOpen] = useState(false)
   const [columnPrefsOpen, setColumnPrefsOpen] = useState(false)
@@ -688,8 +690,7 @@ export function BillList({
     setColumnPrefs(defaultBillColumnPrefs())
   }
 
-  const fetchBills = async () => {
-    const params = new URLSearchParams()
+  const appendBillListFilters = (params: URLSearchParams) => {
     if (filters.buildingId) params.set('buildingId', filters.buildingId)
     if (filters.tenantKeyword.trim()) params.set('tenantKeyword', filters.tenantKeyword.trim())
     if (filters.status) params.set('status', filters.status)
@@ -700,10 +701,51 @@ export function BillList({
     if (filters.dueDateEnd) params.set('dueDateEnd', filters.dueDateEnd)
     if (filters.periodStart) params.set('periodStart', filters.periodStart)
     if (filters.periodEnd) params.set('periodEnd', filters.periodEnd)
+  }
+
+  const fetchBills = async () => {
+    const params = new URLSearchParams()
+    appendBillListFilters(params)
     const res = await fetch(`/api/bills?${params}`)
     const json = await res.json()
     if (json.success) setData(json.data)
     else setData(null)
+  }
+
+  const handleExportExcel = async () => {
+    setExporting(true)
+    try {
+      const params = new URLSearchParams()
+      appendBillListFilters(params)
+      const res = await fetch(`/api/bills/export?${params.toString()}`, {
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string }
+        alert(j.message || '导出失败')
+        return
+      }
+      const blob = await res.blob()
+      const cd = res.headers.get('Content-Disposition')
+      let name = `账单导出_${Date.now()}.xlsx`
+      const m = cd?.match(/filename\*=UTF-8''(.+)/)
+      if (m) {
+        try {
+          name = decodeURIComponent(m[1].replace(/;$/, '').trim())
+        } catch {
+          /* ignore */
+        }
+      }
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = name
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch {
+      alert('网络错误，导出失败')
+    } finally {
+      setExporting(false)
+    }
   }
 
   const fetchRules = async () => {
@@ -854,6 +896,46 @@ export function BillList({
     return ar - issued
   }
 
+  /** 应收 − 已开票，仍大于 0 时可登记开票 */
+  const invoiceRemaining = (b: Bill) => {
+    const ar = Number(b.accountReceivable)
+    const issued = Number(b.invoiceIssuedAmount ?? 0)
+    return ar - issued
+  }
+
+  const goToInvoiceIssue = () => {
+    if (selectedIds.size === 0) {
+      alert('请先勾选要开票的账单')
+      return
+    }
+    const selected = list.filter((b) => selectedIds.has(b.id))
+    const issuable = selected.filter((b) => invoiceRemaining(b) > 1e-6)
+    const skippedCount = selected.length - issuable.length
+
+    if (issuable.length === 0) {
+      if (skippedCount > 0) {
+        alert(
+          '勾选的账单均已无可开票额度（已开票已达应收），无法进入开票页面。请重新勾选仍有可开票额度的账单。'
+        )
+      } else {
+        alert('没有可进入开票的账单')
+      }
+      return
+    }
+
+    if (skippedCount > 0) {
+      alert(
+        `勾选中含有 ${skippedCount} 条账单已无可开票额度（已开票已达应收），已自动排除，仅将剩余 ${issuable.length} 条带入开票页面。`
+      )
+    }
+
+    const q = issuable
+      .map((b) => b.id)
+      .sort((a, b) => a - b)
+      .join(',')
+    router.push(`/bills/invoice-issue?ids=${encodeURIComponent(q)}`)
+  }
+
   const goToReceiptIssue = () => {
     if (selectedIds.size === 0) {
       alert('请先勾选要开具收据的账单')
@@ -885,46 +967,6 @@ export function BillList({
       .sort((a, b) => a - b)
       .join(',')
     router.push(`/bills/receipt-issue?ids=${encodeURIComponent(q)}`)
-  }
-
-  const downloadInvoiceDoc = async () => {
-    if (selectedIds.size === 0) {
-      alert('请先勾选要开具发票的账单')
-      return
-    }
-    setSubmitting(true)
-    try {
-      const res = await fetch('/api/bills/invoice-export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ billIds: Array.from(selectedIds) }),
-      })
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        alert((j as { message?: string }).message || '生成失败')
-        return
-      }
-      const blob = await res.blob()
-      const cd = res.headers.get('Content-Disposition')
-      let name = `发票_${Date.now()}.docx`
-      const m = cd?.match(/filename\*=UTF-8''(.+)/)
-      if (m) {
-        try {
-          name = decodeURIComponent(m[1].replace(/;$/, '').trim())
-        } catch {
-          /* ignore */
-        }
-      }
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = name
-      a.click()
-      URL.revokeObjectURL(a.href)
-      fetchBills()
-    } finally {
-      setSubmitting(false)
-    }
   }
 
   const handleDeleteBills = async () => {
@@ -1056,6 +1098,16 @@ export function BillList({
         </button>
         <button
           type="button"
+          onClick={handleExportExcel}
+          disabled={exporting || loading}
+          title="按当前筛选条件导出全部账单为 Excel（含字段明细）"
+          className="flex items-center gap-2 px-4 py-2 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 bg-white dark:bg-slate-700 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/30 disabled:opacity-50"
+        >
+          <Download className="w-4 h-4" />
+          {exporting ? '导出中…' : '导出Excel'}
+        </button>
+        <button
+          type="button"
           onClick={() => setDunningDrawerOpen(true)}
           className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600"
         >
@@ -1073,8 +1125,8 @@ export function BillList({
         </button>
         <button
           type="button"
-          onClick={downloadInvoiceDoc}
-          disabled={submitting || selectedIds.size === 0}
+          onClick={goToInvoiceIssue}
+          disabled={selectedIds.size === 0}
           className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
         >
           <Landmark className="w-4 h-4" />

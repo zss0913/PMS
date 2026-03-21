@@ -20,18 +20,21 @@ export async function GET(request: Request) {
     await Promise.all([
       isLeader
         ? prisma.workOrder.count({
-            where: { companyId, status: 'pending' },
+            where: { companyId, status: '待派单' },
           })
         : 0,
       prisma.workOrder.count({
         where: {
           companyId,
           assignedTo: userId,
-          status: { in: ['assigned', 'processing'] },
+          status: { in: ['待响应', '处理中'] },
         },
       }),
       prisma.inspectionTask.findMany({
-        where: { companyId, status: { in: ['待巡检', 'pending'] } },
+        where: {
+          companyId,
+          status: { in: ['待巡检', 'pending', '进行中'] },
+        },
         select: { userIds: true },
       }).then((tasks) =>
         tasks.filter((t) => {

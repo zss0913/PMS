@@ -37,8 +37,9 @@ model Company {
   payments        Payment[]
   refunds         Refund[]
   paymentReminders PaymentReminder[]
-  workOrders      WorkOrder[]
-  workOrderTypes  WorkOrderType[]
+  workOrders            WorkOrder[]
+  workOrderTypes        WorkOrderType[]
+  workOrderActivityLogs WorkOrderActivityLog[]
   nfcTags         NfcTag[]
   inspectionPlans InspectionPlan[]
   inspectionTasks InspectionTask[]
@@ -55,6 +56,7 @@ model Company {
   billAttachments  BillAttachment[]
   tenantAppMessages TenantAppMessage[]
   receiptIssueRecords ReceiptIssueRecord[]
+  invoiceIssueRecords InvoiceIssueRecord[]
 }
 
 model Department {
@@ -426,6 +428,36 @@ model ReceiptIssueRecord {
   @@index([companyId, batchId])
 }
 
+/// 开票记录：仅系统内登记金额，无 Word 载体；同一次提交中多张「发票」共享 batchId
+model InvoiceIssueRecord {
+  id              Int      @id @default(autoincrement())
+  companyId       Int
+  batchId         String
+  tenantId        Int
+  tenantName      String
+  mergeMode       String
+  billCount       Int
+  totalAmount     Decimal
+  billIdsJson     String
+  billCodesJson   String
+  lineAmountsJson String
+  operatorId      Int?
+  operatorName    String?
+  operatorPhone   String?
+  createdAt       DateTime @default(now())
+  voidedAt              DateTime?
+  voidedOperatorId      Int?
+  voidedOperatorName    String?
+  reversedAt            DateTime?
+  reversedOperatorId    Int?
+  reversedOperatorName  String?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([companyId, batchId])
+}
+
 /// 账单附件（图片 / PDF / Office / 表格等），不记入操作日志
 model BillAttachment {
   id           Int      @id @default(autoincrement())
@@ -554,8 +586,10 @@ model WorkOrder {
   code         String   @unique
   projectId    Int?
   buildingId   Int
-  roomId       Int
-  tenantId     Int
+  /// 可选：员工自建公区工单等可无房源
+  roomId       Int?
+  /// 可选：与 roomId 一致，可无租客主体
+  tenantId     Int?
   reporterId   Int
   source       String
   type         String
@@ -567,6 +601,14 @@ model WorkOrder {
   taskId       Int?
   tagId        String?
   status       String
+  /// 租客报事报修：公共设施 | 套内设施
+  facilityScope         String?
+  /// 套内报修时租客是否已确认费用知情
+  feeNoticeAcknowledged Boolean  @default(false)
+  /// 进入「待确认费用」时员工填写的费用说明
+  feeRemark             String?
+  /// 租客确认费用后继续处理的时间
+  feeConfirmedAt        DateTime?
   assignedAt   DateTime?
   assignedTo   Int?
   respondedAt  DateTime?
@@ -578,9 +620,32 @@ model WorkOrder {
 
   company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   building  Building  @relation(fields: [buildingId], references: [id], onDelete: Cascade)
-  tenant    Tenant    @relation(fields: [tenantId], references: [id])
-  room      Room      @relation(fields: [roomId], references: [id])
+  tenant    Tenant?   @relation(fields: [tenantId], references: [id])
+  room      Room?     @relation(fields: [roomId], references: [id])
   assignedEmployee Employee? @relation("AssignedWorkOrders", fields: [assignedTo], references: [id])
+  activityLogs     WorkOrderActivityLog[]
+}
+
+/// 工单操作日志（创建、编辑、派单、流程节点等）
+model WorkOrderActivityLog {
+  id             Int      @id @default(autoincrement())
+  workOrderId    Int
+  workOrderCode  String
+  companyId      Int
+  action         String
+  summary        String?
+  changesJson    String?
+  operatorId     Int?
+  operatorName   String?
+  operatorPhone  String?
+  metaJson       String?
+  createdAt      DateTime @default(now())
+
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, workOrderId])
+  @@index([companyId, workOrderCode])
 }
 
 // ========== 巡检管理 ==========
@@ -726,6 +791,8 @@ model Device {
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   building    Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
   maintenances DeviceMaintenance[]
+
+  @@unique([companyId, code])
 }
 
 model DeviceMaintenance {

@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
+import {
+  WORK_ORDER_ACTION,
+  logWorkOrderActivity,
+  operatorFromAuthUser,
+} from '@/lib/work-order-activity-log'
 
 const assignSchema = z.object({
   assignedTo: z.number({ required_error: '请选择处理人' }),
@@ -36,9 +41,9 @@ export async function POST(
       return NextResponse.json({ success: false, message: '工单不存在' }, { status: 404 })
     }
 
-    if (workOrder.status !== '待派单') {
+    if (!['待派单', '待响应'].includes(workOrder.status)) {
       return NextResponse.json(
-        { success: false, message: '只有待派单状态的工单可以派单' },
+        { success: false, message: '仅「待派单」或「待响应」的工单可派单/改派' },
         { status: 400 }
       )
     }
@@ -53,13 +58,38 @@ export async function POST(
       return NextResponse.json({ success: false, message: '处理人不存在或已停用' }, { status: 400 })
     }
 
-    await prisma.workOrder.update({
-      where: { id: workOrderId },
-      data: {
-        assignedTo: parsed.assignedTo,
-        assignedAt: new Date(),
-        status: '待响应',
-      },
+    const now = new Date()
+    if (workOrder.status === '待派单') {
+      await prisma.workOrder.update({
+        where: { id: workOrderId },
+        data: {
+          assignedTo: parsed.assignedTo,
+          assignedAt: now,
+          status: '待响应',
+        },
+      })
+    } else {
+      await prisma.workOrder.update({
+        where: { id: workOrderId },
+        data: {
+          assignedTo: parsed.assignedTo,
+          assignedAt: now,
+        },
+      })
+    }
+
+    const op = operatorFromAuthUser(user)
+    await logWorkOrderActivity(prisma, {
+      workOrderId,
+      workOrderCode: workOrder.code,
+      companyId: user.companyId,
+      action: WORK_ORDER_ACTION.ASSIGN,
+      summary:
+        workOrder.status === '待派单'
+          ? `派单给 ${employee.name}（进入待响应）`
+          : `改派给 ${employee.name}（仍为待响应）`,
+      meta: { assignedTo: employee.id, assignedName: employee.name },
+      ...op,
     })
 
     return NextResponse.json({ success: true })
