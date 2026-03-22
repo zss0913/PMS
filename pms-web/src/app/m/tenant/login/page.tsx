@@ -5,12 +5,39 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 type CompanyOpt = { companyId: number; companyName: string }
-type TenantUserOpt = {
-  id: number
-  name: string
-  companyId: number
-  companyName: string
-  tenants: { tenantId: number; companyName: string }[]
+
+const PREF_PHONE = 'mp_pref_phone'
+const PREF_TENANT_USER_ID = 'mp_pref_tenant_user_id'
+const PREF_COMPANY_ID = 'mp_pref_company_id'
+const PREF_ACTIVE_TENANT_ID = 'mp_pref_active_tenant_id'
+
+function readPrefs(phoneTrim: string) {
+  if (typeof window === 'undefined') return {}
+  const prefPhone = localStorage.getItem(PREF_PHONE)
+  const companyRaw = localStorage.getItem(PREF_COMPANY_ID)
+  const tenantRaw = localStorage.getItem(PREF_TENANT_USER_ID)
+  const activeTenantRaw = localStorage.getItem(PREF_ACTIVE_TENANT_ID)
+  const company =
+    prefPhone === phoneTrim && companyRaw ? Number(companyRaw) : undefined
+  const tenantUserId =
+    prefPhone === phoneTrim && tenantRaw ? Number(tenantRaw) : undefined
+  const activeTenantId =
+    prefPhone === phoneTrim && activeTenantRaw ? Number(activeTenantRaw) : undefined
+  return {
+    ...(company != null && !Number.isNaN(company) && company > 0 ? { companyId: company } : {}),
+    ...(tenantUserId != null && !Number.isNaN(tenantUserId) && tenantUserId > 0
+      ? { tenantUserId }
+      : {}),
+    ...(activeTenantId != null && !Number.isNaN(activeTenantId) && activeTenantId > 0
+      ? { activeTenantId }
+      : {}),
+  }
+}
+
+function savePrefs(user: { phone: string; id: number; companyId: number }) {
+  localStorage.setItem(PREF_PHONE, user.phone)
+  localStorage.setItem(PREF_TENANT_USER_ID, String(user.id))
+  localStorage.setItem(PREF_COMPANY_ID, String(user.companyId))
 }
 
 export default function TenantLoginPage() {
@@ -20,38 +47,31 @@ export default function TenantLoginPage() {
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [companies, setCompanies] = useState<CompanyOpt[] | null>(null)
-  const [tenantUsers, setTenantUsers] = useState<TenantUserOpt[] | null>(null)
   const [pickCompanyId, setPickCompanyId] = useState<number | null>(null)
-  const [pickTenantUserId, setPickTenantUserId] = useState<number | null>(null)
 
   const submit = async (extra?: { companyId?: number; tenantUserId?: number }) => {
     setErr('')
     setLoading(true)
     try {
+      const phoneTrim = phone.trim()
+      const fromPrefs = readPrefs(phoneTrim)
       const res = await fetch('/api/mp/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          phone: phone.trim(),
+          phone: phoneTrim,
           password,
           type: 'tenant',
+          ...fromPrefs,
           ...(extra?.companyId ? { companyId: extra.companyId } : {}),
           ...(extra?.tenantUserId ? { tenantUserId: extra.tenantUserId } : {}),
           ...(pickCompanyId && !extra?.companyId ? { companyId: pickCompanyId } : {}),
-          ...(pickTenantUserId && !extra?.tenantUserId ? { tenantUserId: pickTenantUserId } : {}),
         }),
       })
       const j = await res.json()
       if (j.needCompany && j.companies) {
         setCompanies(j.companies)
-        setTenantUsers(null)
-        setLoading(false)
-        return
-      }
-      if (j.needTenantUser && j.tenantUsers) {
-        setTenantUsers(j.tenantUsers)
-        setCompanies(null)
         setLoading(false)
         return
       }
@@ -59,6 +79,13 @@ export default function TenantLoginPage() {
         setErr(j.message || '登录失败')
         setLoading(false)
         return
+      }
+      if (j.user?.phone && j.user?.id != null && j.user?.companyId != null) {
+        savePrefs({
+          phone: j.user.phone,
+          id: j.user.id,
+          companyId: j.user.companyId,
+        })
       }
       router.replace('/m/tenant')
     } catch {
@@ -74,7 +101,9 @@ export default function TenantLoginPage() {
         ← 返回
       </Link>
       <h1 className="text-2xl font-semibold mb-1">租客端登录</h1>
-      <p className="text-sm text-slate-500 mb-8">使用租客小程序账号（手机号 + 密码）</p>
+      <p className="text-sm text-slate-500 mb-8">
+        使用租客小程序账号（手机号 + 密码）。同公司多租客账号将默认进入上次登录或最新创建的账号。
+      </p>
 
       {companies && (
         <div className="mb-6 space-y-2">
@@ -95,27 +124,7 @@ export default function TenantLoginPage() {
         </div>
       )}
 
-      {tenantUsers && (
-        <div className="mb-6 space-y-2">
-          <p className="text-sm font-medium">请选择要登录的账号</p>
-          {tenantUsers.map((u) => (
-            <button
-              key={u.id}
-              type="button"
-              onClick={() => {
-                setPickTenantUserId(u.id)
-                void submit({ tenantUserId: u.id, companyId: u.companyId })
-              }}
-              className="w-full text-left py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
-            >
-              <span className="font-medium">{u.name}</span>
-              <span className="text-slate-500 text-sm ml-2">{u.companyName}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {!companies && !tenantUsers && (
+      {!companies && (
         <form
           className="space-y-4 flex-1"
           onSubmit={(e) => {
@@ -156,14 +165,12 @@ export default function TenantLoginPage() {
         </form>
       )}
 
-      {(companies || tenantUsers) && (
+      {companies && (
         <button
           type="button"
           onClick={() => {
             setCompanies(null)
-            setTenantUsers(null)
             setPickCompanyId(null)
-            setPickTenantUserId(null)
           }}
           className="mt-4 text-sm text-slate-500"
         >

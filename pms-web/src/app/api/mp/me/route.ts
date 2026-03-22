@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getMpAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { mapTenantRelationsForToken } from '@/lib/mp-tenant-token'
 
 export async function GET(request: Request) {
   const user = await getMpAuthUser(request)
@@ -15,7 +16,9 @@ export async function GET(request: Request) {
     const tenantUser = await prisma.tenantUser.findUnique({
       where: { id: user.id },
       include: {
-        relations: true,
+        relations: {
+          include: { tenant: { select: { id: true, companyName: true } } },
+        },
       },
     })
     if (!tenantUser) {
@@ -24,11 +27,19 @@ export async function GET(request: Request) {
         { status: 404 }
       )
     }
-    const relations = tenantUser.relations.map((r) => ({
-      tenantId: r.tenantId,
-      buildingId: r.buildingId,
-      isAdmin: r.isAdmin,
-    }))
+
+    const relationOptions = mapTenantRelationsForToken(tenantUser.relations)
+    const jwtRels = user.relations ?? []
+
+    let active = relationOptions.filter((row) =>
+      jwtRels.some(
+        (jr) => jr.tenantId === row.tenantId && jr.buildingId === row.buildingId
+      )
+    )
+    if (active.length === 0) {
+      active = relationOptions
+    }
+
     return NextResponse.json({
       success: true,
       user: {
@@ -37,8 +48,9 @@ export async function GET(request: Request) {
         phone: tenantUser.phone,
         type: 'tenant',
         companyId: tenantUser.companyId,
-        relations,
+        relations: active,
       },
+      relationOptions,
     })
   }
 

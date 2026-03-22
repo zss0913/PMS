@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { MStaffSubPageBar } from '@/components/m/MStaffSubPageBar'
 
 type Task = {
   id: number
@@ -31,7 +32,7 @@ export default function StaffInspectionPage() {
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4">
-      <h1 className="text-lg font-semibold">巡检任务</h1>
+      <MStaffSubPageBar title="巡检任务" />
       <p className="text-xs text-slate-500">
         展示分配给我的任务；NFC 执行与详情请在 PC 端或后续版本完善
       </p>

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
+import { MStaffSubPageBar } from '@/components/m/MStaffSubPageBar'
 
 const TABS = ['', '待派单', '待响应', '处理中', '待确认费用', '待评价', '评价完成', '已取消']
 
@@ -39,8 +40,8 @@ export default function StaffWorkOrdersPage() {
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4">
-      <h1 className="text-lg font-semibold">工单</h1>
-      <p className="text-xs text-slate-500">含指派给我与我提交的工单，与 PC 端同一数据源</p>
+      <MStaffSubPageBar title="工单管理" />
+      <p className="text-xs text-slate-500 -mt-1">含指派给我与我提交的工单；管理员可见本企业全部工单</p>
       <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1">
         {TABS.map((s) => (
           <button

@@ -10,20 +10,12 @@ onMounted(() => {
   }
 })
 
-function goTodos() {
-  uni.navigateTo({ url: '/pages/todos/todos' })
-}
-
-function goWorkOrders() {
-  uni.navigateTo({ url: '/pages/work-orders/work-orders' })
-}
-
 function goInspectionTasks() {
   uni.navigateTo({ url: '/pages/inspection-tasks/inspection-tasks' })
 }
 
-function goAnnouncements() {
-  uni.navigateTo({ url: '/pages/announcements/announcements' })
+function goMessages() {
+  uni.switchTab({ url: '/pages/messages/messages' })
 }
 
 function logout() {
@@ -43,24 +35,17 @@ function logout() {
 <template>
   <view class="page">
     <view class="user-card" v-if="userStore.user">
+      <view class="user-glow" />
       <text class="name">{{ userStore.user.name }}</text>
       <text class="phone">{{ userStore.user.phone }}</text>
     </view>
     <view class="menu-list">
-      <view class="menu-item" @click="goTodos">
-        <text class="menu-text">待办</text>
-        <text class="arrow">›</text>
-      </view>
-      <view class="menu-item" @click="goWorkOrders">
-        <text class="menu-text">工单管理</text>
-        <text class="arrow">›</text>
-      </view>
       <view class="menu-item" @click="goInspectionTasks">
         <text class="menu-text">巡检任务</text>
         <text class="arrow">›</text>
       </view>
-      <view class="menu-item" @click="goAnnouncements">
-        <text class="menu-text">公告</text>
+      <view class="menu-item" @click="goMessages">
+        <text class="menu-text">消息通知</text>
         <text class="arrow">›</text>
       </view>
     </view>
@@ -72,51 +57,89 @@ function logout() {
 
 <style lang="scss" scoped>
 .page {
-  padding: 40rpx;
+  padding: 32rpx;
+  min-height: 100vh;
+  box-sizing: border-box;
 }
+
 .user-card {
-  background: linear-gradient(135deg, #007aff 0%, #0051d5 100%);
-  border-radius: 20rpx;
-  padding: 48rpx;
-  margin-bottom: 40rpx;
-  .name {
-    display: block;
-    font-size: 36rpx;
-    font-weight: bold;
-    color: #fff;
-  }
-  .phone {
-    font-size: 28rpx;
-    color: rgba(255,255,255,0.8);
-    margin-top: 12rpx;
-  }
+  position: relative;
+  overflow: hidden;
+  border-radius: 28rpx;
+  padding: 48rpx 40rpx;
+  margin-bottom: 32rpx;
+  border: 1rpx solid rgba(34, 197, 94, 0.35);
+  background: linear-gradient(135deg, $pms-surface 0%, $pms-bg-deep 55%, #052e16 100%);
 }
+
+.user-glow {
+  position: absolute;
+  right: -40rpx;
+  top: -40rpx;
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, $pms-accent-soft 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.name {
+  position: relative;
+  z-index: 1;
+  display: block;
+  font-family: 'Space Grotesk', 'PingFang SC', sans-serif;
+  font-size: 40rpx;
+  font-weight: 700;
+  color: $pms-text;
+}
+
+.phone {
+  position: relative;
+  z-index: 1;
+  display: block;
+  font-size: 26rpx;
+  color: $pms-text-muted;
+  margin-top: 12rpx;
+}
+
 .menu-list {
-  background: #fff;
-  border-radius: 16rpx;
+  @include pms-card;
   overflow: hidden;
 }
+
 .menu-item {
+  @include pms-tap;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 32rpx;
-  border-bottom: 1rpx solid #eee;
+  padding: 34rpx 32rpx;
+  border-bottom: 1rpx solid $pms-border;
   &:last-child {
     border-bottom: none;
   }
 }
-.menu-text { font-size: 30rpx; }
-.arrow { color: #999; font-size: 36rpx; }
-.logout-wrap {
-  margin-top: 60rpx;
+
+.menu-text {
+  font-size: 30rpx;
+  color: $pms-text;
 }
+
+.arrow {
+  color: $pms-text-dim;
+  font-size: 36rpx;
+}
+
+.logout-wrap {
+  margin-top: 48rpx;
+}
+
 .btn-logout {
-  background: #fff;
-  color: #f56c6c;
-  border: 1rpx solid #f56c6c;
-  border-radius: 12rpx;
+  background: transparent;
+  color: $pms-danger;
+  border: 1rpx solid rgba(248, 113, 113, 0.45);
+  border-radius: 16rpx;
   height: 88rpx;
   line-height: 88rpx;
+  font-size: 30rpx;
 }
 </style>

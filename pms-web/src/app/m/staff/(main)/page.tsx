@@ -18,10 +18,15 @@ export default function StaffHomePage() {
         fetch('/api/mp/me', { credentials: 'include' }).then((r) => r.json()),
         fetch('/api/mp/my-todos', { credentials: 'include' }).then((r) => r.json()),
       ])
-      if (me.user?.name) setName(me.user.name)
+      if (me.user?.name) setName(me.user.name ?? '')
       if (td.success && td.todos) setTodos(td.todos)
     })()
   }, [])
+
+  const todoTotal =
+    todos != null
+      ? todos.pendingProcess + todos.pendingInspection + todos.pendingAssign
+      : null
 
   return (
     <div className="p-4 space-y-4 max-w-lg mx-auto">
@@ -37,7 +42,7 @@ export default function StaffHomePage() {
             <p className="text-xs text-slate-500 mt-1">待派工单（组长）</p>
           </div>
           <Link
-            href="/m/staff/work-orders"
+            href="/m/staff/todos"
             className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 active:scale-[0.98] transition-transform"
           >
             <p className="text-2xl font-semibold text-blue-600">{todos.pendingProcess}</p>
@@ -45,7 +50,7 @@ export default function StaffHomePage() {
           </Link>
           <Link
             href="/m/staff/inspection"
-            className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4"
+            className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 active:scale-[0.98] transition-transform"
           >
             <p className="text-2xl font-semibold text-emerald-600">{todos.pendingInspection}</p>
             <p className="text-xs text-slate-500 mt-1">待巡检任务</p>
@@ -59,14 +64,23 @@ export default function StaffHomePage() {
 
       <div className="grid grid-cols-2 gap-3">
         <Link
-          href="/m/staff/work-orders"
-          className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 text-center font-medium"
+          href="/m/staff/todos"
+          className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 text-center font-medium active:scale-[0.98] transition-transform"
         >
-          工单列表
+          <p className="text-base">待办</p>
+          {todoTotal != null && (
+            <p className="text-xs text-slate-500 mt-1">{todoTotal} 项待处理</p>
+          )}
+        </Link>
+        <Link
+          href="/m/staff/work-orders"
+          className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 text-center font-medium active:scale-[0.98] transition-transform"
+        >
+          工单管理
         </Link>
         <Link
           href="/m/staff/inspection"
-          className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 text-center font-medium"
+          className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 text-center font-medium col-span-2 active:scale-[0.98] transition-transform"
         >
           巡检任务
         </Link>

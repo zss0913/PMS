@@ -27,15 +27,24 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+function goWorkOrderDetail(id: number) {
+  uni.navigateTo({ url: `/pages/work-orders/detail?id=${id}` })
+}
 </script>
 
 <template>
   <view class="page">
-    <view v-if="loading" class="loading">加载中...</view>
+    <view v-if="loading" class="loading">加载中…</view>
     <view v-else>
       <view class="section" v-if="workOrders.length > 0">
         <view class="section-title">待处理工单</view>
-        <view v-for="item in workOrders" :key="'wo-' + item.id" class="card">
+        <view
+          v-for="item in workOrders"
+          :key="'wo-' + item.id"
+          class="card"
+          @click="goWorkOrderDetail(item.id)"
+        >
           <view class="title">{{ item.title }}</view>
           <view class="meta">{{ item.code }} · {{ item.status }}</view>
         </view>
@@ -57,33 +66,42 @@ onMounted(async () => {
 <style lang="scss" scoped>
 .page {
   padding: 24rpx;
+  min-height: 100vh;
+  box-sizing: border-box;
 }
-.loading, .empty {
+
+.loading,
+.empty {
   text-align: center;
-  padding: 80rpx;
-  color: #999;
+  padding: 100rpx 40rpx;
+  color: $pms-text-muted;
+  font-size: 28rpx;
 }
+
 .section {
   margin-bottom: 40rpx;
 }
+
 .section-title {
-  font-size: 32rpx;
-  font-weight: bold;
-  margin-bottom: 24rpx;
+  @include pms-section-title;
 }
+
 .card {
-  background: #fff;
-  border-radius: 16rpx;
+  @include pms-card;
+  @include pms-tap;
   padding: 32rpx;
   margin-bottom: 24rpx;
 }
+
 .title {
   font-size: 30rpx;
-  font-weight: bold;
+  font-weight: 600;
+  color: $pms-text;
   margin-bottom: 12rpx;
 }
+
 .meta {
   font-size: 24rpx;
-  color: #666;
+  color: $pms-text-muted;
 }
 </style>

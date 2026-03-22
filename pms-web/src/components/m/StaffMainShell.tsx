@@ -3,15 +3,20 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
-import { Home, ClipboardList, MapPin, Megaphone, User } from 'lucide-react'
+import { Home, Bell, User } from 'lucide-react'
 
 const nav = [
-  { href: '/m/staff', label: '首页', icon: Home },
-  { href: '/m/staff/work-orders', label: '工单', icon: ClipboardList },
-  { href: '/m/staff/inspection', label: '巡检', icon: MapPin },
-  { href: '/m/staff/announcements', label: '公告', icon: Megaphone },
-  { href: '/m/staff/me', label: '我的', icon: User },
+  { href: '/m/staff', label: '首页', icon: Home, exact: true },
+  { href: '/m/staff/messages', label: '消息通知', icon: Bell, exact: false },
+  { href: '/m/staff/me', label: '我的', icon: User, exact: false },
 ]
+
+function isTabActive(pathname: string, href: string, exact: boolean) {
+  if (exact) {
+    return pathname === href || pathname === `${href}/`
+  }
+  return pathname === href || pathname.startsWith(`${href}/`)
+}
 
 export function StaffMainShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
@@ -50,10 +55,13 @@ export function StaffMainShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-[100dvh] pb-[4.5rem]">
       {children}
-      <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+      <nav
+        className="fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95"
+        style={{ paddingBottom: 'max(0px, env(safe-area-inset-bottom))' }}
+      >
         <ul className="flex justify-around items-stretch max-w-lg mx-auto">
-          {nav.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || (href !== '/m/staff' && pathname.startsWith(href))
+          {nav.map(({ href, label, icon: Icon, exact }) => {
+            const active = isTabActive(pathname, href, exact)
             return (
               <li key={href} className="flex-1">
                 <Link

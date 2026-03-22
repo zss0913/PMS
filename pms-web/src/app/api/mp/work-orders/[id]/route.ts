@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { getMpAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { parseWorkOrderImageUrls } from '@/lib/work-order'
+import { mpEmployeeWorkOrderVisibilityWhere } from '@/lib/mp-employee-work-order-scope'
 
 /** 租客端 / 员工端：工单详情（权限与列表一致） */
 export async function GET(
@@ -23,23 +25,27 @@ export async function GET(
       return NextResponse.json({ success: false, message: '无效的工单ID' }, { status: 400 })
     }
 
-    const baseWhere: Record<string, unknown> = {
-      id: workOrderId,
-      companyId: user.companyId,
-    }
+    let where: Prisma.WorkOrderWhereInput
 
     if (user.type === 'tenant') {
       const tenantIds = user.relations?.map((r) => r.tenantId) ?? []
       if (tenantIds.length === 0) {
         return NextResponse.json({ success: false, message: '工单不存在' }, { status: 404 })
       }
-      baseWhere.OR = [{ tenantId: { in: tenantIds } }, { reporterId: user.id }]
+      where = {
+        id: workOrderId,
+        companyId: user.companyId,
+        OR: [{ tenantId: { in: tenantIds } }, { reporterId: user.id }],
+      }
     } else {
-      baseWhere.OR = [{ assignedTo: user.id }, { reporterId: user.id }]
+      const vis = mpEmployeeWorkOrderVisibilityWhere(user)
+      where = {
+        AND: [{ id: workOrderId }, vis],
+      }
     }
 
     const wo = await prisma.workOrder.findFirst({
-      where: baseWhere,
+      where,
       include: {
         building: { select: { id: true, name: true } },
         room: { select: { id: true, name: true, roomNumber: true } },
@@ -53,6 +59,24 @@ export async function GET(
     }
 
     const imageUrls = parseWorkOrderImageUrls(wo.images)
+
+    const reporterEmployee = await prisma.employee.findFirst({
+      where: { id: wo.reporterId, companyId: wo.companyId },
+      select: { name: true, phone: true },
+    })
+    const reporterTenant = reporterEmployee
+      ? null
+      : await prisma.tenantUser.findFirst({
+          where: { id: wo.reporterId, companyId: wo.companyId },
+          select: { name: true, phone: true },
+        })
+    const reporter = reporterEmployee
+      ? { role: '员工' as const, name: reporterEmployee.name, phone: reporterEmployee.phone }
+      : reporterTenant
+        ? { role: '租客' as const, name: reporterTenant.name, phone: reporterTenant.phone }
+        : null
+
+    const iso = (d: Date | null) => (d ? d.toISOString() : null)
 
     return NextResponse.json({
       success: true,
@@ -68,13 +92,24 @@ export async function GET(
         feeRemark: wo.feeRemark,
         feeNoticeAcknowledged: wo.feeNoticeAcknowledged,
         location: wo.location,
+        severity: wo.severity,
+        projectId: wo.projectId,
+        taskId: wo.taskId,
+        tagId: wo.tagId,
         images: wo.images,
         imageUrls,
         building: wo.building,
         room: wo.room,
         tenant: wo.tenant,
+        reporterId: wo.reporterId,
+        reporter,
         assignedTo: wo.assignedTo,
         assignedEmployee: wo.assignedEmployee,
+        assignedAt: iso(wo.assignedAt),
+        respondedAt: iso(wo.respondedAt),
+        feeConfirmedAt: iso(wo.feeConfirmedAt),
+        completedAt: iso(wo.completedAt),
+        evaluatedAt: iso(wo.evaluatedAt),
         createdAt: wo.createdAt.toISOString(),
         updatedAt: wo.updatedAt.toISOString(),
       },

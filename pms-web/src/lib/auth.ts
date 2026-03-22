@@ -22,8 +22,13 @@ export type AuthUser = {
   dataScope?: string
   /** 是否组长，用于待派工单可见 */
   isLeader?: boolean
-  /** 租客关联列表 tenantId, buildingId, isAdmin */
-  relations?: { tenantId: number; buildingId: number; isAdmin: boolean }[]
+  /** 租客关联列表（JWT 内可为当前生效范围；tenantName 便于端上展示） */
+  relations?: {
+    tenantId: number
+    buildingId: number
+    isAdmin: boolean
+    tenantName?: string
+  }[]
 }
 
 export async function createToken(user: AuthUser): Promise<string> {

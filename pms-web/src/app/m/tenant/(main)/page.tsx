@@ -66,16 +66,16 @@ export default function TenantHomePage() {
           <p className="text-xs text-slate-500 mt-1">提交与进度</p>
         </Link>
         <Link
-          href="/m/tenant/announcements"
+          href="/m/tenant/messages"
           className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 shadow-sm active:scale-[0.98] transition-transform"
         >
-          <p className="font-medium">物业公告</p>
-          <p className="text-xs text-slate-500 mt-1">楼宇通知</p>
+          <p className="font-medium">消息通知</p>
+          <p className="text-xs text-slate-500 mt-1">物业公告与通知</p>
         </Link>
       </div>
 
       <p className="text-xs text-slate-400 text-center pt-2">
-        数据与 PC 管理端实时同步；工单状态请在「工单」中查看
+        数据与 PC 管理端实时同步；报修进度可在报事报修提交后于工单列表查看
       </p>
     </div>
   )

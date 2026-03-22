@@ -30,6 +30,7 @@ import {
   BellRing,
   ScrollText,
   Landmark,
+  UserCircle,
 } from 'lucide-react'
 import type { AuthUser } from '@/lib/auth'
 import { cn } from '@/lib/utils'
@@ -172,6 +173,7 @@ const menuItems = [
       { href: '/departments', label: '部门管理', icon: Building },
       { href: '/roles', label: '角色管理', icon: UserCog },
       { href: '/employees', label: '员工账号', icon: Users },
+      { href: '/tenant-users', label: '租客账号', icon: UserCircle },
     ],
   },
 ]
@@ -272,10 +274,11 @@ export function Sidebar({ user, collapsed: propCollapsed, onCollapseChange }: Si
       <nav className={cn('flex-1 overflow-y-auto scrollbar-transparent', collapsed ? 'p-1' : 'p-2')}>
         {menuItems.map((item) => {
           if ('children' in item) {
-            const hasActive = item.children.some((c) => pathname === c.href || pathname.startsWith(c.href + '/'))
+            const children = item.children ?? []
+            const hasActive = children.some((c) => pathname === c.href || pathname.startsWith(c.href + '/'))
             const filtered = isSuperAdmin
-              ? item.children
-              : item.children.filter((c) => c.href !== '/companies')
+              ? children
+              : children.filter((c) => c.href !== '/companies')
             if (filtered.length === 0) return null
 
             return (

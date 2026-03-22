@@ -27,6 +27,7 @@ export const MENU_OPTIONS = [
   { id: 24, label: '部门管理', path: '/departments' },
   { id: 25, label: '角色管理', path: '/roles' },
   { id: 26, label: '员工管理', path: '/employees' },
+  { id: 28, label: '租客账号', path: '/tenant-users' },
 ]
 
 export const DATA_SCOPE_OPTIONS = [

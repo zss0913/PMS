@@ -3,13 +3,11 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
-import { Home, FileText, Receipt, Megaphone, User } from 'lucide-react'
+import { Bell, Home, User } from 'lucide-react'
 
 const nav = [
   { href: '/m/tenant', label: '首页', icon: Home },
-  { href: '/m/tenant/work-orders', label: '工单', icon: FileText },
-  { href: '/m/tenant/bills', label: '账单', icon: Receipt },
-  { href: '/m/tenant/announcements', label: '公告', icon: Megaphone },
+  { href: '/m/tenant/messages', label: '消息通知', icon: Bell },
   { href: '/m/tenant/me', label: '我的', icon: User },
 ]
 

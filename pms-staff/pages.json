@@ -7,6 +7,18 @@
       }
     },
     {
+      "path": "pages/messages/messages",
+      "style": {
+        "navigationBarTitleText": "消息通知"
+      }
+    },
+    {
+      "path": "pages/profile/profile",
+      "style": {
+        "navigationBarTitleText": "个人中心"
+      }
+    },
+    {
       "path": "pages/login/login",
       "style": {
         "navigationBarTitleText": "登录"
@@ -25,6 +37,12 @@
       }
     },
     {
+      "path": "pages/work-orders/detail",
+      "style": {
+        "navigationBarTitleText": "工单详情"
+      }
+    },
+    {
       "path": "pages/inspection-tasks/inspection-tasks",
       "style": {
         "navigationBarTitleText": "巡检任务"
@@ -35,18 +53,32 @@
       "style": {
         "navigationBarTitleText": "公告"
       }
-    },
-    {
-      "path": "pages/profile/profile",
-      "style": {
-        "navigationBarTitleText": "个人中心"
-      }
     }
   ],
   "globalStyle": {
-    "navigationBarTextStyle": "black",
+    "navigationBarTextStyle": "white",
     "navigationBarTitleText": "物业员工端",
-    "navigationBarBackgroundColor": "#ffffff",
-    "backgroundColor": "#f5f5f5"
+    "navigationBarBackgroundColor": "#0f172a",
+    "backgroundColor": "#0f172a"
+  },
+  "tabBar": {
+    "color": "#64748b",
+    "selectedColor": "#22c55e",
+    "backgroundColor": "#0f172a",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/messages/messages",
+        "text": "消息通知"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "我的"
+      }
+    ]
   }
 }

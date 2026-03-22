@@ -26,9 +26,9 @@ export type Employee = {
   company?: { name: string } | null
 }
 
-type Project = { id: number; name: string }
-type Department = { id: number; name: string }
-type Role = { id: number; name: string }
+type Project = { id: number; name: string; companyId: number }
+type Department = { id: number; name: string; companyId: number }
+type Role = { id: number; name: string; companyId: number }
 type Company = { id: number; name: string }
 
 type Props = {

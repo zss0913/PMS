@@ -35,13 +35,13 @@ onMounted(async () => {
 
 <template>
   <view class="page">
-    <view v-if="loading" class="loading">加载中...</view>
+    <view v-if="loading" class="loading">加载中…</view>
     <view v-else-if="list.length === 0" class="empty">暂无账单</view>
     <view v-else class="list">
       <view v-for="item in list" :key="item.id" class="card">
         <view class="row">
           <text class="label">账单编号</text>
-          <text class="value">{{ item.code }}</text>
+          <text class="value mono">{{ item.code }}</text>
         </view>
         <view class="row">
           <text class="label">费用类型</text>
@@ -57,7 +57,7 @@ onMounted(async () => {
         </view>
         <view class="row">
           <text class="label">待缴</text>
-          <text class="value amount">¥{{ item.amountDue }}</text>
+          <text class="value amount-due">¥{{ item.amountDue }}</text>
         </view>
         <view class="row">
           <text class="label">状态</text>
@@ -73,33 +73,63 @@ onMounted(async () => {
 <style lang="scss" scoped>
 .page {
   padding: 24rpx;
+  min-height: 100vh;
+  box-sizing: border-box;
 }
-.loading, .empty {
+
+.loading,
+.empty {
   text-align: center;
-  padding: 80rpx;
-  color: #999;
+  padding: 100rpx 40rpx;
+  color: $pms-text-muted;
+  font-size: 28rpx;
 }
+
 .list {
   .card {
-    background: #fff;
-    border-radius: 16rpx;
+    @include pms-card;
+    @include pms-tap;
     padding: 32rpx;
     margin-bottom: 24rpx;
   }
   .row {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 16rpx;
+    align-items: center;
+    margin-bottom: 18rpx;
     font-size: 28rpx;
+    &:last-child {
+      margin-bottom: 0;
+    }
   }
   .label {
-    color: #666;
+    color: $pms-text-muted;
+  }
+  .value {
+    color: $pms-text;
+    text-align: right;
+    max-width: 60%;
+  }
+  .mono {
+    font-family: 'Space Grotesk', ui-monospace, monospace;
+    font-size: 26rpx;
+    color: $pms-accent;
   }
   .amount {
-    font-weight: bold;
-    color: #f56c6c;
+    font-weight: 600;
+    color: $pms-text;
   }
-  .paid { color: #67c23a; }
-  .unpaid { color: #e6a23c; }
+  .amount-due {
+    font-weight: 700;
+    color: $pms-warning;
+  }
+  .paid {
+    color: $pms-cta;
+    font-weight: 600;
+  }
+  .unpaid {
+    color: $pms-warning;
+    font-weight: 600;
+  }
 }
 </style>

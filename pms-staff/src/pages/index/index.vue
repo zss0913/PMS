@@ -26,33 +26,51 @@ function goInspectionTasks() {
   uni.navigateTo({ url: '/pages/inspection-tasks/inspection-tasks' })
 }
 
-function goAnnouncements() {
-  uni.navigateTo({ url: '/pages/announcements/announcements' })
+function goMessages() {
+  uni.switchTab({ url: '/pages/messages/messages' })
 }
 </script>
 
 <template>
   <view class="page">
-    <view class="header">
-      <text class="title">物业员工端</text>
-      <text class="subtitle" v-if="userStore.user">欢迎，{{ userStore.user.name }}</text>
+    <view class="hero">
+      <view class="hero-orb" />
+      <view class="hero-inner">
+        <text class="brand">PMS · STAFF</text>
+        <text class="title">物业员工端</text>
+        <text class="subtitle" v-if="userStore.user">欢迎回来，{{ userStore.user.name }}</text>
+        <text class="subtitle" v-else>智能工单与巡检工作台</text>
+      </view>
     </view>
-    <view class="menu-list">
-      <view class="menu-item" @click="goTodos">
-        <text class="menu-text">待办</text>
-        <text class="arrow">›</text>
+
+    <view class="menu-grid">
+      <view class="menu-card" @click="goTodos">
+        <view class="icon-wrap">
+          <text class="icon-char">办</text>
+        </view>
+        <text class="menu-label">待办</text>
+        <text class="menu-hint">工单与巡检汇总</text>
       </view>
-      <view class="menu-item" @click="goWorkOrders">
-        <text class="menu-text">工单管理</text>
-        <text class="arrow">›</text>
+      <view class="menu-card" @click="goWorkOrders">
+        <view class="icon-wrap">
+          <text class="icon-char">单</text>
+        </view>
+        <text class="menu-label">工单管理</text>
+        <text class="menu-hint">处理与跟进</text>
       </view>
-      <view class="menu-item" @click="goInspectionTasks">
-        <text class="menu-text">巡检任务</text>
-        <text class="arrow">›</text>
+      <view class="menu-card" @click="goInspectionTasks">
+        <view class="icon-wrap">
+          <text class="icon-char">巡</text>
+        </view>
+        <text class="menu-label">巡检任务</text>
+        <text class="menu-hint">计划与执行</text>
       </view>
-      <view class="menu-item" @click="goAnnouncements">
-        <text class="menu-text">公告</text>
-        <text class="arrow">›</text>
+      <view class="menu-card" @click="goMessages">
+        <view class="icon-wrap">
+          <text class="icon-char">讯</text>
+        </view>
+        <text class="menu-label">消息通知</text>
+        <text class="menu-hint">公告与通知</text>
       </view>
     </view>
   </view>
@@ -60,41 +78,105 @@ function goAnnouncements() {
 
 <style lang="scss" scoped>
 .page {
-  padding: 40rpx;
+  min-height: 100vh;
+  padding: 32rpx 32rpx 48rpx;
+  box-sizing: border-box;
 }
-.header {
-  margin-bottom: 60rpx;
-  .title {
-    font-size: 44rpx;
-    font-weight: bold;
-    display: block;
-  }
-  .subtitle {
-    font-size: 28rpx;
-    color: #666;
-    margin-top: 16rpx;
-  }
-}
-.menu-list {
-  background: #fff;
-  border-radius: 16rpx;
+
+.hero {
+  position: relative;
   overflow: hidden;
+  border-radius: 28rpx;
+  padding: 48rpx 40rpx;
+  margin-bottom: 40rpx;
+  border: 1rpx solid $pms-border;
+  background: linear-gradient(145deg, $pms-surface 0%, $pms-bg-deep 100%);
 }
-.menu-item {
+
+.hero-orb {
+  position: absolute;
+  right: -80rpx;
+  top: -80rpx;
+  width: 280rpx;
+  height: 280rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, $pms-accent-soft 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-inner {
+  position: relative;
+  z-index: 1;
+}
+
+.brand {
+  display: block;
+  font-size: 22rpx;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: $pms-accent;
+  margin-bottom: 16rpx;
+}
+
+.title {
+  display: block;
+  font-family: 'Space Grotesk', 'PingFang SC', sans-serif;
+  font-size: 48rpx;
+  font-weight: 700;
+  color: $pms-text;
+  letter-spacing: 0.02em;
+}
+
+.subtitle {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 26rpx;
+  color: $pms-text-muted;
+  line-height: 1.5;
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24rpx;
+}
+
+.menu-card {
+  @include pms-card;
+  @include pms-tap;
+  padding: 36rpx 28rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.icon-wrap {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 20rpx;
+  background: $pms-accent-soft;
+  border: 1rpx solid rgba(34, 197, 94, 0.35);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 32rpx;
-  border-bottom: 1rpx solid #eee;
-  &:last-child {
-    border-bottom: none;
-  }
+  justify-content: center;
+  margin-bottom: 20rpx;
 }
-.menu-text {
+
+.icon-char {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: $pms-accent;
+}
+
+.menu-label {
   font-size: 30rpx;
+  font-weight: 600;
+  color: $pms-text;
 }
-.arrow {
-  color: #999;
-  font-size: 36rpx;
+
+.menu-hint {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: $pms-text-dim;
 }
 </style>

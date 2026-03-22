@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as bcrypt from 'bcryptjs'
-import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { createToken } from '@/lib/auth'
+import {
+  buildTenantTokenResponse,
+  buildTenantTokenResponseForTenantId,
+  tenantLoginInclude,
+  type TenantUserWithLogin,
+} from '@/lib/mp-tenant-token'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -11,18 +16,11 @@ const schema = z.object({
   type: z.enum(['tenant', 'employee']),
   /** 物业公司；未传且手机号跨公司时需先选公司 */
   companyId: z.number().int().positive().optional(),
-  /** 同一手机号在同一公司下有多条租客账号时需指定 */
+  /** 多租客账号时优先使用该账号（与上次登录偏好一致）；无效时按最新创建账号登录 */
   tenantUserId: z.number().int().positive().optional(),
+  /** 登录后默认进入的租客主体（须为该账号已关联的 tenantId） */
+  activeTenantId: z.number().int().positive().optional(),
 })
-
-const tenantLoginInclude = {
-  relations: {
-    include: { tenant: { select: { id: true, companyName: true } } },
-  },
-  company: { select: { id: true, name: true } },
-} satisfies Prisma.TenantUserInclude
-
-type TenantUserWithLogin = Prisma.TenantUserGetPayload<{ include: typeof tenantLoginInclude }>
 
 function jsonWithAuthCookie(body: object, token: string) {
   const res = NextResponse.json(body)
@@ -35,140 +33,89 @@ function jsonWithAuthCookie(body: object, token: string) {
   return res
 }
 
-async function buildTenantTokenResponse(tenantUser: TenantUserWithLogin) {
-  const relations = tenantUser.relations.map((r) => ({
-    tenantId: r.tenantId,
-    buildingId: r.buildingId,
-    isAdmin: r.isAdmin,
-  }))
-  const token = await createToken({
-    id: tenantUser.id,
-    phone: tenantUser.phone,
-    name: tenantUser.name,
-    companyId: tenantUser.companyId,
-    type: 'tenant',
-    relations,
-  })
-  return {
-    token,
-    user: {
-      id: tenantUser.id,
-      name: tenantUser.name,
-      phone: tenantUser.phone,
-      type: 'tenant' as const,
-      companyId: tenantUser.companyId,
-      relations,
-    },
+function pickTenantUserFromMatches(
+  matches: TenantUserWithLogin[],
+  preferredId?: number | null
+): TenantUserWithLogin {
+  if (preferredId != null && preferredId > 0) {
+    const hit = matches.find((u) => u.id === preferredId)
+    if (hit) return hit
   }
+  const sorted = [...matches].sort((a, b) => {
+    const d = b.createdAt.getTime() - a.createdAt.getTime()
+    if (d !== 0) return d
+    return b.id - a.id
+  })
+  return sorted[0]!
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { phone, password, type, companyId: loginCompanyId, tenantUserId: loginTenantUserId } =
-      schema.parse(body)
+    const {
+      phone,
+      password,
+      type,
+      companyId: loginCompanyId,
+      tenantUserId: loginTenantUserId,
+      activeTenantId: loginActiveTenantId,
+    } = schema.parse(body)
 
     if (type === 'tenant') {
-      let tenantUser: TenantUserWithLogin | null = null
-
-      if (loginTenantUserId) {
-        const u = await prisma.tenantUser.findFirst({
-          where: {
-            id: loginTenantUserId,
-            phone,
-            ...(loginCompanyId ? { companyId: loginCompanyId } : {}),
-          },
+      let list: TenantUserWithLogin[]
+      if (loginCompanyId) {
+        list = await prisma.tenantUser.findMany({
+          where: { phone, companyId: loginCompanyId },
           include: tenantLoginInclude,
         })
-        if (!u || !(await bcrypt.compare(password, u.password))) {
-          return NextResponse.json(
-            { success: false, message: '账号或密码错误' },
-            { status: 401 }
-          )
-        }
-        tenantUser = u
       } else {
-        let list: TenantUserWithLogin[]
-        if (loginCompanyId) {
-          list = await prisma.tenantUser.findMany({
-            where: { phone, companyId: loginCompanyId },
-            include: tenantLoginInclude,
-          })
-        } else {
-          list = await prisma.tenantUser.findMany({
-            where: { phone },
-            include: tenantLoginInclude,
-          })
-          const companyIds = [...new Set(list.map((x) => x.companyId))]
-          if (companyIds.length > 1) {
-            const byCompany = new Map<number, { companyId: number; companyName: string }>()
-            for (const u of list) {
-              if (!byCompany.has(u.companyId)) {
-                byCompany.set(u.companyId, {
-                  companyId: u.companyId,
-                  companyName: u.company.name,
-                })
-              }
+        list = await prisma.tenantUser.findMany({
+          where: { phone },
+          include: tenantLoginInclude,
+        })
+        const companyIds = [...new Set(list.map((x) => x.companyId))]
+        if (companyIds.length > 1) {
+          const byCompany = new Map<number, { companyId: number; companyName: string }>()
+          for (const u of list) {
+            if (!byCompany.has(u.companyId)) {
+              byCompany.set(u.companyId, {
+                companyId: u.companyId,
+                companyName: u.company.name,
+              })
             }
-            return NextResponse.json(
-              {
-                success: false,
-                message: '该手机号在多个物业公司下存在账号，请选择要登录的公司',
-                needCompany: true,
-                companies: [...byCompany.values()],
-              },
-              { status: 400 }
-            )
           }
-        }
-
-        if (list.length === 0) {
-          return NextResponse.json(
-            { success: false, message: '账号不存在' },
-            { status: 401 }
-          )
-        }
-
-        const matches: TenantUserWithLogin[] = []
-        for (const u of list) {
-          if (await bcrypt.compare(password, u.password)) matches.push(u)
-        }
-        if (matches.length === 0) {
-          return NextResponse.json(
-            { success: false, message: '密码错误' },
-            { status: 401 }
-          )
-        }
-        if (matches.length === 1) {
-          tenantUser = matches[0]
-        } else {
           return NextResponse.json(
             {
               success: false,
-              message: '该手机号存在多个租客账号，请选择一个',
-              needTenantUser: true,
-              tenantUsers: matches.map((u) => ({
-                id: u.id,
-                name: u.name,
-                companyId: u.companyId,
-                companyName: u.company.name,
-                tenants: u.relations.map((r) => ({
-                  tenantId: r.tenantId,
-                  companyName: r.tenant.companyName,
-                })),
-              })),
+              message: '该手机号在多个物业公司下存在账号，请选择要登录的公司',
+              needCompany: true,
+              companies: [...byCompany.values()],
             },
             { status: 400 }
           )
         }
       }
 
-      if (!tenantUser) {
+      if (list.length === 0) {
         return NextResponse.json(
           { success: false, message: '账号不存在' },
           { status: 401 }
         )
       }
+
+      const matches: TenantUserWithLogin[] = []
+      for (const u of list) {
+        if (await bcrypt.compare(password, u.password)) matches.push(u)
+      }
+      if (matches.length === 0) {
+        return NextResponse.json(
+          { success: false, message: '密码错误' },
+          { status: 401 }
+        )
+      }
+
+      const tenantUser = pickTenantUserFromMatches(matches, loginTenantUserId)
+
       if (tenantUser.status !== 'active') {
         return NextResponse.json(
           { success: false, message: '账号已禁用' },
@@ -176,8 +123,15 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const { token, user } = await buildTenantTokenResponse(tenantUser)
-      return jsonWithAuthCookie({ success: true, token, user }, token)
+      let out = await buildTenantTokenResponse(tenantUser)
+      if (loginActiveTenantId != null && loginActiveTenantId > 0) {
+        const scoped = await buildTenantTokenResponseForTenantId(
+          tenantUser,
+          loginActiveTenantId
+        )
+        if (scoped) out = scoped
+      }
+      return jsonWithAuthCookie({ success: true, token: out.token, user: out.user }, out.token)
     }
 
     const employee = await prisma.employee.findUnique({

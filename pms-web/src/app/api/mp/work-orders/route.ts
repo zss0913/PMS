@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { getMpAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
@@ -7,6 +8,7 @@ import {
   logWorkOrderActivity,
   operatorFromAuthUser,
 } from '@/lib/work-order-activity-log'
+import { mpEmployeeWorkOrderVisibilityWhere } from '@/lib/mp-employee-work-order-scope'
 const tenantSubmitSchema = z.object({
   category: z.enum(['报事', '报修']),
   facilityScope: z.enum(['公共设施', '套内设施']),
@@ -33,22 +35,27 @@ export async function GET(request: NextRequest) {
     }
 
     const status = request.nextUrl.searchParams.get('status')
-    const where: Record<string, unknown> = { companyId: user.companyId }
 
+    let whereInput: Prisma.WorkOrderWhereInput
     if (user.type === 'tenant') {
       const tenantIds = user.relations?.map((r) => r.tenantId) ?? []
       if (tenantIds.length === 0) {
         return NextResponse.json({ success: true, list: [] })
       }
-      where.OR = [{ tenantId: { in: tenantIds } }, { reporterId: user.id }]
+      whereInput = {
+        companyId: user.companyId,
+        OR: [{ tenantId: { in: tenantIds } }, { reporterId: user.id }],
+        ...(status ? { status } : {}),
+      }
     } else {
-      where.OR = [{ assignedTo: user.id }, { reporterId: user.id }]
+      whereInput = {
+        ...mpEmployeeWorkOrderVisibilityWhere(user),
+        ...(status ? { status } : {}),
+      }
     }
 
-    if (status) where.status = status
-
     const orders = await prisma.workOrder.findMany({
-      where,
+      where: whereInput,
       include: {
         building: { select: { name: true } },
         room: { select: { name: true, roomNumber: true } },

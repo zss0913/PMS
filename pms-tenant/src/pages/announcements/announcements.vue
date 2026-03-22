@@ -28,7 +28,7 @@ onMounted(async () => {
 
 <template>
   <view class="page">
-    <view v-if="loading" class="loading">加载中...</view>
+    <view v-if="loading" class="loading">加载中…</view>
     <view v-else-if="list.length === 0" class="empty">暂无公告</view>
     <view v-else class="list">
       <view v-for="item in list" :key="item.id" class="card">
@@ -43,33 +43,41 @@ onMounted(async () => {
 <style lang="scss" scoped>
 .page {
   padding: 24rpx;
+  min-height: 100vh;
+  box-sizing: border-box;
 }
-.loading, .empty {
+
+.loading,
+.empty {
   text-align: center;
-  padding: 80rpx;
-  color: #999;
+  padding: 100rpx 40rpx;
+  color: $pms-text-muted;
+  font-size: 28rpx;
 }
+
 .list {
   .card {
-    background: #fff;
-    border-radius: 16rpx;
+    @include pms-card;
+    @include pms-tap;
     padding: 32rpx;
     margin-bottom: 24rpx;
   }
   .title {
     font-size: 32rpx;
-    font-weight: bold;
+    font-weight: 600;
+    color: $pms-text;
     margin-bottom: 16rpx;
+    font-family: 'Space Grotesk', 'PingFang SC', sans-serif;
   }
   .content {
     font-size: 28rpx;
-    color: #666;
-    line-height: 1.6;
+    color: $pms-text-muted;
+    line-height: 1.65;
   }
   .time {
-    font-size: 24rpx;
-    color: #999;
-    margin-top: 16rpx;
+    font-size: 22rpx;
+    color: $pms-text-dim;
+    margin-top: 20rpx;
   }
 }
 </style>

@@ -30,13 +30,14 @@ onMounted(async () => {
 
 <template>
   <view class="page">
-    <view v-if="loading" class="loading">加载中...</view>
+    <view v-if="loading" class="loading">加载中…</view>
     <view v-else-if="list.length === 0" class="empty">暂无巡检任务</view>
     <view v-else class="list">
       <view v-for="item in list" :key="item.id" class="card">
         <view class="title">{{ item.planName || item.code }}</view>
         <view class="meta">
           <text>{{ item.inspectionType }}</text>
+          <text class="sep">|</text>
           <text>{{ item.scheduledDate }}</text>
         </view>
         <view class="status">{{ item.status }}</view>
@@ -48,32 +49,44 @@ onMounted(async () => {
 <style lang="scss" scoped>
 .page {
   padding: 24rpx;
+  min-height: 100vh;
+  box-sizing: border-box;
 }
-.loading, .empty {
+
+.loading,
+.empty {
   text-align: center;
-  padding: 80rpx;
-  color: #999;
+  padding: 100rpx 40rpx;
+  color: $pms-text-muted;
+  font-size: 28rpx;
 }
+
 .list {
   .card {
-    background: #fff;
-    border-radius: 16rpx;
+    @include pms-card;
+    @include pms-tap;
     padding: 32rpx;
     margin-bottom: 24rpx;
   }
   .title {
     font-size: 30rpx;
-    font-weight: bold;
+    font-weight: 600;
+    color: $pms-text;
     margin-bottom: 16rpx;
   }
   .meta {
     font-size: 24rpx;
-    color: #666;
-    margin-bottom: 8rpx;
+    color: $pms-text-muted;
+    margin-bottom: 12rpx;
+  }
+  .sep {
+    margin: 0 12rpx;
+    color: $pms-text-dim;
   }
   .status {
     font-size: 24rpx;
-    color: #007aff;
+    font-weight: 500;
+    color: $pms-accent;
   }
 }
 </style>

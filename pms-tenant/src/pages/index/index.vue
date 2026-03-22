@@ -33,26 +33,44 @@ function goComplaints() {
 
 <template>
   <view class="page">
-    <view class="header">
-      <text class="title">物业租客端</text>
-      <text class="subtitle" v-if="userStore.user">欢迎，{{ userStore.user.name }}</text>
+    <view class="hero">
+      <view class="hero-orb" />
+      <view class="hero-inner">
+        <text class="brand">PMS · TENANT</text>
+        <text class="title">物业租客端</text>
+        <text class="subtitle" v-if="userStore.user">你好，{{ userStore.user.name }}</text>
+        <text class="subtitle" v-else>账单、报修与服务一站通达</text>
+      </view>
     </view>
-    <view class="menu-list">
-      <view class="menu-item" @click="goBills">
-        <text class="menu-text">我的账单</text>
-        <text class="arrow">›</text>
+
+    <view class="menu-grid">
+      <view class="menu-card" @click="goBills">
+        <view class="icon-wrap">
+          <text class="icon-char">账</text>
+        </view>
+        <text class="menu-label">我的账单</text>
+        <text class="menu-hint">费用与缴费</text>
       </view>
-      <view class="menu-item" @click="goWorkOrders">
-        <text class="menu-text">报事报修</text>
-        <text class="arrow">›</text>
+      <view class="menu-card" @click="goWorkOrders">
+        <view class="icon-wrap">
+          <text class="icon-char">修</text>
+        </view>
+        <text class="menu-label">报事报修</text>
+        <text class="menu-hint">提交与进度</text>
       </view>
-      <view class="menu-item" @click="goAnnouncements">
-        <text class="menu-text">公告</text>
-        <text class="arrow">›</text>
+      <view class="menu-card" @click="goAnnouncements">
+        <view class="icon-wrap">
+          <text class="icon-char">告</text>
+        </view>
+        <text class="menu-label">公告</text>
+        <text class="menu-hint">小区通知</text>
       </view>
-      <view class="menu-item" @click="goComplaints">
-        <text class="menu-text">卫生吐槽</text>
-        <text class="arrow">›</text>
+      <view class="menu-card" @click="goComplaints">
+        <view class="icon-wrap">
+          <text class="icon-char">评</text>
+        </view>
+        <text class="menu-label">卫生吐槽</text>
+        <text class="menu-hint">意见反馈</text>
       </view>
     </view>
   </view>
@@ -60,41 +78,105 @@ function goComplaints() {
 
 <style lang="scss" scoped>
 .page {
-  padding: 40rpx;
+  min-height: 100vh;
+  padding: 32rpx 32rpx 48rpx;
+  box-sizing: border-box;
 }
-.header {
-  margin-bottom: 60rpx;
-  .title {
-    font-size: 44rpx;
-    font-weight: bold;
-    display: block;
-  }
-  .subtitle {
-    font-size: 28rpx;
-    color: #666;
-    margin-top: 16rpx;
-  }
-}
-.menu-list {
-  background: #fff;
-  border-radius: 16rpx;
+
+.hero {
+  position: relative;
   overflow: hidden;
+  border-radius: 28rpx;
+  padding: 48rpx 40rpx;
+  margin-bottom: 40rpx;
+  border: 1rpx solid $pms-border;
+  background: linear-gradient(145deg, $pms-surface 0%, $pms-bg-deep 100%);
 }
-.menu-item {
+
+.hero-orb {
+  position: absolute;
+  right: -80rpx;
+  top: -80rpx;
+  width: 280rpx;
+  height: 280rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, $pms-accent-soft 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-inner {
+  position: relative;
+  z-index: 1;
+}
+
+.brand {
+  display: block;
+  font-size: 22rpx;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: $pms-accent;
+  margin-bottom: 16rpx;
+}
+
+.title {
+  display: block;
+  font-family: 'Space Grotesk', 'PingFang SC', sans-serif;
+  font-size: 48rpx;
+  font-weight: 700;
+  color: $pms-text;
+  letter-spacing: 0.02em;
+}
+
+.subtitle {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 26rpx;
+  color: $pms-text-muted;
+  line-height: 1.5;
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24rpx;
+}
+
+.menu-card {
+  @include pms-card;
+  @include pms-tap;
+  padding: 36rpx 28rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.icon-wrap {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 20rpx;
+  background: $pms-accent-soft;
+  border: 1rpx solid rgba(56, 189, 248, 0.4);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 32rpx;
-  border-bottom: 1rpx solid #eee;
-  &:last-child {
-    border-bottom: none;
-  }
+  justify-content: center;
+  margin-bottom: 20rpx;
 }
-.menu-text {
+
+.icon-char {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: $pms-accent;
+}
+
+.menu-label {
   font-size: 30rpx;
+  font-weight: 600;
+  color: $pms-text;
 }
-.arrow {
-  color: #999;
-  font-size: 36rpx;
+
+.menu-hint {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: $pms-text-dim;
 }
 </style>

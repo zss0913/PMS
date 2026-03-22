@@ -1,0 +1,40 @@
+// UI UX Pro Max · PMS 租户端 — 同色深色基底，强调青蓝点缀（更易区分租客端）
+$pms-bg: #0f172a;
+$pms-bg-deep: #020617;
+$pms-surface: #1e293b;
+$pms-surface-hover: #334155;
+$pms-border: rgba(148, 163, 184, 0.16);
+$pms-text: #f8fafc;
+$pms-text-muted: #94a3b8;
+$pms-text-dim: #64748b;
+$pms-accent: #38bdf8;
+$pms-accent-soft: rgba(56, 189, 248, 0.2);
+$pms-cta: #22c55e;
+$pms-cta-soft: rgba(34, 197, 94, 0.18);
+$pms-danger: #f87171;
+$pms-warning: #fbbf24;
+
+@mixin pms-card {
+  background: $pms-surface;
+  border-radius: 24rpx;
+  border: 1rpx solid $pms-border;
+  box-shadow: 0 16rpx 48rpx rgba(0, 0, 0, 0.35);
+}
+
+@mixin pms-section-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: $pms-text;
+  margin-bottom: 24rpx;
+  padding-left: 20rpx;
+  border-left: 6rpx solid $pms-accent;
+  letter-spacing: 0.02em;
+}
+
+@mixin pms-tap {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.98);
+  }
+}
