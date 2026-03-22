@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getRequestAuthUser } from '@/lib/auth'
+import { getMpAuthUser } from '@/lib/auth'
 import { z } from 'zod'
 import {
   runWorkOrderAdvance,
   workOrderAdvanceBodySchema,
 } from '@/lib/work-order-advance'
 
+/** 员工端小程序：工单流程推进（与 /api/work-orders/[id]/advance 同源，走 MP 域名白名单路径） */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getRequestAuthUser(request)
+    const user = await getMpAuthUser(request)
     if (!user) {
       return NextResponse.json({ success: false, message: '未登录' }, { status: 401 })
     }

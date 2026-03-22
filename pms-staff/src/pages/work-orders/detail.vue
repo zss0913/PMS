@@ -68,6 +68,29 @@ const resolvedImageUrls = computed(() =>
   (wo.value?.imageUrls ?? []).map((u) => resolveMediaUrl(u)).filter(Boolean)
 )
 
+/** 与 PC 端 WorkOrderFlowStepBar 一致：当前及之前节点高亮，之后置灰 */
+const STEP_LABELS = ['创建', '派单', '响应', '处理', '费用确认', '待评价', '完成'] as const
+
+function getFlowStepState(status: string): { activeIndex: number; cancelled: boolean } {
+  if (status === '已取消') {
+    return { activeIndex: -1, cancelled: true }
+  }
+  const map: Record<string, number> = {
+    待派单: 1,
+    待响应: 2,
+    处理中: 3,
+    待确认费用: 4,
+    待评价: 5,
+    评价完成: 6,
+  }
+  return { activeIndex: map[status] ?? 0, cancelled: false }
+}
+
+const flowState = computed(() => {
+  if (!wo.value) return { activeIndex: 0, cancelled: false }
+  return getFlowStepState(wo.value.status)
+})
+
 const showFooter = computed(() => {
   const w = wo.value
   if (!w) return false
@@ -132,7 +155,7 @@ async function advance(action: AdvanceAction) {
     if (action === 'request_fee_confirmation') {
       body.feeRemark = feeRemark.value.trim() || undefined
     }
-    const res = (await post(`/api/work-orders/${woId.value}/advance`, body)) as {
+    const res = (await post(`/api/mp/work-orders/${woId.value}/advance`, body)) as {
       success?: boolean
       message?: string
     }
@@ -152,9 +175,11 @@ async function advance(action: AdvanceAction) {
   }
 }
 
-function previewImgs(urls: string[], current: string) {
+function previewImgs(urls: string[], index: number) {
   if (!urls?.length) return
-  uni.previewImage({ urls, current })
+  const list = urls.map((u) => String(u))
+  const i = Math.max(0, Math.min(index, list.length - 1))
+  uni.previewImage({ urls: list, current: list[i] })
 }
 
 function confirmCancel() {
@@ -188,6 +213,70 @@ function boolLabel(v: boolean | undefined | null): string {
             <view class="hero-status">{{ wo.status }}</view>
           </view>
           <text class="hero-title">{{ wo.title }}</text>
+        </view>
+
+        <view class="card flow-card">
+          <text class="sec-title">流程进度</text>
+          <view v-if="flowState.cancelled" class="flow-cancel">
+            <text>工单已取消，流程已终止。</text>
+          </view>
+          <scroll-view v-else scroll-x class="flow-scroll" :show-scrollbar="false" enable-flex>
+            <view class="flow-row">
+              <template v-for="(label, i) in STEP_LABELS" :key="label">
+                <view class="flow-col">
+                  <view
+                    :class="['flow-dot', i <= flowState.activeIndex ? 'flow-dot--on' : 'flow-dot--off']"
+                  >
+                    <text class="flow-num">{{ i + 1 }}</text>
+                  </view>
+                  <text
+                    :class="['flow-lbl', i <= flowState.activeIndex ? 'flow-lbl--on' : 'flow-lbl--off']"
+                  >
+                    {{ label }}
+                  </text>
+                </view>
+                <view
+                  v-if="i < STEP_LABELS.length - 1"
+                  :class="[
+                    'flow-bridge',
+                    i < flowState.activeIndex ? 'flow-bridge--on' : 'flow-bridge--off',
+                  ]"
+                />
+              </template>
+            </view>
+          </scroll-view>
+          <text v-if="!flowState.cancelled" class="flow-tip">
+            当前及之前节点为高亮；未到达的步骤为灰色。不涉及费用请勿走「提交费用待确认」。
+          </text>
+          <text class="sub-sec-title">时间记录</text>
+          <view class="kv">
+            <text class="k">创建时间</text>
+            <text class="v mono">{{ formatDateTime(wo.createdAt) }}</text>
+          </view>
+          <view class="kv">
+            <text class="k">最近更新</text>
+            <text class="v mono">{{ formatDateTime(wo.updatedAt) }}</text>
+          </view>
+          <view class="kv">
+            <text class="k">派单时间</text>
+            <text class="v mono">{{ formatDateTime(wo.assignedAt) }}</text>
+          </view>
+          <view class="kv">
+            <text class="k">开始响应</text>
+            <text class="v mono">{{ formatDateTime(wo.respondedAt) }}</text>
+          </view>
+          <view class="kv">
+            <text class="k">费用确认时间</text>
+            <text class="v mono">{{ formatDateTime(wo.feeConfirmedAt) }}</text>
+          </view>
+          <view class="kv">
+            <text class="k">办结时间</text>
+            <text class="v mono">{{ formatDateTime(wo.completedAt) }}</text>
+          </view>
+          <view class="kv">
+            <text class="k">评价完成时间</text>
+            <text class="v mono">{{ formatDateTime(wo.evaluatedAt) }}</text>
+          </view>
         </view>
 
         <view class="card">
@@ -268,38 +357,6 @@ function boolLabel(v: boolean | undefined | null): string {
           <text class="block-text muted">{{ wo.feeRemark || '暂无' }}</text>
         </view>
 
-        <view class="card">
-          <text class="sec-title">时间节点</text>
-          <view class="kv">
-            <text class="k">创建时间</text>
-            <text class="v mono">{{ formatDateTime(wo.createdAt) }}</text>
-          </view>
-          <view class="kv">
-            <text class="k">最近更新</text>
-            <text class="v mono">{{ formatDateTime(wo.updatedAt) }}</text>
-          </view>
-          <view class="kv">
-            <text class="k">派单时间</text>
-            <text class="v mono">{{ formatDateTime(wo.assignedAt) }}</text>
-          </view>
-          <view class="kv">
-            <text class="k">开始响应</text>
-            <text class="v mono">{{ formatDateTime(wo.respondedAt) }}</text>
-          </view>
-          <view class="kv">
-            <text class="k">费用确认时间</text>
-            <text class="v mono">{{ formatDateTime(wo.feeConfirmedAt) }}</text>
-          </view>
-          <view class="kv">
-            <text class="k">办结时间</text>
-            <text class="v mono">{{ formatDateTime(wo.completedAt) }}</text>
-          </view>
-          <view class="kv">
-            <text class="k">评价完成时间</text>
-            <text class="v mono">{{ formatDateTime(wo.evaluatedAt) }}</text>
-          </view>
-        </view>
-
         <view v-if="wo.projectId != null || wo.taskId != null || wo.tagId" class="card">
           <text class="sec-title">系统字段</text>
           <view v-if="wo.projectId != null" class="kv">
@@ -319,15 +376,20 @@ function boolLabel(v: boolean | undefined | null): string {
         <view v-if="resolvedImageUrls.length" class="card">
           <text class="sec-title">现场图片（点击查看大图）</text>
           <view class="imgs">
-            <image
+            <view
               v-for="(url, i) in resolvedImageUrls"
               :key="i"
-              class="img"
-              :src="url"
-              mode="aspectFill"
-              show-menu-by-longpress
-              @tap.stop="previewImgs(resolvedImageUrls, url)"
-            />
+              class="img-cell"
+              hover-class="img-cell--hover"
+              @tap.stop="previewImgs(resolvedImageUrls, i)"
+            >
+              <image
+                class="img"
+                :src="url"
+                mode="aspectFill"
+                show-menu-by-longpress
+              />
+            </view>
           </view>
         </view>
 
@@ -469,6 +531,127 @@ function boolLabel(v: boolean | undefined | null): string {
   line-height: 1.35;
 }
 
+.flow-card {
+  overflow: hidden;
+}
+
+.flow-cancel {
+  padding: 20rpx 24rpx;
+  border-radius: 16rpx;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1rpx solid rgba(248, 113, 113, 0.35);
+  margin-bottom: 8rpx;
+  font-size: 26rpx;
+  color: $pms-danger;
+}
+
+.flow-scroll {
+  width: 100%;
+  margin-bottom: 4rpx;
+}
+
+.flow-row {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: flex-start;
+  padding: 12rpx 4rpx 16rpx;
+}
+
+.flow-col {
+  width: 100rpx;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.flow-dot {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 50%;
+  border-width: 3rpx;
+  border-style: solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.flow-dot--on {
+  border-color: $pms-accent;
+  background: $pms-accent;
+}
+
+.flow-dot--off {
+  border-color: rgba(148, 163, 184, 0.35);
+  background: $pms-bg-deep;
+}
+
+.flow-num {
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.flow-dot--on .flow-num {
+  color: #fff;
+}
+
+.flow-dot--off .flow-num {
+  color: $pms-text-dim;
+}
+
+.flow-lbl {
+  margin-top: 12rpx;
+  font-size: 20rpx;
+  line-height: 1.3;
+  text-align: center;
+  width: 100%;
+}
+
+.flow-lbl--on {
+  color: $pms-accent;
+  font-weight: 600;
+}
+
+.flow-lbl--off {
+  color: $pms-text-dim;
+}
+
+.flow-bridge {
+  width: 28rpx;
+  height: 6rpx;
+  border-radius: 3rpx;
+  flex-shrink: 0;
+  margin-top: 28rpx;
+}
+
+.flow-bridge--on {
+  background: $pms-accent;
+}
+
+.flow-bridge--off {
+  background: rgba(148, 163, 184, 0.22);
+}
+
+.flow-tip {
+  display: block;
+  font-size: 22rpx;
+  color: $pms-text-dim;
+  line-height: 1.5;
+  margin-bottom: 20rpx;
+}
+
+.sub-sec-title {
+  display: block;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: $pms-text-muted;
+  margin-bottom: 12rpx;
+  margin-top: 4rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid $pms-border;
+}
+
 .card {
   @include pms-card;
   padding: 28rpx 32rpx;
@@ -528,16 +711,33 @@ function boolLabel(v: boolean | undefined | null): string {
 }
 
 .imgs {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 16rpx;
 }
-.img {
-  width: 200rpx;
-  height: 200rpx;
+
+.img-cell {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 100%;
   border-radius: 16rpx;
+  overflow: hidden;
   border: 1rpx solid $pms-border;
   background: $pms-bg-deep;
+}
+
+.img-cell--hover {
+  opacity: 0.88;
+}
+
+.img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .fee-card .fee-input {

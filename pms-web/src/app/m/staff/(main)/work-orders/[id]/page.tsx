@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
+import { WorkOrderFlowStepBar } from '@/components/work-orders/WorkOrderFlowStepBar'
 
 type Wo = {
   id: number
@@ -101,6 +102,13 @@ export default function StaffWorkOrderDetailPage() {
       <Link href="/m/staff/work-orders" className="text-sm text-slate-500">
         ← 列表
       </Link>
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 space-y-2">
+        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">流程进度</h2>
+        <WorkOrderFlowStepBar status={wo.status} />
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          当前及之前步骤高亮，后续步骤为灰色（与 PC 端一致）。
+        </p>
+      </div>
       <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 space-y-3">
         <div className="flex justify-between gap-2">
           <span className="font-mono text-xs text-slate-500">{wo.code}</span>

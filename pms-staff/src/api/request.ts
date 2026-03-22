@@ -28,7 +28,18 @@ const BASE_URL = resolveApiBase()
 export function resolveMediaUrl(path: string): string {
   const p = String(path || '').trim()
   if (!p) return ''
-  if (/^https?:\/\//i.test(p)) return p
+  if (/^https?:\/\//i.test(p)) {
+    try {
+      const u = new URL(p)
+      if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
+        const base = BASE_URL.replace(/\/$/, '')
+        if (base) return `${base}${u.pathname}${u.search}`
+      }
+    } catch {
+      /* ignore */
+    }
+    return p
+  }
   const pathPart = p.startsWith('/') ? p : `/${p}`
   const base = BASE_URL.replace(/\/$/, '')
   if (!base) return pathPart
@@ -91,5 +102,12 @@ export function get<T = unknown>(url: string, params?: Record<string, string>) {
 }
 
 export function post<T = unknown>(url: string, data?: unknown) {
-  return request<T>({ url, method: 'POST', data })
+  const isJsonObject =
+    data != null && typeof data === 'object' && !(data instanceof ArrayBuffer)
+  return request<T>({
+    url,
+    method: 'POST',
+    data: isJsonObject ? JSON.stringify(data) : data,
+    header: isJsonObject ? { 'Content-Type': 'application/json' } : {},
+  })
 }
