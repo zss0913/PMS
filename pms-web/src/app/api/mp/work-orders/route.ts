@@ -15,7 +15,7 @@ const tenantSubmitSchema = z.object({
   title: z.string().min(1, '请填写标题'),
   description: z.string().min(1, '请填写问题描述'),
   location: z.string().optional(),
-  images: z.array(z.string()).max(9).optional(),
+  images: z.array(z.string()).max(10).optional(),
   feeNoticeAcknowledged: z.boolean().optional(),
 })
 
@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
     }
 
     const status = request.nextUrl.searchParams.get('status')
+    const titleQ = request.nextUrl.searchParams.get('titleQ')?.trim() ?? ''
 
     let whereInput: Prisma.WorkOrderWhereInput
     if (user.type === 'tenant') {
@@ -42,15 +43,23 @@ export async function GET(request: NextRequest) {
       if (tenantIds.length === 0) {
         return NextResponse.json({ success: true, list: [] })
       }
+      /** 仅当前 token 所选租客 + 本账号提交的报事报修（与切换租客后的数据范围一致） */
       whereInput = {
         companyId: user.companyId,
-        OR: [{ tenantId: { in: tenantIds } }, { reporterId: user.id }],
+        tenantId: { in: tenantIds },
+        reporterId: user.id,
         ...(status ? { status } : {}),
+        ...(titleQ
+          ? { title: { contains: titleQ } }
+          : {}),
       }
     } else {
       whereInput = {
         ...mpEmployeeWorkOrderVisibilityWhere(user),
         ...(status ? { status } : {}),
+        ...(titleQ
+          ? { title: { contains: titleQ } }
+          : {}),
       }
     }
 
@@ -74,6 +83,7 @@ export async function GET(request: NextRequest) {
       source: o.source,
       facilityScope: o.facilityScope,
       feeRemark: o.feeRemark,
+      feeTotal: o.feeTotal,
       buildingName: o.building?.name,
       room: o.room ? `${o.room.roomNumber} · ${o.room.name}` : null,
       tenantName: o.tenant?.companyName,

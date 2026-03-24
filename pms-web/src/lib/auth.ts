@@ -89,7 +89,7 @@ export async function getAuthUser(): Promise<AuthUser | null> {
   return user
 }
 
-/** 小程序 / H5：Bearer token；H5 同域还可带 Cookie（pms_token） */
+/** 租客/员工 H5 门户 API（/api/mp/*）：Bearer token；同域还可带 Cookie（pms_token） */
 export async function getMpAuthUser(request: Request): Promise<AuthUser | null> {
   const auth = request.headers.get('Authorization')
   const bearer = auth?.startsWith('Bearer ') ? auth.slice(7) : null
@@ -104,7 +104,7 @@ export async function getMpAuthUser(request: Request): Promise<AuthUser | null> 
 }
 
 /**
- * API 路由：优先 Bearer（小程序），否则读 Cookie（H5 与 PC 共用 pms_token）
+ * API 路由：优先 Bearer（移动端 H5），否则读 Cookie（H5 与 PC 共用 pms_token）
  */
 export async function getRequestAuthUser(request: NextRequest): Promise<AuthUser | null> {
   const auth = request.headers.get('Authorization')

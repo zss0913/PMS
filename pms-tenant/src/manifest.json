@@ -1,18 +1,10 @@
 {
   "name": "物业租客端",
   "appid": "__UNI__PMS_TENANT",
-  "description": "物业管理系统-租客端小程序",
+  "description": "物业管理系统-租客端（H5）",
   "versionName": "1.0.0",
   "versionCode": "100",
   "transformPx": false,
-  "mp-weixin": {
-    "appid": "touristappid",
-    "setting": {
-      "urlCheck": false,
-      "es6": true,
-      "minified": true
-    }
-  },
   "uniStatistics": {
     "enable": false
   }

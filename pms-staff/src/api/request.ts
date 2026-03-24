@@ -1,6 +1,6 @@
 /**
  * 后端地址：默认 localhost 仅适合本机 H5。
- * 微信小程序请在本目录配置 .env.development 设置 VITE_API_BASE_URL 为电脑的局域网 IP，并重新编译。
+ * H5 真机访问本机后端时，请配置 .env.development 中 VITE_API_BASE_URL=http://电脑局域网IP:5000 并重新编译。
  */
 function resolveApiBase(): string {
   const env = import.meta.env.VITE_API_BASE_URL
@@ -24,7 +24,12 @@ function resolveApiBase(): string {
 
 const BASE_URL = resolveApiBase()
 
-/** 工单图片等为相对路径 /uploads/... 时，小程序需拼成完整 URL 才能显示与 previewImage */
+/** 与 uni.request 同源，供 uploadFile / 图片上传等拼接后端地址 */
+export function getApiBaseUrl(): string {
+  return BASE_URL
+}
+
+/** 工单图片等为相对路径 /uploads/... 时，H5 需拼成完整 URL 才能显示与 previewImage */
 export function resolveMediaUrl(path: string): string {
   const p = String(path || '').trim()
   if (!p) return ''
@@ -83,10 +88,10 @@ export function request<T = unknown>(
       },
       fail: (err) => {
         const raw = err.errMsg || '网络请求失败'
-        const isMp = String(import.meta.env.UNI_PLATFORM || '').startsWith('mp-')
+        const isH5 = import.meta.env.UNI_PLATFORM === 'h5'
         const localHint =
-          isLocalBase(BASE_URL) && isMp
-            ? ' 请在 pms-staff 目录添加 .env.development，设置 VITE_API_BASE_URL=http://你的电脑局域网IP:5000 后重新编译。'
+          isLocalBase(BASE_URL) && isH5
+            ? ' 请在 pms-staff/.env.development 设置 VITE_API_BASE_URL=http://电脑局域网IP:5000 后重新编译，并确保 pms-web 已启动。'
             : ''
         reject(new Error(localHint ? `${raw}${localHint}` : raw))
       },
@@ -107,6 +112,17 @@ export function post<T = unknown>(url: string, data?: unknown) {
   return request<T>({
     url,
     method: 'POST',
+    data: isJsonObject ? JSON.stringify(data) : data,
+    header: isJsonObject ? { 'Content-Type': 'application/json' } : {},
+  })
+}
+
+export function put<T = unknown>(url: string, data?: unknown) {
+  const isJsonObject =
+    data != null && typeof data === 'object' && !(data instanceof ArrayBuffer)
+  return request<T>({
+    url,
+    method: 'PUT',
     data: isJsonObject ? JSON.stringify(data) : data,
     header: isJsonObject ? { 'Content-Type': 'application/json' } : {},
   })

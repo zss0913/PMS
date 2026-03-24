@@ -26,6 +26,16 @@ body {
   font-size: 14px;
 }
 
+/* PC 管理后台主区：列表、筛选区等继承略小字号（约 13px）；标题 h1 等使用 text-* 仍为 rem，不受父级 em 影响 */
+.dashboard-main {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.dashboard-main table {
+  font-size: inherit;
+}
+
 /* 隐藏滚动条但保持滚动功能 */
 .scrollbar-hide {
   -ms-overflow-style: none;  /* IE and Edge */

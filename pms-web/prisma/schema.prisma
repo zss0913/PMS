@@ -381,8 +381,10 @@ model Bill {
   quantityTotal     Decimal?
   /// 单价（元，选填；手工账单可录）
   unitPrice         Decimal?
-  /// rule=规则生成, manual=手工新建
+  /// rule=规则生成, manual=手工新建, work_order_fee=工单待租客确认费用时自动生成
   billSource        String   @default("rule")
+  /// 关联工单（工单费用账单）
+  workOrderId       Int?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -392,10 +394,14 @@ model Bill {
   room     Room?     @relation(fields: [roomId], references: [id])
   account  Account  @relation(fields: [accountId], references: [id])
   rule     BillRule? @relation(fields: [ruleId], references: [id])
+  workOrder WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
   payments PaymentBill[]
   refunds  Refund[]
   activityLogs BillActivityLog[]
   attachments BillAttachment[]
+  onlineCheckoutPayments Payment[] @relation("BillOnlineCheckout")
+
+  @@index([companyId, workOrderId])
 }
 
 /// 收据开具记录：每生成一张物理收据（Word 中一页/一份）一条；多账单合并开一张仍是一条
@@ -506,14 +512,21 @@ model Payment {
   payer          String
   totalAmount    Decimal
   paymentMethod  String
+  /// success | pending | cancelled | failed
   paymentStatus  String
   transactionId  String?
-  operatorId     Int
+  /// 线下记账为员工；租客线上自助缴费可为空
+  operatorId     Int?
   companyId      Int
+  /// 租客端「工单费用」在线支付：下单时关联待缴账单，支付成功前为 pending
+  relatedBillId  Int?
   createdAt      DateTime @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   bills   PaymentBill[]
+  relatedBill Bill? @relation("BillOnlineCheckout", fields: [relatedBillId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, relatedBillId])
 }
 
 model PaymentBill {
@@ -605,8 +618,10 @@ model WorkOrder {
   facilityScope         String?
   /// 套内报修时租客是否已确认费用知情
   feeNoticeAcknowledged Boolean  @default(false)
-  /// 进入「待确认费用」时员工填写的费用说明
+  /// 费用流程中员工填写的费用说明（处理中提交后进入「待员工确认费用」等）
   feeRemark             String?
+  /// 费用合计（人民币元，须 > 0），与 feeRemark 一并提交
+  feeTotal              Float?
   /// 租客确认费用后继续处理的时间
   feeConfirmedAt        DateTime?
   assignedAt   DateTime?
@@ -614,6 +629,12 @@ model WorkOrder {
   respondedAt  DateTime?
   completedAt  DateTime?
   evaluatedAt  DateTime?
+  /// 办结进入待评价时上传的现场照片（JSON 字符串数组，与 images 格式一致）
+  completionImages   String?
+  /// 办结说明（选填）
+  completionRemark   String?
+  /// 评价说明：员工标记评价完成或租客提交评价时写入（选填）
+  evaluationNote     String?
   companyId    Int
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -624,6 +645,7 @@ model WorkOrder {
   room      Room?     @relation(fields: [roomId], references: [id])
   assignedEmployee Employee? @relation("AssignedWorkOrders", fields: [assignedTo], references: [id])
   activityLogs     WorkOrderActivityLog[]
+  feeBills         Bill[]
 }
 
 /// 工单操作日志（创建、编辑、派单、流程节点等）

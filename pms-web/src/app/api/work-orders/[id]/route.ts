@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
+import { parseWorkOrderImageUrls } from '@/lib/work-order'
 import {
   WORK_ORDER_ACTION,
   buildWorkOrderEditChanges,
@@ -62,6 +63,16 @@ export async function GET(
       return NextResponse.json({ success: false, message: '工单不存在' }, { status: 404 })
     }
 
+    const completionImageUrls = parseWorkOrderImageUrls(workOrder.completionImages)
+
+    let tenantPayload = workOrder.tenant
+    if (!tenantPayload && workOrder.tenantId != null) {
+      tenantPayload = await prisma.tenant.findFirst({
+        where: { id: workOrder.tenantId, companyId: user.companyId },
+        select: { id: true, companyName: true },
+      })
+    }
+
     const employees = await prisma.employee.findMany({
       where: { companyId: user.companyId, status: 'active' },
       select: { id: true, name: true, phone: true },
@@ -84,16 +95,20 @@ export async function GET(
           facilityScope: workOrder.facilityScope,
           feeNoticeAcknowledged: workOrder.feeNoticeAcknowledged,
           feeRemark: workOrder.feeRemark,
+          feeTotal: workOrder.feeTotal,
           feeConfirmedAt: workOrder.feeConfirmedAt?.toISOString() ?? null,
           building: workOrder.building,
           room: workOrder.room,
-          tenant: workOrder.tenant,
+          tenant: tenantPayload,
           assignedTo: workOrder.assignedTo,
           assignedEmployee: workOrder.assignedEmployee,
           assignedAt: workOrder.assignedAt?.toISOString() ?? null,
           respondedAt: workOrder.respondedAt?.toISOString() ?? null,
           completedAt: workOrder.completedAt?.toISOString() ?? null,
           evaluatedAt: workOrder.evaluatedAt?.toISOString() ?? null,
+          completionImageUrls,
+          completionRemark: workOrder.completionRemark,
+          evaluationNote: workOrder.evaluationNote,
           createdAt: workOrder.createdAt.toISOString(),
           updatedAt: workOrder.updatedAt.toISOString(),
         },

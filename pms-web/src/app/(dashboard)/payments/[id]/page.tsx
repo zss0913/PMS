@@ -9,6 +9,8 @@ import { ArrowLeft } from 'lucide-react'
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
   success: '成功',
   failed: '失败',
+  pending: '待支付',
+  cancelled: '已取消',
 }
 
 const BILL_PAYMENT_STATUS: Record<string, string> = {
@@ -65,10 +67,12 @@ export default async function PaymentDetailPage({
       where: { id: payment.tenantId, companyId: user.companyId },
       select: { companyName: true },
     }),
-    prisma.employee.findFirst({
-      where: { id: payment.operatorId, companyId: user.companyId },
-      select: { name: true, phone: true },
-    }),
+    payment.operatorId != null
+      ? prisma.employee.findFirst({
+          where: { id: payment.operatorId, companyId: user.companyId },
+          select: { name: true, phone: true },
+        })
+      : Promise.resolve(null),
   ])
 
   const returnToBill = (billId: number) =>
@@ -126,7 +130,9 @@ export default async function PaymentDetailPage({
                 className={`inline-flex px-2 py-0.5 rounded text-xs ${
                   payment.paymentStatus === 'success'
                     ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                    : payment.paymentStatus === 'pending'
+                      ? 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200'
+                      : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
                 }`}
               >
                 {PAYMENT_STATUS_LABELS[payment.paymentStatus] ?? payment.paymentStatus}
@@ -136,7 +142,11 @@ export default async function PaymentDetailPage({
           <div className="flex gap-2 sm:gap-4">
             <dt className="w-28 shrink-0 text-slate-500 dark:text-slate-400">操作人</dt>
             <dd className="text-slate-900 dark:text-slate-100">
-              {operator ? `${operator.name}（${operator.phone}）` : `ID ${payment.operatorId}`}
+              {operator
+                ? `${operator.name}（${operator.phone}）`
+                : payment.operatorId != null
+                  ? `ID ${payment.operatorId}`
+                  : '租客自助（线上）'}
             </dd>
           </div>
           <div className="flex gap-2 sm:gap-4">

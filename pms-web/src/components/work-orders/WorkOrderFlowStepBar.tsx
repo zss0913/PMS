@@ -24,7 +24,8 @@ export function getWorkOrderFlowStepState(status: string): WorkOrderFlowStepStat
     待派单: 1,
     待响应: 2,
     处理中: 3,
-    待确认费用: 4,
+    待员工确认费用: 4,
+    待租客确认费用: 4,
     待评价: 5,
     评价完成: 6,
   }

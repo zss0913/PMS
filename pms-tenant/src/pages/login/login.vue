@@ -53,7 +53,7 @@ async function handleLogin(opts?: LoginOpts) {
     <view class="panel">
       <text class="panel-brand">PMS TENANT</text>
       <text class="panel-title">租客登录</text>
-      <text class="panel-desc">账单、报修与公告统一入口</text>
+      <text class="panel-desc">账单、报修与公告移动端入口</text>
       <view class="form">
         <view class="input-wrap">
           <text class="field-label">手机号</text>

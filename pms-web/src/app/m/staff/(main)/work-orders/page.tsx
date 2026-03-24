@@ -4,7 +4,17 @@ import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { MStaffSubPageBar } from '@/components/m/MStaffSubPageBar'
 
-const TABS = ['', '待派单', '待响应', '处理中', '待确认费用', '待评价', '评价完成', '已取消']
+const TABS = [
+  '',
+  '待派单',
+  '待响应',
+  '处理中',
+  '待员工确认费用',
+  '待租客确认费用',
+  '待评价',
+  '评价完成',
+  '已取消',
+]
 
 type Row = {
   id: number

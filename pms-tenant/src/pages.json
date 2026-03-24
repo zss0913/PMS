@@ -7,6 +7,12 @@
       }
     },
     {
+      "path": "pages/messages/messages",
+      "style": {
+        "navigationBarTitleText": "消息通知"
+      }
+    },
+    {
       "path": "pages/login/login",
       "style": {
         "navigationBarTitleText": "登录"
@@ -21,13 +27,32 @@
     {
       "path": "pages/work-orders/work-orders",
       "style": {
-        "navigationBarTitleText": "报事报修"
+        "navigationBarTitleText": "报事报修",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/work-orders/create",
+      "style": {
+        "navigationBarTitleText": "提交报修"
+      }
+    },
+    {
+      "path": "pages/work-orders/detail",
+      "style": {
+        "navigationBarTitleText": "工单详情"
       }
     },
     {
       "path": "pages/announcements/announcements",
       "style": {
         "navigationBarTitleText": "公告"
+      }
+    },
+    {
+      "path": "pages/announcements/detail",
+      "style": {
+        "navigationBarTitleText": "公告详情"
       }
     },
     {
@@ -60,12 +85,8 @@
         "text": "首页"
       },
       {
-        "pagePath": "pages/bills/bills",
-        "text": "账单"
-      },
-      {
-        "pagePath": "pages/work-orders/work-orders",
-        "text": "报修"
+        "pagePath": "pages/messages/messages",
+        "text": "消息通知"
       },
       {
         "pagePath": "pages/profile/profile",

@@ -1,6 +1,6 @@
 /**
- * 后端地址：默认 localhost 仅适合本机 H5。
- * 微信小程序请在本目录配置 .env.development 设置 VITE_API_BASE_URL 为电脑的局域网 IP（如 http://192.168.0.3:5000），并重新编译。
+ * 后端地址：H5 开发默认走 Vite 代理（同源 /api）；本机也可指向 http://localhost:5000。
+ * 若需固定后端地址（如真机访问局域网 IP），在本目录配置 .env.development 设置 VITE_API_BASE_URL。
  */
 function resolveApiBase(): string {
   const env = import.meta.env.VITE_API_BASE_URL
@@ -25,6 +25,11 @@ function resolveApiBase(): string {
 }
 
 const BASE_URL = resolveApiBase()
+
+/** 与 uni.request 同源，供 uploadFile 等拼接后端地址 */
+export function getApiBaseUrl(): string {
+  return BASE_URL
+}
 
 export interface ApiResponse<T = unknown> {
   success: boolean
@@ -68,10 +73,10 @@ export function request<T = unknown>(
       },
       fail: (err) => {
         const raw = err.errMsg || '网络请求失败'
-        const isMp = String(import.meta.env.UNI_PLATFORM || '').startsWith('mp-')
+        const isH5 = import.meta.env.UNI_PLATFORM === 'h5'
         const localHint =
-          isLocalBase(BASE_URL) && isMp
-            ? ' 请在 pms-tenant 目录添加 .env.development，设置 VITE_API_BASE_URL=http://你的电脑局域网IP:5000 后重新编译，并保证 PC 上 Next 已启动且防火墙放行 5000 端口。'
+          isH5 && isLocalBase(BASE_URL)
+            ? ' 请在 pms-tenant/.env.development 设置 VITE_API_BASE_URL=http://电脑局域网IP:5000 后重新编译，并确保 pms-web 已启动（建议 dev 使用 --hostname 0.0.0.0）。'
             : ''
         reject(new Error(localHint ? `${raw}${localHint}` : raw))
       },
@@ -88,4 +93,8 @@ export function get<T = unknown>(url: string, params?: Record<string, string>) {
 
 export function post<T = unknown>(url: string, data?: unknown) {
   return request<T>({ url, method: 'POST', data })
+}
+
+export function put<T = unknown>(url: string, data?: unknown) {
+  return request<T>({ url, method: 'PUT', data })
 }

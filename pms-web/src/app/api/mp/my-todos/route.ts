@@ -7,7 +7,13 @@ import { mpEmployeeWorkOrderVisibilityWhere } from '@/lib/mp-employee-work-order
 /** 巡检任务：视为「待办」的状态（与库内历史值兼容） */
 const ACTIVE_INSPECTION_STATUSES = ['待巡检', 'pending', '待执行', '执行中', '进行中']
 
-const TODO_WORK_ORDER_STATUSES = ['待派单', '待响应', '处理中', '待确认费用'] as const
+const TODO_WORK_ORDER_STATUSES = [
+  '待派单',
+  '待响应',
+  '处理中',
+  '待员工确认费用',
+  '待租客确认费用',
+] as const
 
 /** 员工端：待办列表（工单 + 巡检）+ 汇总数字 */
 export async function GET(request: Request) {

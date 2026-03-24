@@ -1,10 +1,8 @@
 {
   "name": "pms-staff",
   "version": "1.0.0",
-  "description": "物业管理系统-员工端小程序",
+  "description": "物业管理系统-员工端 H5",
   "scripts": {
-    "dev:mp-weixin": "npx uni -p mp-weixin",
-    "build:mp-weixin": "npx uni build -p mp-weixin",
     "dev:h5": "npx uni",
     "build:h5": "npx uni build"
   },
@@ -13,7 +11,6 @@
     "@dcloudio/uni-app-plus": "3.0.0-4080720251210001",
     "@dcloudio/uni-components": "3.0.0-4080720251210001",
     "@dcloudio/uni-h5": "3.0.0-4080720251210001",
-    "@dcloudio/uni-mp-weixin": "3.0.0-4080720251210001",
     "pinia": "^2.1.7",
     "sass": "^1.77.0",
     "vue": "^3.4.21"

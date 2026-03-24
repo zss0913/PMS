@@ -70,6 +70,10 @@ export function paymentStatusZh(s: string): string {
     unpaid: '未缴纳',
     partial: '部分缴纳',
     paid: '已结清',
+    pending: '待支付',
+    success: '支付成功',
+    cancelled: '已取消',
+    failed: '支付失败',
   }
   return m[s] ?? s
 }

@@ -5,6 +5,8 @@ import { ArrowLeft } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { fetchWorkOrderActivityLogs } from '@/lib/work-order-activity-log-db'
 import { WorkOrderDetail } from '@/components/work-orders/WorkOrderDetail'
+import { resolveWorkOrderReporter } from '@/lib/work-order-reporter'
+import { parseWorkOrderImageUrls } from '@/lib/work-order'
 
 export default async function WorkOrderDetailPage({
   params,
@@ -25,11 +27,26 @@ export default async function WorkOrderDetailPage({
       building: { select: { id: true, name: true } },
       room: { select: { id: true, name: true, roomNumber: true } },
       tenant: { select: { id: true, companyName: true } },
-      assignedEmployee: { select: { id: true, name: true } },
+      assignedEmployee: { select: { id: true, name: true, phone: true } },
     },
   })
 
   if (!workOrder) notFound()
+
+  const reporter = await resolveWorkOrderReporter(
+    prisma,
+    user.companyId,
+    workOrder.reporterId,
+    workOrder.source
+  )
+
+  let tenantForDetail = workOrder.tenant
+  if (!tenantForDetail && workOrder.tenantId != null) {
+    tenantForDetail = await prisma.tenant.findFirst({
+      where: { id: workOrder.tenantId, companyId: user.companyId },
+      select: { id: true, companyName: true },
+    })
+  }
 
   const [employees, activityLogs] = await Promise.all([
     prisma.employee.findMany({
@@ -66,16 +83,21 @@ export default async function WorkOrderDetailPage({
           facilityScope: workOrder.facilityScope,
           feeNoticeAcknowledged: workOrder.feeNoticeAcknowledged,
           feeRemark: workOrder.feeRemark,
+          feeTotal: workOrder.feeTotal,
           feeConfirmedAt: workOrder.feeConfirmedAt?.toISOString() ?? null,
           building: workOrder.building,
           room: workOrder.room,
-          tenant: workOrder.tenant,
+          tenant: tenantForDetail,
+          reporter,
           assignedTo: workOrder.assignedTo,
           assignedEmployee: workOrder.assignedEmployee,
           assignedAt: workOrder.assignedAt?.toISOString() ?? null,
           respondedAt: workOrder.respondedAt?.toISOString() ?? null,
           completedAt: workOrder.completedAt?.toISOString() ?? null,
           evaluatedAt: workOrder.evaluatedAt?.toISOString() ?? null,
+          completionImageUrls: parseWorkOrderImageUrls(workOrder.completionImages),
+          completionRemark: workOrder.completionRemark,
+          evaluationNote: workOrder.evaluationNote,
           createdAt: workOrder.createdAt.toISOString(),
           updatedAt: workOrder.updatedAt.toISOString(),
         }}

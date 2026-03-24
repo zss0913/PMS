@@ -11,12 +11,41 @@ interface AnnouncementItem {
 
 const list = ref<AnnouncementItem[]>([])
 const loading = ref(true)
+const buildingId = ref<number | null>(null)
+
+function formatTime(v: string | null) {
+  if (!v) return ''
+  try {
+    const d = new Date(v)
+    return Number.isNaN(d.getTime()) ? v : d.toLocaleString('zh-CN')
+  } catch {
+    return v
+  }
+}
+
+function goDetail(item: AnnouncementItem) {
+  let url = `/pages/announcements/detail?id=${item.id}`
+  if (buildingId.value != null) url += `&buildingId=${buildingId.value}`
+  uni.navigateTo({ url })
+}
 
 onMounted(async () => {
   try {
-    const res = await get<{ list: AnnouncementItem[] }>('/api/mp/announcements')
-    if (res.success && res.data) {
-      list.value = res.data.list
+    const ctx = (await get('/api/mp/work-order-submit-context')) as {
+      success?: boolean
+      data?: { buildingId?: number | null }
+    }
+    if (ctx.success && ctx.data?.buildingId != null) {
+      buildingId.value = ctx.data.buildingId
+    }
+    const params: Record<string, string> = {}
+    if (buildingId.value != null) params.buildingId = String(buildingId.value)
+    const res = (await get('/api/mp/announcements', params)) as {
+      success?: boolean
+      list?: AnnouncementItem[]
+    }
+    if (res.success && Array.isArray(res.list)) {
+      list.value = res.list
     }
   } catch {
     uni.showToast({ title: '加载失败', icon: 'none' })
@@ -31,10 +60,10 @@ onMounted(async () => {
     <view v-if="loading" class="loading">加载中…</view>
     <view v-else-if="list.length === 0" class="empty">暂无公告</view>
     <view v-else class="list">
-      <view v-for="item in list" :key="item.id" class="card">
+      <view v-for="item in list" :key="item.id" class="card" @click="goDetail(item)">
         <view class="title">{{ item.title }}</view>
-        <view class="content">{{ item.content }}</view>
-        <view class="time" v-if="item.publishTime">{{ item.publishTime }}</view>
+        <view class="meta" v-if="formatTime(item.publishTime)">{{ formatTime(item.publishTime) }}</view>
+        <view class="hint">点击查看全文 ›</view>
       </view>
     </view>
   </view>
@@ -66,18 +95,16 @@ onMounted(async () => {
     font-size: 32rpx;
     font-weight: 600;
     color: $pms-text;
-    margin-bottom: 16rpx;
-    font-family: 'Space Grotesk', 'PingFang SC', sans-serif;
+    margin-bottom: 12rpx;
   }
-  .content {
-    font-size: 28rpx;
-    color: $pms-text-muted;
-    line-height: 1.65;
-  }
-  .time {
+  .meta {
     font-size: 22rpx;
     color: $pms-text-dim;
-    margin-top: 20rpx;
+  }
+  .hint {
+    margin-top: 16rpx;
+    font-size: 24rpx;
+    color: $pms-accent;
   }
 }
 </style>
