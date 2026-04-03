@@ -9,6 +9,8 @@ import {
   operatorFromAuthUser,
 } from '@/lib/work-order-activity-log'
 import { mpEmployeeWorkOrderVisibilityWhere } from '@/lib/mp-employee-work-order-scope'
+import { businessTagForTenantWorkOrder } from '@/lib/staff-notification-routing'
+import { writeStaffNotifications } from '@/lib/staff-notification-write'
 const tenantSubmitSchema = z.object({
   category: z.enum(['报事', '报修']),
   facilityScope: z.enum(['公共设施', '套内设施']),
@@ -180,6 +182,17 @@ export async function POST(request: NextRequest) {
       action: WORK_ORDER_ACTION.CREATE,
       summary: `租客端创建工单「${workOrder.title}」（${workOrder.type}）`,
       ...operatorFromAuthUser(user),
+    })
+
+    const tag = businessTagForTenantWorkOrder(workOrder.type)
+    await writeStaffNotifications(prisma, {
+      companyId: user.companyId,
+      buildingId,
+      businessTag: tag,
+      category: 'work_order',
+      entityId: workOrder.id,
+      title: `新报事报修：${workOrder.title}`,
+      summary: `${workOrder.code} · ${workOrder.status} · ${workOrder.type}`,
     })
 
     return NextResponse.json({

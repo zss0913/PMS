@@ -17,7 +17,7 @@ export type EmployeeFormData = {
 }
 
 const POSITIONS = ['保安', '维修工', '保洁', '管理员', '其他'] as const
-const BUSINESS_TYPES = ['工程', '安保', '绿化', '设备', '保洁']
+const BUSINESS_TYPES = ['报修', '巡检', '工程', '安保', '绿化', '设备', '保洁']
 
 type Project = { id: number; name: string; companyId: number }
 type Department = { id: number; name: string; companyId: number }

@@ -40,6 +40,8 @@ type Props = {
 }
 
 const BUSINESS_TYPE_LABELS: Record<string, string> = {
+  报修: '报修',
+  巡检: '巡检',
   工程: '工程',
   安保: '安保',
   绿化: '绿化',

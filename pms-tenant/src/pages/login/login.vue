@@ -38,7 +38,7 @@ async function handleLogin(opts?: LoginOpts) {
     }, 500)
   } catch (e: unknown) {
     const msg = (e as { message?: string })?.message || '登录失败'
-    uni.showToast({ title: msg, icon: 'none' })
+    uni.showToast({ title: msg, icon: 'none', duration: Math.min(6000, 2000 + msg.length * 80) })
   } finally {
     loading.value = false
   }

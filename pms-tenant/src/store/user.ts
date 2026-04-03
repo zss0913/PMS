@@ -124,7 +124,8 @@ export const useUserStore = defineStore('user', {
       uni.setStorageSync('mp_company_id', res.user.companyId)
       uni.setStorageSync('mp_tenant_user_id', res.user.id)
       saveLoginPrefs(res.user)
-      await this.fetchUser()
+      // 登录接口已返回 user/relations；不阻塞在 me，避免第二跳挂死导致一直「登录中」
+      void this.fetchUser()
       return { ok: true as const }
     },
 
@@ -145,7 +146,7 @@ export const useUserStore = defineStore('user', {
       uni.setStorageSync('mp_tenant_user_id', res.user.id)
       saveLoginPrefs(res.user)
       uni.removeStorageSync(PREF_ACTIVE_TENANT_ID)
-      await this.fetchUser()
+      void this.fetchUser()
     },
 
     /** 同一租客账号下切换当前所属租客主体（收窄数据范围） */
@@ -168,7 +169,7 @@ export const useUserStore = defineStore('user', {
       if (res.user.phone) {
         saveActiveTenantPref(res.user.phone, tenantId)
       }
-      await this.fetchUser()
+      void this.fetchUser()
     },
 
     logout() {

@@ -9,6 +9,8 @@ import {
   logWorkOrderActivity,
   operatorFromAuthUser,
 } from '@/lib/work-order-activity-log'
+import { businessTagForTenantWorkOrder } from '@/lib/staff-notification-routing'
+import { writeStaffNotifications } from '@/lib/staff-notification-write'
 
 const workOrderSourceZodEnum = z.enum(
   WORK_ORDER_SOURCE_OPTIONS as unknown as [string, string, ...string[]]
@@ -232,6 +234,17 @@ export async function POST(request: NextRequest) {
       action: WORK_ORDER_ACTION.CREATE,
       summary: `创建工单「${workOrder.title}」，类型 ${workOrder.type}，来源 ${workOrder.source}`,
       ...op,
+    })
+
+    const tag = businessTagForTenantWorkOrder(workOrder.type)
+    await writeStaffNotifications(prisma, {
+      companyId: user.companyId,
+      buildingId: parsed.buildingId,
+      businessTag: tag,
+      category: 'work_order',
+      entityId: workOrder.id,
+      title: `新工单：${workOrder.title}`,
+      summary: `${workOrder.code} · ${workOrder.status} · ${workOrder.type}`,
     })
 
     return NextResponse.json({ success: true, data: { id: workOrder.id, code: workOrder.code } })

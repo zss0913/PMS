@@ -9,6 +9,10 @@ export default defineConfig({
   plugins: [uni()],
   server: {
     port: 5173,
+    // Edge 等浏览器易强缓存 dev 资源，导致仍跑旧脚本（如未走 fetch）；开发态禁止缓存 HTML/模块
+    headers: {
+      'Cache-Control': 'no-store',
+    },
     // H5 开发：页面在 5173、API 在 5000，走代理避免浏览器跨域拦截
     proxy: {
       '/api': {

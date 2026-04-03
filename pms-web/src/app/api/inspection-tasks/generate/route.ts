@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
+import { writeInspectionTaskNotifications } from '@/lib/staff-notification-write'
 
 function genTaskCode() {
   return 'IT' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 6).toUpperCase()
@@ -47,7 +48,7 @@ export async function POST() {
         code = genTaskCode()
       }
 
-      await prisma.inspectionTask.create({
+      const task = await prisma.inspectionTask.create({
         data: {
           code,
           planId: plan.id,
@@ -60,6 +61,14 @@ export async function POST() {
           status: '待执行',
           companyId: user.companyId,
         },
+      })
+      await writeInspectionTaskNotifications(prisma, {
+        companyId: user.companyId,
+        taskId: task.id,
+        planName: plan.name,
+        taskCode: task.code,
+        inspectionType: plan.inspectionType,
+        planUserIds: plan.userIds,
       })
       created.push(plan.name)
     }

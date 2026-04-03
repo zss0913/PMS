@@ -49,6 +49,18 @@
       }
     },
     {
+      "path": "pages/inspection-tasks/detail",
+      "style": {
+        "navigationBarTitleText": "巡检详情"
+      }
+    },
+    {
+      "path": "pages/complaints/detail",
+      "style": {
+        "navigationBarTitleText": "卫生吐槽"
+      }
+    },
+    {
       "path": "pages/announcements/announcements",
       "style": {
         "navigationBarTitleText": "公告"

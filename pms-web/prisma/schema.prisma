@@ -57,6 +57,7 @@ model Company {
   tenantAppMessages TenantAppMessage[]
   receiptIssueRecords ReceiptIssueRecord[]
   invoiceIssueRecords InvoiceIssueRecord[]
+  staffNotifications StaffNotification[]
 }
 
 model Department {
@@ -113,6 +114,7 @@ model Employee {
   role       Role       @relation(fields: [roleId], references: [id])
   project    Project?   @relation(fields: [projectId], references: [id])
   assignedWorkOrders WorkOrder[] @relation("AssignedWorkOrders")
+  staffNotifications StaffNotification[]
 }
 
 // 超级管理员(跨公司)
@@ -763,6 +765,27 @@ model Announcement {
   updatedAt   DateTime @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+/// 员工站内业务通知（报事报修/巡检/吐槽等），按楼宇+管理业务类型投递
+model StaffNotification {
+  id         Int       @id @default(autoincrement())
+  companyId  Int
+  employeeId Int
+  category   String
+  title      String
+  summary    String?
+  entityType String
+  entityId   Int
+  buildingId Int?
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, category, entityType, entityId, employeeId])
+  @@index([companyId, employeeId, createdAt])
 }
 
 // ========== 卫生吐槽 ==========

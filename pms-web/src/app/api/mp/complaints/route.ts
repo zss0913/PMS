@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getMpAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { businessTagForComplaint } from '@/lib/staff-notification-routing'
+import { writeStaffNotifications } from '@/lib/staff-notification-write'
 
 /** 租客端：获取我的吐槽列表 */
 export async function GET(request: NextRequest) {
@@ -91,6 +93,18 @@ export async function POST(request: NextRequest) {
       status: 'pending',
       companyId: user.companyId,
     },
+  })
+
+  const preview =
+    description.length > 80 ? `${description.slice(0, 80)}…` : description
+  await writeStaffNotifications(prisma, {
+    companyId: user.companyId,
+    buildingId,
+    businessTag: businessTagForComplaint(),
+    category: 'complaint',
+    entityId: complaint.id,
+    title: '新的卫生吐槽',
+    summary: preview,
   })
 
   return NextResponse.json({

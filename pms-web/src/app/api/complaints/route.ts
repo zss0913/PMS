@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
+import { businessTagForComplaint } from '@/lib/staff-notification-routing'
+import { writeStaffNotifications } from '@/lib/staff-notification-write'
 
 const createSchema = z.object({
   buildingId: z.number(),
@@ -90,6 +92,19 @@ export async function POST(request: NextRequest) {
         status: 'pending',
         companyId: user.companyId,
       },
+    })
+    const preview =
+      parsed.description.length > 80
+        ? `${parsed.description.slice(0, 80)}…`
+        : parsed.description
+    await writeStaffNotifications(prisma, {
+      companyId: user.companyId,
+      buildingId: parsed.buildingId,
+      businessTag: businessTagForComplaint(),
+      category: 'complaint',
+      entityId: complaint.id,
+      title: '新的卫生吐槽',
+      summary: preview,
     })
     return NextResponse.json({ success: true, data: complaint })
   } catch (e) {
