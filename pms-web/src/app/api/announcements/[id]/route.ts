@@ -9,8 +9,16 @@ const updateSchema = z.object({
   images: z.string().optional().nullable(),
   scope: z.enum(['all', 'specified']).optional(),
   buildingIds: z.array(z.number()).optional(),
-  status: z.enum(['draft', 'published']).optional(),
+  status: z.enum(['draft', 'published', 'offline']).optional(),
 })
+
+function normalizeStatus(
+  s: string
+): 'draft' | 'published' | 'offline' {
+  if (s === 'published' || s === '已发布') return 'published'
+  if (s === 'offline' || s === '已下架') return 'offline'
+  return 'draft'
+}
 
 export async function PUT(
   request: NextRequest,
@@ -56,6 +64,14 @@ export async function PUT(
 
     const body = await request.json()
     const parsed = updateSchema.parse(body)
+    const currentStatus = normalizeStatus(announcement.status)
+
+    if (currentStatus === 'offline') {
+      return NextResponse.json(
+        { success: false, message: '已下架公告不可再编辑或变更状态' },
+        { status: 400 }
+      )
+    }
 
     const updateData: Record<string, unknown> = {}
     if (parsed.title !== undefined) updateData.title = parsed.title
@@ -71,9 +87,20 @@ export async function PUT(
         scope === 'specified' ? JSON.stringify(parsed.buildingIds) : null
     }
     if (parsed.status !== undefined) {
-      updateData.status = parsed.status
-      if (parsed.status === 'published' && announcement.status !== 'published') {
+      if (parsed.status === currentStatus) {
+        updateData.status = parsed.status
+      } else if (currentStatus === 'draft' && parsed.status === 'published') {
+        updateData.status = 'published'
         updateData.publishTime = new Date()
+        updateData.publisherName = user.name
+        updateData.publisherId = user.id
+      } else if (currentStatus === 'published' && parsed.status === 'offline') {
+        updateData.status = 'offline'
+      } else {
+        return NextResponse.json(
+          { success: false, message: '非法状态流转，仅支持 草稿->发布、发布->下架' },
+          { status: 400 }
+        )
       }
     }
 

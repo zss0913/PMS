@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { get } from '@/api/request'
 
@@ -25,6 +25,20 @@ function formatTime(iso: string) {
     return iso
   }
 }
+
+function sanitizeRichHtml(html: string) {
+  if (!html) return ''
+  return html
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+    .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, '')
+    .replace(/\son\w+="[^"]*"/gi, '')
+    .replace(/\son\w+='[^']*'/gi, '')
+    .replace(/\shref="javascript:[^"]*"/gi, '')
+    .replace(/\ssrc="javascript:[^"]*"/gi, '')
+}
+
+const richContent = computed(() => sanitizeRichHtml(row.value?.content || ''))
 
 async function load() {
   if (!qId) return
@@ -69,7 +83,7 @@ onLoad((options) => {
     <view v-else-if="row" class="body">
       <text class="h1">{{ row.title }}</text>
       <text class="time">{{ formatTime(row.publishTime) }}</text>
-      <text class="content">{{ row.content }}</text>
+      <rich-text class="content-rich" :nodes="richContent" />
     </view>
   </view>
 </template>
@@ -109,11 +123,10 @@ onLoad((options) => {
   margin-bottom: 28rpx;
 }
 
-.content {
+.content-rich {
   display: block;
   font-size: 28rpx;
   color: $pms-text-muted;
   line-height: 1.65;
-  white-space: pre-wrap;
 }
 </style>

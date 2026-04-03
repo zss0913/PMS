@@ -9,7 +9,6 @@ const createSchema = z.object({
   images: z.string().optional().nullable(),
   scope: z.enum(['all', 'specified']),
   buildingIds: z.array(z.number()).optional().default([]),
-  status: z.enum(['draft', 'published']),
 })
 
 function parseJsonIds(s: string | null): number[] {
@@ -22,7 +21,15 @@ function parseJsonIds(s: string | null): number[] {
   }
 }
 
-export async function GET(request: NextRequest) {
+function normalizeStatus(
+  s: string
+): 'draft' | 'published' | 'offline' {
+  if (s === 'published' || s === '已发布') return 'published'
+  if (s === 'offline' || s === '已下架') return 'offline'
+  return 'draft'
+}
+
+export async function GET() {
   try {
     const user = await getAuthUser()
     if (!user) {
@@ -54,10 +61,12 @@ export async function GET(request: NextRequest) {
       scope: a.scope,
       buildingIds: parseJsonIds(a.buildingIds),
       publishTime: a.publishTime?.toISOString() ?? null,
-      status: a.status,
+      status: normalizeStatus(a.status),
+      publisherName: a.publisherName,
+      publisherId: a.publisherId,
       readCount: a.readCount,
       companyId: a.companyId,
-      createdAt: a.createdAt,
+      createdAt: a.createdAt.toISOString(),
     }))
 
     return NextResponse.json({
@@ -89,9 +98,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const parsed = createSchema.parse(body)
 
-    const publishTime =
-      parsed.status === 'published' ? new Date() : null
-
     const announcement = await prisma.announcement.create({
       data: {
         title: parsed.title,
@@ -102,8 +108,10 @@ export async function POST(request: NextRequest) {
           parsed.scope === 'specified'
             ? JSON.stringify(parsed.buildingIds ?? [])
             : null,
-        publishTime,
-        status: parsed.status,
+        publishTime: null,
+        status: 'draft',
+        publisherName: user.name,
+        publisherId: user.id,
         companyId: user.companyId,
       },
     })

@@ -12,20 +12,27 @@ type InspectionPlan = {
   inspectionType: string
   cycleType: string
   cycleValue: number
+  cycleWeekday?: number | null
+  cycleMonthDay?: number | null
   cycleLabel: string
   userIds: number[]
-  checkItems: { name: string }[]
+  checkItems: { name: string; nfcTagId?: number }[]
+  buildingId?: number | null
   status: string
   createdAt: string
 }
 
 type Employee = { id: number; name: string }
 
+type Building = { id: number; name: string }
+
 type ApiData = {
   list: InspectionPlan[]
   employees: Employee[]
+  buildings: Building[]
   inspectionTypes: string[]
   cycleTypes: string[]
+  cycleWeekdayOptions: { value: number; label: string }[]
 }
 
 export function InspectionPlanList() {
@@ -82,10 +89,15 @@ export function InspectionPlanList() {
 
   const list = data?.list ?? []
   const employees = data?.employees ?? []
+  const buildings = data?.buildings ?? []
+  const cycleWeekdayOptions = data?.cycleWeekdayOptions ?? []
   const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
     usePagination(list, 15)
   const inspectionTypes = data?.inspectionTypes ?? ['工程', '安保', '设备', '绿化']
   const cycleTypes = data?.cycleTypes ?? ['每天', '每周', '每月']
+
+  const buildingName = (id: number | null | undefined) =>
+    !id ? '-' : buildings.find((b) => b.id === id)?.name ?? `#${id}`
 
   const getPersonnelNames = (userIds: number[]) => {
     if (!userIds.length || !data?.employees) return '-'
@@ -116,6 +128,7 @@ export function InspectionPlanList() {
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
                 <th className="text-left p-4 font-medium">计划名称</th>
+                <th className="text-left p-4 font-medium">楼宇</th>
                 <th className="text-left p-4 font-medium">巡检类型</th>
                 <th className="text-left p-4 font-medium">周期</th>
                 <th className="text-left p-4 font-medium">巡检人员</th>
@@ -126,7 +139,7 @@ export function InspectionPlanList() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="p-12 text-center text-slate-500">
+                  <td colSpan={7} className="p-12 text-center text-slate-500">
                     加载中...
                   </td>
                 </tr>
@@ -137,6 +150,7 @@ export function InspectionPlanList() {
                     className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
                   >
                     <td className="p-4 font-medium">{p.name}</td>
+                    <td className="p-4">{buildingName(p.buildingId)}</td>
                     <td className="p-4">{p.inspectionType}</td>
                     <td className="p-4">{p.cycleLabel}</td>
                     <td className="p-4">{getPersonnelNames(p.userIds)}</td>
@@ -189,8 +203,10 @@ export function InspectionPlanList() {
         <InspectionPlanForm
           plan={editingPlan}
           employees={employees}
+          buildings={buildings}
           inspectionTypes={inspectionTypes}
           cycleTypes={cycleTypes}
+          cycleWeekdayOptions={cycleWeekdayOptions}
           onClose={handleFormClose}
         />
       )}

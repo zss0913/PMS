@@ -55,6 +55,12 @@
       }
     },
     {
+      "path": "pages/inspection-tasks/execute",
+      "style": {
+        "navigationBarTitleText": "执行巡检"
+      }
+    },
+    {
       "path": "pages/complaints/detail",
       "style": {
         "navigationBarTitleText": "卫生吐槽"

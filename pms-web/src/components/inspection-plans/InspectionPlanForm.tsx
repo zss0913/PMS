@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { X, Plus, Trash2 } from 'lucide-react'
+
+type CheckItem = { name: string; nfcTagId: number }
 
 type InspectionPlan = {
   id: number
@@ -9,37 +11,90 @@ type InspectionPlan = {
   inspectionType: string
   cycleType: string
   cycleValue: number
+  cycleWeekday?: number | null
+  cycleMonthDay?: number | null
   userIds: number[]
-  checkItems: { name: string }[]
+  checkItems: CheckItem[]
+  buildingId?: number | null
   status: string
 }
 
 type Employee = { id: number; name: string }
+type Building = { id: number; name: string }
+type NfcOption = { id: number; tagId: string; location: string; buildingName: string }
+
+type WeekdayOpt = { value: number; label: string }
 
 export function InspectionPlanForm({
   plan,
   employees,
+  buildings,
   inspectionTypes,
   cycleTypes,
+  cycleWeekdayOptions,
   onClose,
 }: {
   plan: InspectionPlan | null
   employees: Employee[]
+  buildings: Building[]
   inspectionTypes: string[]
   cycleTypes: string[]
+  cycleWeekdayOptions: WeekdayOpt[]
   onClose: () => void
 }) {
   const [name, setName] = useState('')
   const [inspectionType, setInspectionType] = useState('')
   const [cycleType, setCycleType] = useState('')
   const [cycleValue, setCycleValue] = useState(1)
+  const [cycleWeekday, setCycleWeekday] = useState(1)
+  const [cycleMonthDay, setCycleMonthDay] = useState(1)
+  const [buildingId, setBuildingId] = useState(0)
   const [userIds, setUserIds] = useState<number[]>([])
-  const [checkItems, setCheckItems] = useState<{ name: string }[]>([])
+  const [checkItems, setCheckItems] = useState<CheckItem[]>([{ name: '', nfcTagId: 0 }])
   const [status, setStatus] = useState('active')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [nfcOptions, setNfcOptions] = useState<NfcOption[]>([])
+  const [nfcLoading, setNfcLoading] = useState(false)
 
   const isEdit = !!plan
+
+  const loadNfc = useCallback(async () => {
+    if (!buildingId || !inspectionType) {
+      setNfcOptions([])
+      return
+    }
+    setNfcLoading(true)
+    try {
+      const q = new URLSearchParams({
+        buildingId: String(buildingId),
+        inspectionType,
+        status: 'active',
+      })
+      const res = await fetch(`/api/nfc-tags?${q}`, { credentials: 'include' })
+      const json = await res.json()
+      if (json.success && json.data?.list) {
+        setNfcOptions(
+          json.data.list.map((t: { id: number; tagId: string; location: string; buildingName: string }) => ({
+            id: t.id,
+            tagId: t.tagId,
+            location: t.location,
+            buildingName: t.buildingName,
+          }))
+        )
+      } else {
+        setNfcOptions([])
+      }
+    } catch {
+      setNfcOptions([])
+    } finally {
+      setNfcLoading(false)
+    }
+  }, [buildingId, inspectionType])
+
+  useEffect(() => {
+    void loadNfc()
+  }, [loadNfc])
 
   useEffect(() => {
     if (plan) {
@@ -47,19 +102,31 @@ export function InspectionPlanForm({
       setInspectionType(plan.inspectionType)
       setCycleType(plan.cycleType)
       setCycleValue(plan.cycleValue)
+      setCycleWeekday(plan.cycleWeekday ?? 1)
+      setCycleMonthDay(plan.cycleMonthDay ?? 1)
+      setBuildingId(plan.buildingId ?? 0)
       setUserIds(plan.userIds)
-      setCheckItems(plan.checkItems?.length ? plan.checkItems : [{ name: '' }])
+      const items = plan.checkItems?.length
+        ? plan.checkItems.map((c) => ({
+            name: c.name,
+            nfcTagId: typeof c.nfcTagId === 'number' && c.nfcTagId > 0 ? c.nfcTagId : 0,
+          }))
+        : [{ name: '', nfcTagId: 0 }]
+      setCheckItems(items)
       setStatus(plan.status)
     } else {
       setName('')
       setInspectionType(inspectionTypes[0] || '')
       setCycleType(cycleTypes[0] || '')
       setCycleValue(1)
+      setCycleWeekday(1)
+      setCycleMonthDay(1)
+      setBuildingId(buildings[0]?.id ?? 0)
       setUserIds([])
-      setCheckItems([{ name: '' }])
+      setCheckItems([{ name: '', nfcTagId: 0 }])
       setStatus('active')
     }
-  }, [plan, inspectionTypes, cycleTypes])
+  }, [plan, inspectionTypes, cycleTypes, buildings])
 
   useEffect(() => {
     if (!isEdit && inspectionTypes.length && !inspectionType) {
@@ -71,17 +138,17 @@ export function InspectionPlanForm({
   }, [isEdit, inspectionTypes, cycleTypes, inspectionType, cycleType])
 
   const addCheckItem = () => {
-    setCheckItems((prev) => [...prev, { name: '' }])
+    setCheckItems((prev) => [...prev, { name: '', nfcTagId: 0 }])
   }
 
   const removeCheckItem = (idx: number) => {
     setCheckItems((prev) => prev.filter((_, i) => i !== idx))
   }
 
-  const updateCheckItem = (idx: number, name: string) => {
+  const updateCheckItem = (idx: number, patch: Partial<CheckItem>) => {
     setCheckItems((prev) => {
       const next = [...prev]
-      next[idx] = { name }
+      next[idx] = { ...next[idx], ...patch }
       return next
     })
   }
@@ -93,16 +160,27 @@ export function InspectionPlanForm({
       setError('计划名称必填')
       return
     }
-    const validItems = checkItems.filter((c) => c.name?.trim())
+    if (!buildingId) {
+      setError('请选择楼宇')
+      return
+    }
+    const validItems = checkItems.filter((c) => c.name?.trim() && c.nfcTagId > 0)
+    if (validItems.length === 0) {
+      setError('请至少添加一条检查项目并绑定 NFC')
+      return
+    }
     setSubmitting(true)
     try {
-      const body = {
+      const body: Record<string, unknown> = {
         name: name.trim(),
         inspectionType: inspectionType || inspectionTypes[0],
         cycleType: cycleType || cycleTypes[0],
         cycleValue,
+        cycleWeekday: cycleType === '每周' ? cycleWeekday : null,
+        cycleMonthDay: cycleType === '每月' ? cycleMonthDay : null,
+        buildingId,
         userIds,
-        checkItems: validItems,
+        checkItems: validItems.map((c) => ({ name: c.name.trim(), nfcTagId: c.nfcTagId })),
         ...(isEdit && { status }),
       }
       const url = isEdit ? `/api/inspection-plans/${plan!.id}` : '/api/inspection-plans'
@@ -110,6 +188,7 @@ export function InspectionPlanForm({
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(body),
       })
       const json = await res.json()
@@ -131,14 +210,22 @@ export function InspectionPlanForm({
     )
   }
 
+  const cycleHint =
+    cycleType === '每周'
+      ? '在下方选择每周的星期；周期值为「每隔几周」执行一次（1=每周）。'
+      : cycleType === '每月'
+        ? '在下方选择每月几号生成任务（1-28）；周期值为「每隔几个月」一次。'
+        : '周期值为「每隔几天」生成一次（1=每天）。'
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
           <h2 className="text-lg font-semibold">
             {isEdit ? '编辑巡检计划' : '新建巡检计划'}
           </h2>
           <button
+            type="button"
             onClick={onClose}
             className="p-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
           >
@@ -167,6 +254,22 @@ export function InspectionPlanForm({
             />
           </div>
           <div>
+            <label className="block text-sm font-medium mb-1">所属楼宇 *</label>
+            <select
+              value={buildingId}
+              onChange={(e) => setBuildingId(Number(e.target.value))}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+              required
+            >
+              <option value={0}>请选择楼宇</option>
+              {buildings.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="block text-sm font-medium mb-1">巡检类型 *</label>
             <select
               value={inspectionType}
@@ -180,6 +283,9 @@ export function InspectionPlanForm({
                 </option>
               ))}
             </select>
+            <p className="text-xs text-slate-500 mt-1">
+              检查项目仅可选择该类型、本楼宇下且「启用」的 NFC 点。
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -208,6 +314,39 @@ export function InspectionPlanForm({
               />
             </div>
           </div>
+          <p className="text-xs text-slate-500 -mt-2">{cycleHint}</p>
+          {cycleType === '每周' && (
+            <div>
+              <label className="block text-sm font-medium mb-1">每周星期几</label>
+              <select
+                value={cycleWeekday}
+                onChange={(e) => setCycleWeekday(Number(e.target.value))}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+              >
+                {cycleWeekdayOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {cycleType === '每月' && (
+            <div>
+              <label className="block text-sm font-medium mb-1">每月几号生成</label>
+              <select
+                value={cycleMonthDay}
+                onChange={(e) => setCycleMonthDay(Number(e.target.value))}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+              >
+                {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                  <option key={d} value={d}>
+                    {d} 号
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium mb-1">巡检人员</label>
             <div className="border border-slate-300 dark:border-slate-600 rounded-lg p-3 max-h-32 overflow-y-auto space-y-2">
@@ -230,7 +369,7 @@ export function InspectionPlanForm({
           </div>
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium">检查项目</label>
+              <label className="block text-sm font-medium">检查项目（绑定 NFC）*</label>
               <button
                 type="button"
                 onClick={addCheckItem}
@@ -240,20 +379,42 @@ export function InspectionPlanForm({
                 添加
               </button>
             </div>
+            {nfcLoading && (
+              <p className="text-xs text-slate-500 mb-2">加载 NFC 列表…</p>
+            )}
+            {!nfcLoading && buildingId > 0 && nfcOptions.length === 0 && (
+              <p className="text-xs text-amber-600 mb-2">
+                当前楼宇与类型下没有可用的启用 NFC，请先在「NFC标签」中维护。
+              </p>
+            )}
             <div className="space-y-2">
               {checkItems.map((item, idx) => (
-                <div key={idx} className="flex gap-2">
+                <div key={idx} className="flex flex-col sm:flex-row gap-2 items-stretch">
                   <input
                     type="text"
                     value={item.name}
-                    onChange={(e) => updateCheckItem(idx, e.target.value)}
-                    className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                    onChange={(e) => updateCheckItem(idx, { name: e.target.value })}
+                    className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
                     placeholder="检查项名称"
                   />
+                  <select
+                    value={item.nfcTagId || ''}
+                    onChange={(e) =>
+                      updateCheckItem(idx, { nfcTagId: Number(e.target.value) || 0 })
+                    }
+                    className="sm:w-64 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
+                  >
+                    <option value="">选择 NFC 点</option>
+                    {nfcOptions.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.tagId} · {n.location}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="button"
                     onClick={() => removeCheckItem(idx)}
-                    className="p-2 text-slate-500 hover:text-red-600"
+                    className="p-2 text-slate-500 hover:text-red-600 shrink-0"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -275,7 +436,7 @@ export function InspectionPlanForm({
             </div>
           )}
         </form>
-        <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
+        <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2 shrink-0">
           <button
             type="button"
             onClick={onClose}

@@ -11,6 +11,7 @@ const createSchema = z.object({
   location: z.string().min(1, '位置名称不能为空'),
   description: z.string().optional().default(''),
   inspectionType: z.enum(INSPECTION_TYPES),
+  status: z.enum(['active', 'disabled']).optional().default('active'),
 })
 
 export async function GET(request: NextRequest) {
@@ -26,8 +27,30 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const { searchParams } = new URL(request.url)
+    const inspectionType = searchParams.get('inspectionType')?.trim()
+    const buildingIdStr = searchParams.get('buildingId')
+    const statusQ = searchParams.get('status')?.trim()
+
+    const where: {
+      companyId: number
+      inspectionType?: string
+      buildingId?: number
+      status?: string
+    } = { companyId: user.companyId }
+    if (inspectionType && INSPECTION_TYPES.includes(inspectionType as (typeof INSPECTION_TYPES)[number])) {
+      where.inspectionType = inspectionType
+    }
+    if (buildingIdStr) {
+      const bid = parseInt(buildingIdStr, 10)
+      if (!Number.isNaN(bid)) where.buildingId = bid
+    }
+    if (statusQ === 'active' || statusQ === 'disabled') {
+      where.status = statusQ
+    }
+
     const tags = await prisma.nfcTag.findMany({
-      where: { companyId: user.companyId },
+      where,
       include: {
         building: { select: { id: true, name: true } },
       },
@@ -48,6 +71,7 @@ export async function GET(request: NextRequest) {
       location: t.location,
       description: t.description,
       inspectionType: t.inspectionType,
+      status: t.status,
       companyId: t.companyId,
     }))
 
@@ -104,6 +128,7 @@ export async function POST(request: NextRequest) {
         location: parsed.location,
         description: parsed.description ?? '',
         inspectionType: parsed.inspectionType,
+        status: parsed.status,
         companyId: user.companyId,
       },
     })

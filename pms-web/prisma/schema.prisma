@@ -164,6 +164,8 @@ model Building {
   floors    Floor[]
   rooms     Room[]
   nfcTags   NfcTag[]
+  inspectionPlans InspectionPlan[]
+  inspectionTasks InspectionTask[]
   devices   Device[]
   tenants   Tenant[]
   bills     Bill[]
@@ -682,6 +684,7 @@ model NfcTag {
   inspectionType String
   buildingId     Int
   companyId      Int
+  status         String   @default("active")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -695,16 +698,20 @@ model InspectionPlan {
   inspectionType String
   cycleType      String
   cycleValue     Int      @default(1)
+  cycleWeekday   Int?
+  cycleMonthDay  Int?
   userIds        String?
   route          String?
   checkItems     String?
+  buildingId     Int?
   companyId      Int
   status         String   @default("active")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  tasks   InspectionTask[]
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  building Building? @relation(fields: [buildingId], references: [id], onDelete: Restrict)
+  tasks    InspectionTask[]
 }
 
 model InspectionTask {
@@ -717,6 +724,7 @@ model InspectionTask {
   userIds        String?
   route          String?
   checkItems     String?
+  buildingId     Int?
   status         String
   startedAt      DateTime?
   completedAt    DateTime?
@@ -727,6 +735,7 @@ model InspectionTask {
 
   company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   plan     InspectionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  building Building? @relation(fields: [buildingId], references: [id], onDelete: Restrict)
   records  InspectionRecord[]
 }
 
@@ -755,6 +764,8 @@ model Announcement {
   title       String
   content     String
   images      String?
+  publisherName String?
+  publisherId Int?
   scope       String
   buildingIds  String?
   publishTime DateTime?

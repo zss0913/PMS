@@ -19,11 +19,21 @@ interface BillItem {
 const list = ref<BillItem[]>([])
 const loading = ref(true)
 
+function openDetail(id: number) {
+  uni.navigateTo({ url: `/pages/bills/detail?id=${id}` })
+}
+
 onMounted(async () => {
   try {
-    const res = await get<{ list: BillItem[] }>('/api/mp/bills')
-    if (res.success && res.data) {
-      list.value = res.data.list
+    const res = await get<{ list?: BillItem[] }>('/api/mp/bills')
+    if (res.success) {
+      const topLevelList = (res as unknown as { list?: BillItem[] }).list
+      const wrappedList = res.data?.list
+      list.value = Array.isArray(topLevelList)
+        ? topLevelList
+        : Array.isArray(wrappedList)
+          ? wrappedList
+          : []
     }
   } catch {
     uni.showToast({ title: '加载失败', icon: 'none' })
@@ -38,7 +48,7 @@ onMounted(async () => {
     <view v-if="loading" class="loading">加载中…</view>
     <view v-else-if="list.length === 0" class="empty">暂无账单</view>
     <view v-else class="list">
-      <view v-for="item in list" :key="item.id" class="card">
+      <view v-for="item in list" :key="item.id" class="card" @click="openDetail(item.id)">
         <view class="row">
           <text class="label">账单编号</text>
           <text class="value mono">{{ item.code }}</text>

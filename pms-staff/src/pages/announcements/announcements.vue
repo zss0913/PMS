@@ -12,6 +12,26 @@ interface AnnouncementItem {
 const list = ref<AnnouncementItem[]>([])
 const loading = ref(true)
 
+function stripHtml(html: string) {
+  if (!html) return ''
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function contentPreview(html: string) {
+  const text = stripHtml(html)
+  if (!text) return '（无内容）'
+  return text.length > 80 ? `${text.slice(0, 80)}...` : text
+}
+
 onMounted(async () => {
   try {
     const res = (await get('/api/mp/announcements')) as {
@@ -36,7 +56,7 @@ onMounted(async () => {
     <view v-else class="list">
       <view v-for="item in list" :key="item.id" class="card">
         <view class="title">{{ item.title }}</view>
-        <view class="content">{{ item.content }}</view>
+        <view class="content">{{ contentPreview(item.content) }}</view>
         <view class="time" v-if="item.publishTime">{{ item.publishTime }}</view>
       </view>
     </view>

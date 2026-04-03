@@ -25,6 +25,12 @@
       }
     },
     {
+      "path": "pages/bills/detail",
+      "style": {
+        "navigationBarTitleText": "账单详情"
+      }
+    },
+    {
       "path": "pages/work-orders/work-orders",
       "style": {
         "navigationBarTitleText": "报事报修",
@@ -59,6 +65,18 @@
       "path": "pages/complaints/complaints",
       "style": {
         "navigationBarTitleText": "卫生吐槽"
+      }
+    },
+    {
+      "path": "pages/complaints/submit",
+      "style": {
+        "navigationBarTitleText": "提交卫生吐槽"
+      }
+    },
+    {
+      "path": "pages/complaints/detail",
+      "style": {
+        "navigationBarTitleText": "吐槽详情"
       }
     },
     {

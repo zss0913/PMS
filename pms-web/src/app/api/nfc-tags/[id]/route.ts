@@ -12,6 +12,7 @@ const updateSchema = z.object({
   location: z.string().min(1, '位置名称不能为空').optional(),
   description: z.string().optional(),
   inspectionType: z.enum(INSPECTION_TYPES).optional(),
+  status: z.enum(['active', 'disabled']).optional(),
 })
 
 export async function PUT(
@@ -84,6 +85,7 @@ export async function PUT(
         ...(parsed.location && { location: parsed.location }),
         ...(parsed.description !== undefined && { description: parsed.description }),
         ...(parsed.inspectionType && { inspectionType: parsed.inspectionType }),
+        ...(parsed.status && { status: parsed.status }),
       },
     })
 

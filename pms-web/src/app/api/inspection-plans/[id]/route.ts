@@ -2,14 +2,29 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
+import {
+  parseCheckItemsJson,
+  validatePlanCheckItems,
+  type InspectionCheckItemJson,
+} from '@/lib/inspection-check-items'
+
+const checkItemSchema = z.array(
+  z.object({
+    name: z.string().min(1, '检查项名称不能为空'),
+    nfcTagId: z.number().int().positive(),
+  })
+)
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
   inspectionType: z.enum(['工程', '安保', '设备', '绿化']).optional(),
   cycleType: z.enum(['每天', '每周', '每月']).optional(),
   cycleValue: z.number().min(1).optional(),
+  cycleWeekday: z.number().int().min(1).max(7).optional().nullable(),
+  cycleMonthDay: z.number().int().min(1).max(28).optional().nullable(),
+  buildingId: z.number().int().min(1).optional(),
   userIds: z.array(z.number()).optional(),
-  checkItems: z.any().optional(),
+  checkItems: checkItemSchema.optional(),
   status: z.string().optional(),
 })
 
@@ -49,6 +64,12 @@ export async function GET(
       orderBy: { id: 'asc' },
     })
 
+    const buildings = await prisma.building.findMany({
+      where: { companyId: user.companyId },
+      select: { id: true, name: true },
+      orderBy: { id: 'asc' },
+    })
+
     return NextResponse.json({
       success: true,
       data: {
@@ -58,13 +79,17 @@ export async function GET(
           inspectionType: plan.inspectionType,
           cycleType: plan.cycleType,
           cycleValue: plan.cycleValue,
+          cycleWeekday: plan.cycleWeekday,
+          cycleMonthDay: plan.cycleMonthDay,
           userIds: plan.userIds ? (JSON.parse(plan.userIds) as number[]) : [],
-          checkItems: plan.checkItems ? JSON.parse(plan.checkItems) : [],
+          checkItems: parseCheckItemsJson(plan.checkItems),
+          buildingId: plan.buildingId,
           status: plan.status,
           createdAt: plan.createdAt.toISOString(),
           updatedAt: plan.updatedAt.toISOString(),
         },
         employees,
+        buildings,
       },
     })
   } catch (e) {
@@ -105,16 +130,60 @@ export async function PUT(
     const body = await request.json()
     const parsed = updateSchema.parse(body)
 
+    const nextType = parsed.inspectionType ?? existing.inspectionType
+    const nextBuildingId = parsed.buildingId ?? existing.buildingId
+    if (parsed.buildingId !== undefined) {
+      const b = await prisma.building.findFirst({
+        where: { id: parsed.buildingId, companyId: user.companyId },
+      })
+      if (!b) {
+        return NextResponse.json({ success: false, message: '楼宇不存在' }, { status: 400 })
+      }
+    }
+
+    if (parsed.checkItems !== undefined) {
+      const items: InspectionCheckItemJson[] = parsed.checkItems.map((c) => ({
+        name: c.name.trim(),
+        nfcTagId: c.nfcTagId,
+      }))
+      if (!nextBuildingId) {
+        return NextResponse.json({ success: false, message: '请先为计划选择楼宇' }, { status: 400 })
+      }
+      const v = await validatePlanCheckItems(prisma, user.companyId, nextType, nextBuildingId, items)
+      if (!v.ok) {
+        return NextResponse.json({ success: false, message: v.message }, { status: 400 })
+      }
+    }
+
     const updateData: Record<string, unknown> = {}
     if (parsed.name !== undefined) updateData.name = parsed.name.trim()
     if (parsed.inspectionType !== undefined) updateData.inspectionType = parsed.inspectionType
     if (parsed.cycleType !== undefined) updateData.cycleType = parsed.cycleType
     if (parsed.cycleValue !== undefined) updateData.cycleValue = parsed.cycleValue
+    if (parsed.cycleWeekday !== undefined) updateData.cycleWeekday = parsed.cycleWeekday
+    if (parsed.cycleMonthDay !== undefined) updateData.cycleMonthDay = parsed.cycleMonthDay
+    if (parsed.buildingId !== undefined) updateData.buildingId = parsed.buildingId
     if (parsed.userIds !== undefined) {
       updateData.userIds = parsed.userIds.length > 0 ? JSON.stringify(parsed.userIds) : null
     }
     if (parsed.checkItems !== undefined) {
-      updateData.checkItems = parsed.checkItems ? JSON.stringify(parsed.checkItems) : null
+      const items: InspectionCheckItemJson[] = parsed.checkItems.map((c) => ({
+        name: c.name.trim(),
+        nfcTagId: c.nfcTagId,
+      }))
+      const tags = await prisma.nfcTag.findMany({
+        where: { id: { in: items.map((i) => i.nfcTagId) }, companyId: user.companyId },
+      })
+      const tagMap = new Map(tags.map((t) => [t.id, t]))
+      const enriched = items.map((it) => {
+        const t = tagMap.get(it.nfcTagId)
+        return {
+          ...it,
+          tagId: t?.tagId,
+          location: t ? `${t.location}` : undefined,
+        }
+      })
+      updateData.checkItems = JSON.stringify(enriched)
     }
     if (parsed.status !== undefined) updateData.status = parsed.status
 

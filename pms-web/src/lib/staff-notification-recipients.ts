@@ -30,9 +30,11 @@ export function projectCoversBuilding(
 }
 
 /**
- * 投递规则（按顺序合并去重）：
- * 1. 已绑定项目：若项目配置了 buildingIds 则须包含目标楼宇；若未配置（空）则视为该项目覆盖本公司全部楼宇（避免后台未录入楼宇范围时永远收不到通知）。
- * 2. 若仍无人：projectId 为空的在职员工，只要勾选了对应管理业务类型也接收（常见：只配了「报修」未选所属项目）。
+ * 投递规则（**并集**去重，与后台「所属项目 / 所属部门 / 部门负责人」配置对齐）：
+ * 1. 员工绑定了项目：项目 buildingIds 含该楼，或项目未配楼宇则视为覆盖本公司全部楼宇。
+ * 2. 员工绑定了部门：部门 `buildingIds` 含该楼；**未配置负责楼宇（空数组）时与项目一致，视为本公司全部楼宇**。
+ * 3. 员工作为 **部门负责人**：部门 `buildingIds` 含该楼；未配置时同上。
+ * 4. 兜底：`projectId` 为空 + 勾选对应管理业务类型（仅当上面都未命中任何人时不推荐依赖；仍会并入并集）。
  */
 export async function findRecipientEmployeeIds(
   prisma: PrismaClient,
@@ -52,6 +54,8 @@ export async function findRecipientEmployeeIds(
     )
   }
 
+  const seen = new Set<number>()
+
   const withProject = await prisma.employee.findMany({
     where: {
       companyId,
@@ -65,8 +69,6 @@ export async function findRecipientEmployeeIds(
       project: { select: { buildingIds: true } },
     },
   })
-
-  const seen = new Set<number>()
 
   for (const e of withProject) {
     if (!e.project || e.projectId == null) continue
@@ -82,8 +84,49 @@ export async function findRecipientEmployeeIds(
     seen.add(e.id)
   }
 
-  if (seen.size > 0) {
-    return [...seen]
+  const withDept = await prisma.employee.findMany({
+    where: {
+      companyId,
+      status: 'active',
+      departmentId: { not: null },
+    },
+    select: {
+      id: true,
+      businessTypes: true,
+      department: { select: { buildingIds: true } },
+    },
+  })
+  for (const e of withDept) {
+    if (!e.department) continue
+    if (!parseEmployeeBusinessTypes(e.businessTypes).includes(businessTag)) continue
+    const bids = parseProjectBuildingIds(e.department.buildingIds)
+    if (bids.length > 0) {
+      if (!bids.includes(buildingId)) continue
+    } else {
+      if (!companyBuildingIdSet.has(buildingId)) continue
+    }
+    seen.add(e.id)
+  }
+
+  const deptsWithManager = await prisma.department.findMany({
+    where: { companyId, managerId: { not: null } },
+    select: { managerId: true, buildingIds: true },
+  })
+  for (const d of deptsWithManager) {
+    if (d.managerId == null) continue
+    const bids = parseProjectBuildingIds(d.buildingIds)
+    if (bids.length > 0) {
+      if (!bids.includes(buildingId)) continue
+    } else {
+      if (!companyBuildingIdSet.has(buildingId)) continue
+    }
+    const mgr = await prisma.employee.findFirst({
+      where: { id: d.managerId, companyId, status: 'active' },
+      select: { id: true, businessTypes: true },
+    })
+    if (mgr && parseEmployeeBusinessTypes(mgr.businessTypes).includes(businessTag)) {
+      seen.add(mgr.id)
+    }
   }
 
   const noProject = await prisma.employee.findMany({
@@ -99,12 +142,19 @@ export async function findRecipientEmployeeIds(
       seen.add(e.id)
     }
   }
+
   if (seen.size > 0) {
+    console.log(
+      '[staff-notification] recipients',
+      JSON.stringify({ companyId, buildingId, businessTag, count: seen.size, ids: [...seen] })
+    )
+  } else {
     console.warn(
-      '[staff-notification] used projectId-null fallback',
-      JSON.stringify({ companyId, buildingId, businessTag, employeeIds: [...seen] })
+      '[staff-notification] no recipients',
+      JSON.stringify({ companyId, buildingId, businessTag })
     )
   }
+
   return [...seen]
 }
 

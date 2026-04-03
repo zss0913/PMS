@@ -21,6 +21,7 @@ export type NfcTag = {
   location: string
   description: string | null
   inspectionType: string
+  status?: string
 }
 
 type Building = { id: number; name: string }
@@ -67,6 +68,7 @@ export function NfcTagList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       return false
     return true
   })
+  const statusLabel = (s?: string) => (s === 'disabled' ? '停用' : '启用')
   const { page, pageSize, total, paginatedItems, handlePageChange, handlePageSizeChange } =
     usePagination(filtered, 15)
 
@@ -186,6 +188,7 @@ export function NfcTagList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               <th className="text-left p-4 font-medium">所属楼宇</th>
               <th className="text-left p-4 font-medium">位置名称</th>
               <th className="text-left p-4 font-medium">巡检类型</th>
+              <th className="text-left p-4 font-medium">状态</th>
               <th className="text-left p-4 font-medium min-w-[120px] max-w-[280px]">说明</th>
               <th className="text-left p-4 font-medium w-28">操作</th>
             </tr>
@@ -193,7 +196,7 @@ export function NfcTagList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="p-12 text-center text-slate-500">
+                <td colSpan={7} className="p-12 text-center text-slate-500">
                   加载中...
                 </td>
               </tr>
@@ -207,6 +210,7 @@ export function NfcTagList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   <td className="p-4">{t.buildingName}</td>
                   <td className="p-4">{t.location}</td>
                   <td className="p-4">{t.inspectionType}</td>
+                  <td className="p-4">{statusLabel(t.status)}</td>
                   <td className="p-4 text-slate-600 dark:text-slate-300 max-w-[280px]">
                     <span className="line-clamp-2 break-words" title={t.description ?? undefined}>
                       {t.description?.trim() ? t.description : '—'}

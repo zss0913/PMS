@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getMpAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { parseCheckItemsJson } from '@/lib/inspection-check-items'
+import { normalizeInspectionTaskStatus } from '@/lib/inspection-task-status'
 
-/** 员工端：巡检任务详情（同公司即可查看，便于从消息通知进入） */
+/** 员工端：巡检任务详情（含路线检查项、楼宇、进度） */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getMpAuthUser(request)
+  const user = await getMpAuthUser(_request)
   if (!user || user.type !== 'employee') {
     return NextResponse.json(
       { success: false, message: '未登录或非员工' },
@@ -23,6 +25,9 @@ export async function GET(
 
   const task = await prisma.inspectionTask.findFirst({
     where: { id: taskId, companyId: user.companyId },
+    include: {
+      building: { select: { id: true, name: true } },
+    },
   })
 
   if (!task) {
@@ -39,6 +44,39 @@ export async function GET(
     }
   }
 
+  const checkItems = parseCheckItemsJson(task.checkItems)
+  const tagRows =
+    checkItems.length > 0
+      ? await prisma.nfcTag.findMany({
+          where: { id: { in: checkItems.map((c) => c.nfcTagId) } },
+          select: { id: true, tagId: true, location: true },
+        })
+      : []
+  const tagById = new Map(tagRows.map((t) => [t.id, t]))
+
+  const itemsOut = checkItems.map((c) => {
+    const t = tagById.get(c.nfcTagId)
+    return {
+      name: c.name,
+      nfcTagId: c.nfcTagId,
+      tagId: c.tagId ?? t?.tagId ?? '',
+      location: c.location ?? t?.location ?? '',
+    }
+  })
+
+  const records = await prisma.inspectionRecord.findMany({
+    where: { taskId, companyId: user.companyId },
+    orderBy: { checkedAt: 'asc' },
+  })
+  const doneSet = new Set(records.map((r) => r.tagId))
+
+  const progress = {
+    total: itemsOut.length,
+    done: itemsOut.filter((i) => i.tagId && doneSet.has(i.tagId)).length,
+  }
+
+  const canExecute = userIds.length === 0 || userIds.includes(user.id)
+
   return NextResponse.json({
     success: true,
     data: {
@@ -47,12 +85,17 @@ export async function GET(
       planName: task.planName,
       inspectionType: task.inspectionType,
       scheduledDate: task.scheduledDate.toISOString(),
-      status: task.status,
+      status: normalizeInspectionTaskStatus(task.status),
       startedAt: task.startedAt?.toISOString() ?? null,
       completedAt: task.completedAt?.toISOString() ?? null,
       userIds,
+      canExecute,
+      buildingId: task.buildingId,
+      buildingName: task.building?.name ?? null,
+      checkItems: itemsOut,
+      progress,
+      doneTagIds: [...doneSet],
       route: task.route,
-      checkItems: task.checkItems,
     },
   })
 }

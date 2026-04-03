@@ -5,7 +5,14 @@ import { prisma } from '@/lib/prisma'
 import { mpEmployeeWorkOrderVisibilityWhere } from '@/lib/mp-employee-work-order-scope'
 
 /** 巡检任务：视为「待办」的状态（与库内历史值兼容） */
-const ACTIVE_INSPECTION_STATUSES = ['待巡检', 'pending', '待执行', '执行中', '进行中']
+const ACTIVE_INSPECTION_STATUSES = [
+  '待巡检',
+  'pending',
+  '待执行',
+  '执行中',
+  '巡检中',
+  '进行中',
+]
 
 const TODO_WORK_ORDER_STATUSES = [
   '待派单',
@@ -61,10 +68,10 @@ export async function GET(request: Request) {
 
   const inspectionTasks = inspectionRaw
     .filter((t) => {
-      if (!t.userIds) return false
+      if (!t.userIds?.trim()) return true
       try {
         const ids = JSON.parse(t.userIds) as number[]
-        return ids.includes(userId)
+        return Array.isArray(ids) && ids.includes(userId)
       } catch {
         return false
       }

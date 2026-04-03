@@ -3,6 +3,31 @@ import { getMpAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { formatBillRoomsDisplay } from '@/lib/bill-merged-rooms'
 
+async function resolveEffectiveTenantIds(userId: number, jwtRelations: { tenantId: number; buildingId: number }[] = []) {
+  const tenantUser = await prisma.tenantUser.findUnique({
+    where: { id: userId },
+    select: {
+      relations: {
+        select: { tenantId: true, buildingId: true },
+      },
+    },
+  })
+  const dbRelations = tenantUser?.relations ?? []
+  if (dbRelations.length === 0) {
+    return []
+  }
+  if (jwtRelations.length === 0) {
+    return Array.from(new Set(dbRelations.map((r) => r.tenantId)))
+  }
+  const scoped = dbRelations.filter((r) =>
+    jwtRelations.some(
+      (jr) => jr.tenantId === r.tenantId && jr.buildingId === r.buildingId
+    )
+  )
+  const effective = scoped.length > 0 ? scoped : dbRelations
+  return Array.from(new Set(effective.map((r) => r.tenantId)))
+}
+
 /** 租客端：获取当前租客的账单列表（仅租客管理员可看） */
 export async function GET(request: NextRequest) {
   const user = await getMpAuthUser(request)
@@ -12,7 +37,7 @@ export async function GET(request: NextRequest) {
       { status: 401 }
     )
   }
-  const tenantIds = user.relations?.map((r) => r.tenantId) ?? []
+  const tenantIds = await resolveEffectiveTenantIds(user.id, user.relations ?? [])
   if (tenantIds.length === 0) {
     return NextResponse.json({ success: true, list: [] })
   }

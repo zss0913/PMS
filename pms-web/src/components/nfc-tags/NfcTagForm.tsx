@@ -27,6 +27,7 @@ export function NfcTagForm({
   const [location, setLocation] = useState('')
   const [description, setDescription] = useState('')
   const [inspectionType, setInspectionType] = useState<string>('工程')
+  const [status, setStatus] = useState<'active' | 'disabled'>('active')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -39,12 +40,14 @@ export function NfcTagForm({
       setLocation(tag.location)
       setDescription(tag.description ?? '')
       setInspectionType(tag.inspectionType)
+      setStatus(tag.status === 'disabled' ? 'disabled' : 'active')
     } else {
       setTagId('')
       setBuildingId(buildings[0]?.id ?? 0)
       setLocation('')
       setDescription('')
       setInspectionType('工程')
+      setStatus('active')
     }
   }, [tag, buildings])
 
@@ -59,6 +62,7 @@ export function NfcTagForm({
         location,
         description,
         inspectionType,
+        status,
       }
       const url = isEdit ? `/api/nfc-tags/${tag!.id}` : '/api/nfc-tags'
       const method = isEdit ? 'PUT' : 'POST'
@@ -161,6 +165,17 @@ export function NfcTagForm({
                   {o.label}
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">启用状态</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as 'active' | 'disabled')}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+            >
+              <option value="active">启用</option>
+              <option value="disabled">停用</option>
             </select>
           </div>
         </form>

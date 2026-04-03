@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getMpAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { normalizeInspectionTaskStatus } from '@/lib/inspection-task-status'
 
 /** 员工端：获取待巡检任务列表 */
 export async function GET(request: NextRequest) {
@@ -13,20 +14,31 @@ export async function GET(request: NextRequest) {
   }
 
   const status = request.nextUrl.searchParams.get('status')
+  const where: {
+    companyId: number
+    OR?: ({ status: string } | { status: string })[]
+    status?: string
+  } = { companyId: user.companyId }
+  if (status) {
+    if (status === '巡检中') {
+      where.OR = [{ status: '巡检中' }, { status: '执行中' }]
+    } else {
+      where.status = status
+    }
+  }
+
   const tasks = await prisma.inspectionTask.findMany({
-    where: {
-      companyId: user.companyId,
-      ...(status ? { status } : {}),
-    },
+    where,
+    include: { building: { select: { name: true } } },
     orderBy: { scheduledDate: 'desc' },
   })
 
   const userId = user.id
   const filtered = tasks.filter((t) => {
-    if (!t.userIds) return false
+    if (!t.userIds?.trim()) return true
     try {
       const ids = JSON.parse(t.userIds) as number[]
-      return ids.includes(userId)
+      return Array.isArray(ids) && ids.includes(userId)
     } catch {
       return false
     }
@@ -37,11 +49,12 @@ export async function GET(request: NextRequest) {
     code: t.code,
     planName: t.planName,
     inspectionType: t.inspectionType,
-    scheduledDate: t.scheduledDate,
-    status: t.status,
-    startedAt: t.startedAt,
-    completedAt: t.completedAt,
+    scheduledDate: t.scheduledDate.toISOString(),
+    status: normalizeInspectionTaskStatus(t.status),
+    buildingName: t.building?.name ?? null,
+    startedAt: t.startedAt?.toISOString() ?? null,
+    completedAt: t.completedAt?.toISOString() ?? null,
   }))
 
-  return NextResponse.json({ success: true, list })
+  return NextResponse.json({ success: true, data: { list } })
 }

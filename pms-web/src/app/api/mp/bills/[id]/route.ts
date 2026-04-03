@@ -3,6 +3,39 @@ import { getMpAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { formatBillRoomsDisplay } from '@/lib/bill-merged-rooms'
 
+async function resolveEffectiveTenantIds(userId: number, jwtRelations: { tenantId: number; buildingId: number }[] = []) {
+  const tenantUser = await prisma.tenantUser.findUnique({
+    where: { id: userId },
+    select: {
+      relations: {
+        select: { tenantId: true, buildingId: true },
+      },
+    },
+  })
+  const dbRelations = tenantUser?.relations ?? []
+  if (dbRelations.length === 0) {
+    return []
+  }
+  if (jwtRelations.length === 0) {
+    return Array.from(new Set(dbRelations.map((r) => r.tenantId)))
+  }
+  const scoped = dbRelations.filter((r) =>
+    jwtRelations.some(
+      (jr) => jr.tenantId === r.tenantId && jr.buildingId === r.buildingId
+    )
+  )
+  const effective = scoped.length > 0 ? scoped : dbRelations
+  return Array.from(new Set(effective.map((r) => r.tenantId)))
+}
+
+function billIsOverdue(dueDate: Date, paymentStatus: string): boolean {
+  if (paymentStatus === 'paid') return false
+  const t = new Date()
+  const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+  const due = dueDate.toISOString().slice(0, 10)
+  return due < today
+}
+
 /** 租客端：账单详情（须为本账号关联租客下的账单） */
 export async function GET(
   request: NextRequest,
@@ -17,7 +50,7 @@ export async function GET(
       )
     }
 
-    const tenantIds = user.relations?.map((r) => r.tenantId) ?? []
+    const tenantIds = await resolveEffectiveTenantIds(user.id, user.relations ?? [])
     if (tenantIds.length === 0) {
       return NextResponse.json({ success: false, message: '账单不存在' }, { status: 404 })
     }
@@ -65,9 +98,12 @@ export async function GET(
         accountReceivable: Number(bill.accountReceivable),
         amountPaid: Number(bill.amountPaid),
         amountDue: Number(bill.amountDue),
+        invoiceIssuedAmount: Number(bill.invoiceIssuedAmount),
+        receiptIssuedAmount: Number(bill.receiptIssuedAmount),
         status: bill.status,
         paymentStatus: bill.paymentStatus,
         dueDate: bill.dueDate,
+        overdue: billIsOverdue(bill.dueDate, bill.paymentStatus),
         tenantName: bill.tenant?.companyName,
         buildingName: bill.building?.name,
         room: formatBillRoomsDisplay(bill.remark, bill.room),
