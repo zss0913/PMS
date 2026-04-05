@@ -98,20 +98,30 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const claimTime = new Date()
     await prisma.$transaction(async (tx) => {
+      const claimed = await tx.tenantInviteCode.updateMany({
+        where: {
+          id: invite.id,
+          usedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gte: claimTime } }],
+        },
+        data: {
+          usedAt: claimTime,
+          usedByTenantUserId: tenantUser!.id,
+        },
+      })
+
+      if (claimed.count !== 1) {
+        throw new Error('邀请码已使用或已过期')
+      }
+
       await tx.tenantUserRelation.create({
         data: {
           tenantUserId: tenantUser!.id,
           tenantId,
           buildingId,
           isAdmin: false,
-        },
-      })
-      await tx.tenantInviteCode.update({
-        where: { id: invite.id },
-        data: {
-          usedAt: new Date(),
-          usedByTenantUserId: tenantUser!.id,
         },
       })
     })
@@ -139,6 +149,9 @@ export async function POST(request: NextRequest) {
         { success: false, message: '参数错误', errors: e.errors },
         { status: 400 }
       )
+    }
+    if (e instanceof Error && e.message === '邀请码已使用或已过期') {
+      return NextResponse.json({ success: false, message: e.message }, { status: 400 })
     }
     console.error(e)
     return NextResponse.json({ success: false, message: '服务器错误' }, { status: 500 })
