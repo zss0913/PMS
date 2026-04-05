@@ -34,20 +34,20 @@ export function getApiBaseUrl(): string {
 
     if (import.meta.env.DEV && hostname && !isLoopback) {
       if (envBase) return envBase
-      return `${protocol}//${hostname}:5000`
+      return `${protocol}//${hostname}:5001`
     }
 
     if (!import.meta.env.DEV && hostname && !isLoopback) {
       if (envBase) return envBase
-      return `${protocol}//${hostname}:5000`
+      return `${protocol}//${hostname}:5001`
     }
 
     if (envBase) return envBase
-    return 'http://localhost:5000'
+    return 'http://localhost:5001'
   }
 
   if (envBase) return envBase
-  return 'http://localhost:5000'
+  return 'http://localhost:5001'
 }
 
 function buildRequestUrl(optionsUrl: string, base: string): string {
@@ -86,7 +86,7 @@ function networkFailHint(base: string, raw: string): string {
   const useViteProxy = isBrowser() && isDev && base === ''
   if (isBrowser() && isDev) {
     if (useViteProxy) {
-      return `${raw} 无法连接后端：请启动 pms-web（npm run dev，端口 5000），本页 /api 由 Vite 转发。`
+      return `${raw} 无法连接后端：请启动 pms-web（npm run dev，端口 5001），本页 /api 由 Vite 转发。`
     }
     if (isLocalBase(base)) {
       return `${raw} 请确认 VITE_API_BASE_URL 与后端可访问；手机勿用 localhost。`
@@ -150,7 +150,7 @@ async function requestViaFetch<T>(
     }
     if (res.status === 502 || res.status === 503 || res.status === 504) {
       throw new Error(
-        `网关错误（${res.status}）：请确认 pms-web 已在 5000 端口运行（Vite 将 /api 代理到该端口）。`
+        `网关错误（${res.status}）：请确认 pms-web 已在 5001 端口运行（Vite 将 /api 代理到该端口）。`
       )
     }
     return data
@@ -200,7 +200,7 @@ export function request<T = unknown>(
         if (sc === 502 || sc === 503 || sc === 504) {
           reject(
             new Error(
-              `网关错误（${sc}）：请确认已在 pms-web 执行 npm run dev，且监听 5000（H5 的 /api 由 Vite 代理到该端口）。`
+              `网关错误（${sc}）：请确认已在 pms-web 执行 npm run dev，且监听 5001（H5 的 /api 由 Vite 代理到该端口）。`
             )
           )
           return

@@ -13,14 +13,14 @@ export default defineConfig({
     headers: {
       'Cache-Control': 'no-store',
     },
-    // H5 开发：页面在 5173、API 在 5000，走代理避免浏览器跨域拦截
+    // H5 开发：页面在 5173、API 在 5001，走代理避免浏览器跨域拦截
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:5000',
+        target: 'http://127.0.0.1:5001',
         changeOrigin: true,
       },
       '/uploads': {
-        target: 'http://127.0.0.1:5000',
+        target: 'http://127.0.0.1:5001',
         changeOrigin: true,
       },
     },

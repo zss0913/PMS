@@ -40,7 +40,7 @@ npm run db:seed
 npm run dev
 ```
 
-访问 http://localhost:5000
+访问 http://localhost:5001
 
 ### 测试账号
 

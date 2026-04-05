@@ -166,7 +166,7 @@ export async function runWorkOrderAdvance(
           return {
             ok: false,
             message:
-              'Prisma 客户端未包含「费用合计」字段定义。请先停止本机的 Next 开发服务（占用的 5000 端口），在 pms-web 目录执行：npx prisma generate，再重新启动服务。',
+              'Prisma 客户端未包含「费用合计」字段定义。请先停止本机的 Next 开发服务（占用的 5001 端口），在 pms-web 目录执行：npx prisma generate，再重新启动服务。',
             status: 503,
           }
         }
@@ -229,7 +229,7 @@ export async function runWorkOrderAdvance(
           return {
             ok: false,
             message:
-              'Prisma 客户端未包含「费用合计」字段定义。请先停止本机的 Next 开发服务（占用的 5000 端口），在 pms-web 目录执行：npx prisma generate，再重新启动服务。',
+              'Prisma 客户端未包含「费用合计」字段定义。请先停止本机的 Next 开发服务（占用的 5001 端口），在 pms-web 目录执行：npx prisma generate，再重新启动服务。',
             status: 503,
           }
         }

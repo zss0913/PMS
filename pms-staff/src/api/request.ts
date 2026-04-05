@@ -23,21 +23,21 @@ export function getApiBaseUrl(): string {
 
       if (import.meta.env.DEV && hostname && !isLoopback) {
         if (envBase) return envBase
-        return `${protocol}//${hostname}:5000`
+        return `${protocol}//${hostname}:5001`
       }
 
       if (!import.meta.env.DEV && hostname && !isLoopback) {
         if (envBase) return envBase
-        return `${protocol}//${hostname}:5000`
+        return `${protocol}//${hostname}:5001`
       }
     }
 
     if (envBase) return envBase
-    return 'http://localhost:5000'
+    return 'http://localhost:5001'
   }
 
   if (envBase) return envBase
-  return 'http://localhost:5000'
+  return 'http://localhost:5001'
 }
 
 /** 工单图片等为相对路径 /uploads/... 时，H5 需拼成完整 URL 才能显示与 previewImage */
@@ -108,7 +108,7 @@ export function request<T = unknown>(
         let hint = ''
         if (isH5 && isDev && base === '') {
           hint =
-            ' 无法连接后端：请启动 pms-web（npm run dev，端口 5000）。本机 localhost 走 Vite /api 代理。'
+            ' 无法连接后端：请启动 pms-web（npm run dev，端口 5001）。本机 localhost 走 Vite /api 代理。'
         } else if (isH5 && isLocalBase(base)) {
           hint =
             ' 请确认 VITE_API_BASE_URL 与 pms-web 可访问；手机调试勿用 localhost。'
