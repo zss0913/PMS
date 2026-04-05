@@ -273,6 +273,51 @@ async function main() {
     })
   }
 
+  /** 租客小程序 /api/mp/announcements 仅展示已发布；仅有草稿时列表仍为空，故按「已发布条数」补种 */
+  const publishedAnnouncementCount = await prisma.announcement.count({
+    where: {
+      companyId: company.id,
+      status: { in: ['published', '已发布'] },
+    },
+  })
+  if (publishedAnnouncementCount === 0) {
+    const pub = await prisma.employee.findFirst({ where: { companyId: company.id } })
+    const publisherName = pub?.name ?? '物业管理处'
+    const publisherId = pub?.id ?? null
+    await prisma.announcement.createMany({
+      data: [
+        {
+          title: '关于大厦消防演练的通知',
+          content:
+            '<p>定于本周五 15:00 进行消防疏散演练，请各租户配合现场指引。</p>',
+          images: null,
+          scope: 'all',
+          buildingIds: null,
+          publishTime: new Date(),
+          status: 'published',
+          readCount: 0,
+          companyId: company.id,
+          publisherName,
+          publisherId,
+        },
+        {
+          title: 'A座电梯维保暂停使用说明',
+          content: '<p>A座客梯将于周六上午例行维保，请优先使用货梯出入。</p>',
+          images: null,
+          scope: 'specified',
+          buildingIds: JSON.stringify([building.id]),
+          publishTime: new Date(),
+          status: '已发布',
+          readCount: 0,
+          companyId: company.id,
+          publisherName,
+          publisherId,
+        },
+      ],
+    })
+    console.log('Announcements seeded (小程序公告列表可见)')
+  }
+
   console.log('Seed completed!')
 }
 

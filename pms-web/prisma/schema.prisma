@@ -55,6 +55,7 @@ model Company {
   billActivityLogs BillActivityLog[]
   billAttachments  BillAttachment[]
   tenantAppMessages TenantAppMessage[]
+  tenantInviteCodes TenantInviteCode[]
   receiptIssueRecords ReceiptIssueRecord[]
   invoiceIssueRecords InvoiceIssueRecord[]
   staffNotifications StaffNotification[]
@@ -231,6 +232,7 @@ model Tenant {
   workOrders  WorkOrder[]
   complaints  Complaint[]
   appMessages TenantAppMessage[]
+  inviteCodes TenantInviteCode[]
 
   @@unique([companyId, companyName])
 }
@@ -293,6 +295,25 @@ model TenantAppMessage {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, createdAt])
+  @@index([companyId])
+}
+
+/// 租客管理员生成的一次性邀请码，新成员凭码绑定手机号后加入对应租客主体
+model TenantInviteCode {
+  id                    Int       @id @default(autoincrement())
+  code                  String    @unique
+  tenantId              Int
+  companyId             Int
+  createdByTenantUserId Int?
+  expiresAt             DateTime?
+  usedAt                DateTime?
+  usedByTenantUserId    Int?
+  createdAt             DateTime  @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
   @@index([companyId])
 }
 
@@ -524,6 +545,8 @@ model Payment {
   companyId      Int
   /// 租客端「工单费用」在线支付：下单时关联待缴账单，支付成功前为 pending
   relatedBillId  Int?
+  /// 租客端多笔账单合并支付：pending 阶段存账单 ID 列表 JSON（number[]），成功入账后清空语义由业务保证
+  pendingBillIdsJson String?
   createdAt      DateTime @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
