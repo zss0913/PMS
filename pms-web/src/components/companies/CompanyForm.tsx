@@ -12,6 +12,10 @@ type FormData = {
   address: string
   appId: string
   appSecret: string
+  wechatMchId: string
+  wechatMchSerialNo: string
+  wechatApiV3Key: string
+  wechatPrivateKeyPem: string
   status: 'active' | 'inactive'
 }
 
@@ -33,6 +37,10 @@ export function CompanyForm({
     address: '',
     appId: '',
     appSecret: '',
+    wechatMchId: '',
+    wechatMchSerialNo: '',
+    wechatApiV3Key: '',
+    wechatPrivateKeyPem: '',
     status: 'active',
   })
 
@@ -59,6 +67,10 @@ export function CompanyForm({
           address: c.address ?? '',
           appId: c.appId ?? '',
           appSecret: c.appSecret ?? '',
+          wechatMchId: c.wechatMchId ?? '',
+          wechatMchSerialNo: c.wechatMchSerialNo ?? '',
+          wechatApiV3Key: c.wechatApiV3Key ?? '',
+          wechatPrivateKeyPem: c.wechatPrivateKeyPem ?? '',
           status: c.status === 'inactive' ? 'inactive' : 'active',
         })
       } catch (e) {
@@ -93,6 +105,10 @@ export function CompanyForm({
         address: form.address.trim() || null,
         appId: form.appId.trim() || null,
         appSecret: form.appSecret.trim() || null,
+        wechatMchId: form.wechatMchId.trim() || null,
+        wechatMchSerialNo: form.wechatMchSerialNo.trim() || null,
+        wechatApiV3Key: form.wechatApiV3Key.trim() || null,
+        wechatPrivateKeyPem: form.wechatPrivateKeyPem.trim() || null,
         status: form.status,
       }
       const url = mode === 'edit' && id ? `/api/companies/${id}` : '/api/companies'
@@ -207,6 +223,49 @@ export function CompanyForm({
             onChange={(e) => setForm((p) => ({ ...p, appSecret: e.target.value }))}
             className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
             placeholder="请输入 AppSecret（可选）"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">微信商户号</label>
+          <input
+            type="text"
+            value={form.wechatMchId}
+            onChange={(e) => setForm((p) => ({ ...p, wechatMchId: e.target.value }))}
+            className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+            placeholder="请输入微信支付商户号（可选）"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">商户证书序列号</label>
+          <input
+            type="text"
+            value={form.wechatMchSerialNo}
+            onChange={(e) => setForm((p) => ({ ...p, wechatMchSerialNo: e.target.value }))}
+            className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+            placeholder="请输入微信商户证书序列号（可选）"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">APIv3 Key</label>
+          <input
+            type="text"
+            value={form.wechatApiV3Key}
+            onChange={(e) => setForm((p) => ({ ...p, wechatApiV3Key: e.target.value }))}
+            className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+            placeholder="请输入微信支付 APIv3 Key（可选）"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">商户私钥 PEM</label>
+          <textarea
+            value={form.wechatPrivateKeyPem}
+            onChange={(e) => setForm((p) => ({ ...p, wechatPrivateKeyPem: e.target.value }))}
+            className="w-full min-h-40 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+            placeholder="请输入微信支付商户私钥 PEM（可选）"
           />
         </div>
 
