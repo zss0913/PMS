@@ -20,6 +20,10 @@ model Company {
   address   String?
   appId     String?
   appSecret String?
+  wechatMchId String?
+  wechatMchSerialNo String?
+  wechatApiV3Key String?
+  wechatPrivateKeyPem String?
   status    String   @default("active")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -10,6 +10,10 @@ const createSchema = z.object({
   address: z.string().optional().nullable(),
   appId: z.string().optional().nullable(),
   appSecret: z.string().optional().nullable(),
+  wechatMchId: z.string().optional().nullable(),
+  wechatMchSerialNo: z.string().optional().nullable(),
+  wechatApiV3Key: z.string().optional().nullable(),
+  wechatPrivateKeyPem: z.string().optional().nullable(),
   status: z.enum(['active', 'inactive']).default('active'),
 })
 
@@ -44,6 +48,10 @@ export async function POST(request: NextRequest) {
         address: parsed.address ?? null,
         appId: parsed.appId ?? null,
         appSecret: parsed.appSecret ?? null,
+        wechatMchId: parsed.wechatMchId ?? null,
+        wechatMchSerialNo: parsed.wechatMchSerialNo ?? null,
+        wechatApiV3Key: parsed.wechatApiV3Key ?? null,
+        wechatPrivateKeyPem: parsed.wechatPrivateKeyPem ?? null,
         status: parsed.status,
       },
     })

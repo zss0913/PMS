@@ -94,6 +94,8 @@ export async function GET(
         code: bill.code,
         ruleName: bill.ruleName,
         feeType: bill.feeType,
+        billSource: bill.billSource,
+        workOrderId: bill.workOrderId,
         period: bill.period,
         accountReceivable: Number(bill.accountReceivable),
         amountPaid: Number(bill.amountPaid),
