@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client'
 import { isPendingStatus, isProcessingStatus, normalizeComplaintStatus } from '@/lib/complaint-status'
+import { insertComplaintActivityLog } from '@/lib/complaint-activity-log'
 
 export type ComplaintStaffActionBody = {
   status?: string
@@ -67,6 +68,25 @@ export async function applyComplaintStaffAction(
         assignedTo: aid,
       },
     })
+    const [actorEmp, assigneeEmp] = await Promise.all([
+      prisma.employee.findFirst({
+        where: { id: actorEmployeeId, companyId },
+        select: { name: true },
+      }),
+      prisma.employee.findFirst({
+        where: { id: aid, companyId },
+        select: { name: true },
+      }),
+    ])
+    await insertComplaintActivityLog(prisma, {
+      complaintId,
+      companyId,
+      action: '受理',
+      summary: `员工「${actorEmp?.name ?? '?'}」受理为「处理中」，指派处理人「${assigneeEmp?.name ?? '?'}」`,
+      operatorType: 'employee',
+      operatorId: actorEmployeeId,
+      operatorName: actorEmp?.name ?? null,
+    })
     return { ok: true }
   }
 
@@ -98,6 +118,21 @@ export async function applyComplaintStaffAction(
         handledBy: actorEmployeeId,
         handledAt: new Date(),
       },
+    })
+    const finisher = await prisma.employee.findFirst({
+      where: { id: actorEmployeeId, companyId },
+      select: { name: true },
+    })
+    const summary =
+      resText.length > 400 ? `${resText.slice(0, 400)}…` : resText
+    await insertComplaintActivityLog(prisma, {
+      complaintId,
+      companyId,
+      action: '办结',
+      summary: `处理人「${finisher?.name ?? '?'}」办结为「已处理」。说明：${summary}`,
+      operatorType: 'employee',
+      operatorId: actorEmployeeId,
+      operatorName: finisher?.name ?? null,
     })
     return { ok: true }
   }

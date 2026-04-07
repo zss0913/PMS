@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { X, Plus, Trash2 } from 'lucide-react'
-
-type CheckItem = { name: string; nfcTagId: number }
+import { useState, useEffect, useRef } from 'react'
+import { GripVertical, X } from 'lucide-react'
+import { planTypeMatchesCategory } from '@/lib/inspection-point-types'
+import type { CycleScheduleV1, DailySlot, WeeklySlot, MonthlySlot } from '@/lib/inspection-cycle-schedule'
 
 type InspectionPlan = {
   id: number
@@ -13,17 +13,93 @@ type InspectionPlan = {
   cycleValue: number
   cycleWeekday?: number | null
   cycleMonthDay?: number | null
+  cycleSchedule?: CycleScheduleV1 | null
+  requirePhoto?: boolean
   userIds: number[]
-  checkItems: CheckItem[]
+  checkItems: { name: string; nfcTagId?: number }[]
+  inspectionPointIds?: number[]
   buildingId?: number | null
   status: string
 }
 
 type Employee = { id: number; name: string }
 type Building = { id: number; name: string }
-type NfcOption = { id: number; tagId: string; location: string; buildingName: string }
 
 type WeekdayOpt = { value: number; label: string }
+
+/** 巡检点列表项（含位置，供计划路线展示） */
+type PointOption = { id: number; name: string; inspectionCategory: string; location: string }
+
+const SCHEDULE_V = 1 as const
+
+/** 位置为空时显示两条横线样式 */
+function formatPointLocation(raw: string | null | undefined): string {
+  const s = (raw ?? '').trim()
+  return s || '--'
+}
+
+function defaultSlots(
+  cycleType: string,
+  count: number,
+  legacyWeekday?: number | null,
+  legacyMonthDay?: number | null
+): DailySlot[] | WeeklySlot[] | MonthlySlot[] {
+  const n = Math.max(1, count)
+  if (cycleType === '每天') {
+    return Array.from({ length: n }, () => ({ time: '09:00' }))
+  }
+  if (cycleType === '每周') {
+    const wd = legacyWeekday && legacyWeekday >= 1 && legacyWeekday <= 7 ? legacyWeekday : 1
+    return Array.from({ length: n }, () => ({ weekday: wd, time: '09:00' }))
+  }
+  const md = legacyMonthDay && legacyMonthDay >= 1 && legacyMonthDay <= 28 ? legacyMonthDay : 1
+  return Array.from({ length: n }, () => ({ monthDay: md, time: '09:00' }))
+}
+
+function scheduleToSlots(
+  cycleType: string,
+  sch: CycleScheduleV1 | null | undefined,
+  cycleValue: number,
+  legacyWeekday?: number | null,
+  legacyMonthDay?: number | null
+): DailySlot[] | WeeklySlot[] | MonthlySlot[] {
+  if (sch && sch.v === SCHEDULE_V && Array.isArray(sch.slots) && sch.slots.length > 0) {
+    if (cycleType === '每天' && sch.kind === 'daily') return sch.slots
+    if (cycleType === '每周' && sch.kind === 'weekly') return sch.slots
+    if (cycleType === '每月' && sch.kind === 'monthly') return sch.slots
+  }
+  return defaultSlots(cycleType, cycleValue, legacyWeekday, legacyMonthDay)
+}
+
+/** 将列表中一项从 fromIndex 移到 toIndex（用于路线拖拽排序） */
+function reorderIds<T>(list: T[], fromIndex: number, toIndex: number): T[] {
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= list.length ||
+    toIndex >= list.length
+  ) {
+    return list
+  }
+  const next = [...list]
+  const [removed] = next.splice(fromIndex, 1)
+  next.splice(toIndex, 0, removed)
+  return next
+}
+
+function buildCycleSchedulePayload(
+  cycleType: string,
+  slots: DailySlot[] | WeeklySlot[] | MonthlySlot[]
+): CycleScheduleV1 {
+  if (cycleType === '每天') {
+    return { v: SCHEDULE_V, kind: 'daily', slots: slots as DailySlot[] }
+  }
+  if (cycleType === '每周') {
+    return { v: SCHEDULE_V, kind: 'weekly', slots: slots as WeeklySlot[] }
+  }
+  return { v: SCHEDULE_V, kind: 'monthly', slots: slots as MonthlySlot[] }
+}
 
 export function InspectionPlanForm({
   plan,
@@ -46,55 +122,66 @@ export function InspectionPlanForm({
   const [inspectionType, setInspectionType] = useState('')
   const [cycleType, setCycleType] = useState('')
   const [cycleValue, setCycleValue] = useState(1)
-  const [cycleWeekday, setCycleWeekday] = useState(1)
-  const [cycleMonthDay, setCycleMonthDay] = useState(1)
+  const [slots, setSlots] = useState<DailySlot[] | WeeklySlot[] | MonthlySlot[]>([{ time: '09:00' }])
   const [buildingId, setBuildingId] = useState(0)
   const [userIds, setUserIds] = useState<number[]>([])
-  const [checkItems, setCheckItems] = useState<CheckItem[]>([{ name: '', nfcTagId: 0 }])
+  const [selectedPointIds, setSelectedPointIds] = useState<number[]>([])
+  const [requirePhoto, setRequirePhoto] = useState(true)
   const [status, setStatus] = useState('active')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [nfcOptions, setNfcOptions] = useState<NfcOption[]>([])
-  const [nfcLoading, setNfcLoading] = useState(false)
+  const [pointOptions, setPointOptions] = useState<PointOption[]>([])
+  const [pointsLoading, setPointsLoading] = useState(false)
+  const routeDragFrom = useRef<number | null>(null)
 
   const isEdit = !!plan
 
-  const loadNfc = useCallback(async () => {
-    if (!buildingId || !inspectionType) {
-      setNfcOptions([])
-      return
-    }
-    setNfcLoading(true)
-    try {
-      const q = new URLSearchParams({
-        buildingId: String(buildingId),
-        inspectionType,
-        status: 'active',
-      })
-      const res = await fetch(`/api/nfc-tags?${q}`, { credentials: 'include' })
-      const json = await res.json()
-      if (json.success && json.data?.list) {
-        setNfcOptions(
-          json.data.list.map((t: { id: number; tagId: string; location: string; buildingName: string }) => ({
-            id: t.id,
-            tagId: t.tagId,
-            location: t.location,
-            buildingName: t.buildingName,
-          }))
-        )
-      } else {
-        setNfcOptions([])
+  useEffect(() => {
+    let cancelled = false
+    async function loadPoints() {
+      if (!buildingId || !inspectionType) {
+        setPointOptions([])
+        return
       }
-    } catch {
-      setNfcOptions([])
-    } finally {
-      setNfcLoading(false)
+      setPointsLoading(true)
+      try {
+        const q = new URLSearchParams({
+          buildingId: String(buildingId),
+          status: 'enabled',
+        })
+        const res = await fetch(`/api/inspection-points?${q}`, { credentials: 'include' })
+        const json = await res.json()
+        if (cancelled || !json.success || !json.data?.list) {
+          setPointOptions([])
+          return
+        }
+        const list = json.data.list as {
+          id: number
+          name: string
+          inspectionCategory: string
+          location?: string | null
+        }[]
+        setPointOptions(
+          list
+            .filter((p) => planTypeMatchesCategory(inspectionType, p.inspectionCategory))
+            .map((p) => ({
+              id: p.id,
+              name: p.name,
+              inspectionCategory: p.inspectionCategory,
+              location: typeof p.location === 'string' ? p.location : '',
+            }))
+        )
+      } catch {
+        if (!cancelled) setPointOptions([])
+      } finally {
+        if (!cancelled) setPointsLoading(false)
+      }
+    }
+    void loadPoints()
+    return () => {
+      cancelled = true
     }
   }, [buildingId, inspectionType])
-
-  useEffect(() => {
-    void loadNfc()
-  }, [loadNfc])
 
   useEffect(() => {
     if (plan) {
@@ -102,28 +189,31 @@ export function InspectionPlanForm({
       setInspectionType(plan.inspectionType)
       setCycleType(plan.cycleType)
       setCycleValue(plan.cycleValue)
-      setCycleWeekday(plan.cycleWeekday ?? 1)
-      setCycleMonthDay(plan.cycleMonthDay ?? 1)
+      setSlots(
+        scheduleToSlots(
+          plan.cycleType,
+          plan.cycleSchedule ?? null,
+          plan.cycleValue,
+          plan.cycleWeekday,
+          plan.cycleMonthDay
+        )
+      )
       setBuildingId(plan.buildingId ?? 0)
       setUserIds(plan.userIds)
-      const items = plan.checkItems?.length
-        ? plan.checkItems.map((c) => ({
-            name: c.name,
-            nfcTagId: typeof c.nfcTagId === 'number' && c.nfcTagId > 0 ? c.nfcTagId : 0,
-          }))
-        : [{ name: '', nfcTagId: 0 }]
-      setCheckItems(items)
+      setSelectedPointIds(plan.inspectionPointIds ?? [])
+      setRequirePhoto(plan.requirePhoto !== false)
       setStatus(plan.status)
     } else {
+      const ct = cycleTypes[0] || '每天'
       setName('')
       setInspectionType(inspectionTypes[0] || '')
-      setCycleType(cycleTypes[0] || '')
+      setCycleType(ct)
       setCycleValue(1)
-      setCycleWeekday(1)
-      setCycleMonthDay(1)
+      setSlots(defaultSlots(ct, 1, null, null))
       setBuildingId(buildings[0]?.id ?? 0)
       setUserIds([])
-      setCheckItems([{ name: '', nfcTagId: 0 }])
+      setSelectedPointIds([])
+      setRequirePhoto(true)
       setStatus('active')
     }
   }, [plan, inspectionTypes, cycleTypes, buildings])
@@ -137,21 +227,38 @@ export function InspectionPlanForm({
     }
   }, [isEdit, inspectionTypes, cycleTypes, inspectionType, cycleType])
 
-  const addCheckItem = () => {
-    setCheckItems((prev) => [...prev, { name: '', nfcTagId: 0 }])
-  }
-
-  const removeCheckItem = (idx: number) => {
-    setCheckItems((prev) => prev.filter((_, i) => i !== idx))
-  }
-
-  const updateCheckItem = (idx: number, patch: Partial<CheckItem>) => {
-    setCheckItems((prev) => {
-      const next = [...prev]
-      next[idx] = { ...next[idx], ...patch }
-      return next
+  useEffect(() => {
+    setSlots((prev) => {
+      const n = Math.max(1, cycleValue)
+      if (prev.length === n) return prev
+      if (prev.length < n) {
+        const extra = n - prev.length
+        if (cycleType === '每天') {
+          const p = prev as DailySlot[]
+          return [...p, ...Array.from({ length: extra }, () => ({ time: p[p.length - 1]?.time ?? '09:00' }))]
+        }
+        if (cycleType === '每周') {
+          const p = prev as WeeklySlot[]
+          return [
+            ...p,
+            ...Array.from({ length: extra }, () => ({
+              weekday: p[p.length - 1]?.weekday ?? 1,
+              time: p[p.length - 1]?.time ?? '09:00',
+            })),
+          ]
+        }
+        const p = prev as MonthlySlot[]
+        return [
+          ...p,
+          ...Array.from({ length: extra }, () => ({
+            monthDay: p[p.length - 1]?.monthDay ?? 1,
+            time: p[p.length - 1]?.time ?? '09:00',
+          })),
+        ]
+      }
+      return prev.slice(0, n)
     })
-  }
+  }, [cycleValue, cycleType])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -164,11 +271,11 @@ export function InspectionPlanForm({
       setError('请选择楼宇')
       return
     }
-    const validItems = checkItems.filter((c) => c.name?.trim() && c.nfcTagId > 0)
-    if (validItems.length === 0) {
-      setError('请至少添加一条检查项目并绑定 NFC')
+    if (selectedPointIds.length === 0) {
+      setError('请至少选择一个巡检点作为路线')
       return
     }
+    const schedulePayload = buildCycleSchedulePayload(cycleType, slots)
     setSubmitting(true)
     try {
       const body: Record<string, unknown> = {
@@ -176,11 +283,11 @@ export function InspectionPlanForm({
         inspectionType: inspectionType || inspectionTypes[0],
         cycleType: cycleType || cycleTypes[0],
         cycleValue,
-        cycleWeekday: cycleType === '每周' ? cycleWeekday : null,
-        cycleMonthDay: cycleType === '每月' ? cycleMonthDay : null,
+        cycleSchedule: schedulePayload,
+        requirePhoto,
         buildingId,
         userIds,
-        checkItems: validItems.map((c) => ({ name: c.name.trim(), nfcTagId: c.nfcTagId })),
+        inspectionPointIds: selectedPointIds,
         ...(isEdit && { status }),
       }
       const url = isEdit ? `/api/inspection-plans/${plan!.id}` : '/api/inspection-plans'
@@ -211,11 +318,35 @@ export function InspectionPlanForm({
   }
 
   const cycleHint =
-    cycleType === '每周'
-      ? '在下方选择每周的星期；周期值为「每隔几周」执行一次（1=每周）。'
-      : cycleType === '每月'
-        ? '在下方选择每月几号生成任务（1-28）；周期值为「每隔几个月」一次。'
-        : '周期值为「每隔几天」生成一次（1=每天）。'
+    cycleType === '每天'
+      ? `周期值为每天生成巡检任务的次数（${cycleValue} 次/天），每次对应下方一个时刻，每次生成一条任务。`
+      : cycleType === '每周'
+        ? `周期值为每周生成任务的次数（${cycleValue} 次/周），请为每次选择周几与时刻。`
+        : `周期值为每月生成任务的次数（${cycleValue} 次/月），请为每次选择日期（1–28）与时刻。`
+
+  const updateDaily = (i: number, time: string) => {
+    setSlots((prev) => {
+      const next = [...(prev as DailySlot[])]
+      next[i] = { ...next[i], time }
+      return next
+    })
+  }
+
+  const updateWeekly = (i: number, patch: Partial<WeeklySlot>) => {
+    setSlots((prev) => {
+      const next = [...(prev as WeeklySlot[])]
+      next[i] = { ...next[i], ...patch }
+      return next
+    })
+  }
+
+  const updateMonthly = (i: number, patch: Partial<MonthlySlot>) => {
+    setSlots((prev) => {
+      const next = [...(prev as MonthlySlot[])]
+      next[i] = { ...next[i], ...patch }
+      return next
+    })
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2">
@@ -284,15 +415,127 @@ export function InspectionPlanForm({
               ))}
             </select>
             <p className="text-xs text-slate-500 mt-1">
-              检查项目仅可选择该类型、本楼宇下且「启用」的 NFC 点。
+              仅列出与本楼宇、本类型一致且已启用的巡检点；加入路线后可在下方拖动调整先后顺序。
             </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">选择巡检点（路线）*</label>
+            <div className="border border-slate-300 dark:border-slate-600 rounded-lg p-3 max-h-72 overflow-y-auto space-y-3">
+              {pointsLoading ? (
+                <p className="text-xs text-slate-500">加载巡检点…</p>
+              ) : pointOptions.length === 0 ? (
+                <p className="text-xs text-amber-600">
+                  当前楼宇下没有符合条件的启用巡检点，请先在「巡检点」中维护并绑定 NFC。
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-slate-500">
+                    先勾选要巡检的点；新勾选的点会排在路线末尾。已选点的顺序即为巡检路线，可在下方用鼠标拖动整行调整。
+                  </p>
+                  <div className="space-y-2">
+                    {pointOptions.map((p) => (
+                      <label
+                        key={p.id}
+                        className="flex items-center gap-2 cursor-pointer text-sm w-full min-w-0"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedPointIds.includes(p.id)}
+                          onChange={() => {
+                            setSelectedPointIds((prev) =>
+                              prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id]
+                            )
+                          }}
+                          className="rounded shrink-0"
+                        />
+                        <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                          <span className="font-medium text-slate-800 dark:text-slate-100 shrink-0">
+                            {p.name}
+                          </span>
+                          <span
+                            className="text-slate-500 dark:text-slate-400 text-right truncate max-w-[55%]"
+                            title={formatPointLocation(p.location)}
+                          >
+                            {formatPointLocation(p.location)}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {selectedPointIds.length > 0 && (
+                    <div className="pt-3 border-t border-slate-200 dark:border-slate-600 space-y-2">
+                      <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                        路线顺序（第 1 站 → 第 N 站，拖动行即可调整）
+                      </p>
+                      <ul className="space-y-1.5">
+                        {selectedPointIds.map((pid, index) => {
+                          const p = pointOptions.find((x) => x.id === pid)
+                          if (!p) return null
+                          return (
+                            <li
+                              key={pid}
+                              draggable
+                              onDragStart={(e) => {
+                                routeDragFrom.current = index
+                                e.dataTransfer.effectAllowed = 'move'
+                                e.dataTransfer.setData('text/plain', String(index))
+                              }}
+                              onDragEnd={() => {
+                                routeDragFrom.current = null
+                              }}
+                              onDragOver={(e) => {
+                                e.preventDefault()
+                                e.dataTransfer.dropEffect = 'move'
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault()
+                                const fromStr =
+                                  e.dataTransfer.getData('text/plain') ||
+                                  (routeDragFrom.current !== null ? String(routeDragFrom.current) : '')
+                                const from = parseInt(fromStr, 10)
+                                routeDragFrom.current = null
+                                if (Number.isNaN(from)) return
+                                setSelectedPointIds((prev) => reorderIds(prev, from, index))
+                              }}
+                              className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50/80 dark:bg-slate-700/40 px-2 py-1.5 text-sm select-none cursor-grab active:cursor-grabbing"
+                            >
+                              <div className="pointer-events-none flex min-w-0 flex-1 items-center gap-2">
+                                <GripVertical
+                                  className="h-4 w-4 shrink-0 text-slate-400"
+                                  aria-hidden
+                                />
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">
+                                  {index + 1}
+                                </span>
+                                <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                                  <span className="min-w-0 font-medium text-slate-800 dark:text-slate-100 truncate">
+                                    {p.name}
+                                  </span>
+                                  <span className="shrink-0 text-slate-500 dark:text-slate-400 text-xs sm:text-sm truncate max-w-[45%] text-right">
+                                    {formatPointLocation(p.location)}
+                                  </span>
+                                </span>
+                              </div>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">周期类型 *</label>
               <select
                 value={cycleType}
-                onChange={(e) => setCycleType(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value
+                  setCycleType(next)
+                  setSlots(defaultSlots(next, cycleValue, null, null))
+                }}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
                 required
               >
@@ -304,7 +547,7 @@ export function InspectionPlanForm({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">周期值</label>
+              <label className="block text-sm font-medium mb-1">周期值（次数）*</label>
               <input
                 type="number"
                 min={1}
@@ -315,38 +558,84 @@ export function InspectionPlanForm({
             </div>
           </div>
           <p className="text-xs text-slate-500 -mt-2">{cycleHint}</p>
-          {cycleType === '每周' && (
-            <div>
-              <label className="block text-sm font-medium mb-1">每周星期几</label>
-              <select
-                value={cycleWeekday}
-                onChange={(e) => setCycleWeekday(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
-              >
-                {cycleWeekdayOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">执行时刻（与周期值条数一致）</label>
+            <div className="space-y-2">
+              {cycleType === '每天' &&
+                (slots as DailySlot[]).map((s, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm">
+                    <span className="text-slate-500 w-16">第 {i + 1} 次</span>
+                    <input
+                      type="time"
+                      value={s.time.length === 5 ? s.time : '09:00'}
+                      onChange={(e) => updateDaily(i, e.target.value)}
+                      className="px-2 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                    />
+                  </div>
                 ))}
-              </select>
-            </div>
-          )}
-          {cycleType === '每月' && (
-            <div>
-              <label className="block text-sm font-medium mb-1">每月几号生成</label>
-              <select
-                value={cycleMonthDay}
-                onChange={(e) => setCycleMonthDay(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
-              >
-                {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
-                  <option key={d} value={d}>
-                    {d} 号
-                  </option>
+              {cycleType === '每周' &&
+                (slots as WeeklySlot[]).map((s, i) => (
+                  <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="text-slate-500">第 {i + 1} 次</span>
+                    <select
+                      value={s.weekday}
+                      onChange={(e) => updateWeekly(i, { weekday: Number(e.target.value) })}
+                      className="px-2 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                    >
+                      {cycleWeekdayOptions.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="time"
+                      value={s.time}
+                      onChange={(e) => updateWeekly(i, { time: e.target.value })}
+                      className="px-2 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                    />
+                  </div>
                 ))}
-              </select>
+              {cycleType === '每月' &&
+                (slots as MonthlySlot[]).map((s, i) => (
+                  <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="text-slate-500">第 {i + 1} 次</span>
+                    <select
+                      value={s.monthDay}
+                      onChange={(e) => updateMonthly(i, { monthDay: Number(e.target.value) })}
+                      className="px-2 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                    >
+                      {Array.from({ length: 28 }, (_, j) => j + 1).map((d) => (
+                        <option key={d} value={d}>
+                          {d} 号
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="time"
+                      value={s.time}
+                      onChange={(e) => updateMonthly(i, { time: e.target.value })}
+                      className="px-2 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                    />
+                  </div>
+                ))}
             </div>
-          )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="requirePhoto"
+              type="checkbox"
+              checked={requirePhoto}
+              onChange={(e) => setRequirePhoto(e.target.checked)}
+              className="rounded"
+            />
+            <label htmlFor="requirePhoto" className="text-sm cursor-pointer">
+              必须拍照（每个巡检点 NFC 打卡后须上传照片才能完成）
+            </label>
+          </div>
+
           <div>
             <label className="block text-sm font-medium mb-1">巡检人员</label>
             <div className="border border-slate-300 dark:border-slate-600 rounded-lg p-3 max-h-32 overflow-y-auto space-y-2">
@@ -365,61 +654,6 @@ export function InspectionPlanForm({
                   </label>
                 ))
               )}
-            </div>
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium">检查项目（绑定 NFC）*</label>
-              <button
-                type="button"
-                onClick={addCheckItem}
-                className="text-sm text-blue-600 hover:underline flex items-center gap-1"
-              >
-                <Plus className="w-4 h-4" />
-                添加
-              </button>
-            </div>
-            {nfcLoading && (
-              <p className="text-xs text-slate-500 mb-2">加载 NFC 列表…</p>
-            )}
-            {!nfcLoading && buildingId > 0 && nfcOptions.length === 0 && (
-              <p className="text-xs text-amber-600 mb-2">
-                当前楼宇与类型下没有可用的启用 NFC，请先在「NFC标签」中维护。
-              </p>
-            )}
-            <div className="space-y-2">
-              {checkItems.map((item, idx) => (
-                <div key={idx} className="flex flex-col sm:flex-row gap-2 items-stretch">
-                  <input
-                    type="text"
-                    value={item.name}
-                    onChange={(e) => updateCheckItem(idx, { name: e.target.value })}
-                    className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
-                    placeholder="检查项名称"
-                  />
-                  <select
-                    value={item.nfcTagId || ''}
-                    onChange={(e) =>
-                      updateCheckItem(idx, { nfcTagId: Number(e.target.value) || 0 })
-                    }
-                    className="sm:w-64 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
-                  >
-                    <option value="">选择 NFC 点</option>
-                    {nfcOptions.map((n) => (
-                      <option key={n.id} value={n.id}>
-                        {n.tagId} · {n.location}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => removeCheckItem(idx)}
-                    className="p-2 text-slate-500 hover:text-red-600 shrink-0"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
             </div>
           </div>
           {isEdit && (

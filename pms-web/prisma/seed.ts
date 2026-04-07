@@ -246,8 +246,11 @@ async function main() {
         inspectionType: '工程',
         cycleType: '每天',
         cycleValue: 1,
+        cycleSchedule: JSON.stringify({ v: 1, kind: 'daily', slots: [{ time: '09:00' }] }),
+        requirePhoto: true,
+        buildingId: building.id,
         userIds: JSON.stringify([employee.id]),
-        checkItems: JSON.stringify([{ name: '电梯运行', required: true }, { name: '照明检查', required: false }]),
+        checkItems: JSON.stringify([]),
         status: 'active',
         companyId: company.id,
       },
@@ -255,7 +258,8 @@ async function main() {
   }
 
   const taskCount = await prisma.inspectionTask.count({ where: { companyId: company.id } })
-  if (taskCount === 0) {
+  const planItemsRaw = inspectionPlan.checkItems?.trim()
+  if (taskCount === 0 && planItemsRaw && planItemsRaw !== '[]' && planItemsRaw !== 'null') {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     await prisma.inspectionTask.create({
@@ -265,8 +269,10 @@ async function main() {
         planName: inspectionPlan.name,
         inspectionType: inspectionPlan.inspectionType,
         scheduledDate: today,
+        requirePhoto: inspectionPlan.requirePhoto,
         userIds: inspectionPlan.userIds,
         checkItems: inspectionPlan.checkItems,
+        buildingId: inspectionPlan.buildingId,
         status: '待执行',
         companyId: company.id,
       },

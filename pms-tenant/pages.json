@@ -13,6 +13,12 @@
       }
     },
     {
+      "path": "pages/messages/category",
+      "style": {
+        "navigationBarTitleText": "消息分类"
+      }
+    },
+    {
       "path": "pages/login/login",
       "style": {
         "navigationBarTitleText": "登录"

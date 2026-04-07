@@ -8,6 +8,7 @@ import {
   Building,
   Layers,
   MapPin,
+  LocateFixed,
   Home,
   Users,
   UserCog,
@@ -150,6 +151,7 @@ const menuItems = [
     children: [
       { href: '/nfc-tags', label: 'NFC标签', icon: Nfc },
       { href: '/devices', label: '设备台账', icon: Cpu },
+      { href: '/inspection-points', label: '巡检点', icon: LocateFixed },
       { href: '/work-order-types', label: '工单类型', icon: Wrench },
     ],
   },

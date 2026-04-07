@@ -1,9 +1,25 @@
+import { Prisma } from '@prisma/client'
 import type { PrismaClient } from '@prisma/client'
 import {
   findRecipientEmployeeIds,
   findRecipientEmployeeIdsForInspectionPlan,
 } from '@/lib/staff-notification-recipients'
 import { businessTagForInspectionType, type StaffNotificationCategory } from '@/lib/staff-notification-routing'
+
+/** SQLite 下 createMany 无 skipDuplicates，逐条插入并忽略重复 */
+async function createStaffNotificationsDedup(
+  prisma: PrismaClient,
+  rows: Prisma.StaffNotificationUncheckedCreateInput[]
+) {
+  for (const data of rows) {
+    try {
+      await prisma.staffNotification.create({ data })
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') continue
+      throw e
+    }
+  }
+}
 
 export async function writeStaffNotifications(
   prisma: PrismaClient,
@@ -35,8 +51,9 @@ export async function writeStaffNotifications(
   }
 
   try {
-    await prisma.staffNotification.createMany({
-      data: recipientIds.map((employeeId) => ({
+    await createStaffNotificationsDedup(
+      prisma,
+      recipientIds.map((employeeId) => ({
         companyId,
         employeeId,
         category,
@@ -45,9 +62,8 @@ export async function writeStaffNotifications(
         buildingId,
         title,
         summary: summary ?? null,
-      })),
-      skipDuplicates: true,
-    })
+      }))
+    )
   } catch (err) {
     console.error(
       '[staff-notification] createMany failed（请执行 prisma migrate / db push 并 prisma generate）',
@@ -87,19 +103,19 @@ export async function writeInspectionTaskNotifications(
   }
 
   try {
-    await prisma.staffNotification.createMany({
-      data: recipientIds.map((employeeId) => ({
+    await createStaffNotificationsDedup(
+      prisma,
+      recipientIds.map((employeeId) => ({
         companyId: args.companyId,
         employeeId,
-        category: 'inspection_task' as const,
+        category: 'inspection_task',
         entityType: 'inspection_task',
         entityId: args.taskId,
         buildingId: null,
         title: `巡检任务：${args.planName}`,
         summary: `${args.taskCode} · ${args.inspectionType}`,
-      })),
-      skipDuplicates: true,
-    })
+      }))
+    )
   } catch (err) {
     console.error('[staff-notification] inspection createMany failed', err)
   }

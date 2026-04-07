@@ -5,8 +5,6 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { Plus, Pencil, Trash2, Search, Eye, Upload, Download, X } from 'lucide-react'
 import { AnnouncementForm } from './AnnouncementForm'
-import QRCode from 'qrcode'
-import Image from 'next/image'
 
 export type Announcement = {
   id: number
@@ -374,31 +372,11 @@ function AnnouncementDetailModal({
   onClose: () => void
   formatTime: (s: string | null) => string
 }) {
-  const [qrDataUrl, setQrDataUrl] = useState('')
-  const previewUrl =
-    typeof window === 'undefined'
-      ? ''
-      : `${window.location.origin}/preview/announcements/${announcement.id}`
-
+  /** 与浏览器地址栏打开 `/preview/announcements/:id` 同源，避免 SSR 使用 window 导致水合不一致 */
+  const [previewFrameSrc, setPreviewFrameSrc] = useState('')
   useEffect(() => {
-    let active = true
-    const buildQr = async () => {
-      if (!previewUrl) return
-      try {
-        const url = await QRCode.toDataURL(previewUrl, {
-          width: 220,
-          margin: 1,
-        })
-        if (active) setQrDataUrl(url)
-      } catch {
-        if (active) setQrDataUrl('')
-      }
-    }
-    void buildQr()
-    return () => {
-      active = false
-    }
-  }, [previewUrl])
+    setPreviewFrameSrc(`${window.location.origin}/preview/announcements/${announcement.id}`)
+  }, [announcement.id])
 
   const publishTime =
     announcement.publishTime || (announcement.status === 'draft' ? announcement.createdAt : null)
@@ -434,40 +412,32 @@ function AnnouncementDetailModal({
             </div>
             <div className="mt-4 rounded-lg border border-slate-200 dark:border-slate-700 p-3 max-h-[46vh] overflow-y-auto">
               <div
-                className="prose prose-sm max-w-none"
+                className="prose prose-sm max-w-none [&_img]:max-w-full [&_img]:h-auto [&_video]:max-w-full [&_table]:max-w-full"
                 dangerouslySetInnerHTML={{ __html: announcement.content || '<p>（无内容）</p>' }}
               />
             </div>
           </section>
-          <section className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-            <h3 className="text-base font-semibold mb-3">手机端预览二维码</h3>
-            <p className="text-sm text-slate-500 mb-3">
-              手机扫码可打开移动端样式预览页，查看该公告在手机上的展示效果。
+          <section className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 flex flex-col min-h-0 min-w-0">
+            <h3 className="text-base font-semibold mb-2 shrink-0">手机端预览</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 shrink-0">
+              内嵌展示与单独打开「公告预览」页相同，可滚动查看全文。
             </p>
-            <div className="flex justify-center mb-3">
-              {qrDataUrl ? (
-                <Image
-                  src={qrDataUrl}
-                  alt="公告预览二维码"
-                  width={208}
-                  height={208}
-                  unoptimized
-                  className="w-52 h-52 border border-slate-200 rounded"
-                />
-              ) : (
-                <div className="w-52 h-52 border border-dashed border-slate-300 rounded flex items-center justify-center text-slate-400 text-sm">
-                  二维码生成中...
-                </div>
-              )}
+            <div className="flex flex-1 min-h-[min(420px,52vh)] justify-center">
+              <div className="relative w-full max-w-[375px] h-[min(520px,58vh)] rounded-[2rem] border-[10px] border-slate-800 bg-slate-800 shadow-xl overflow-hidden dark:border-slate-600">
+                {previewFrameSrc ? (
+                  <iframe
+                    title="公告移动端预览"
+                    src={previewFrameSrc}
+                    className="absolute inset-0 h-full w-full border-0 bg-slate-100"
+                    sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-slate-100 text-sm text-slate-400">
+                    预览加载中…
+                  </div>
+                )}
+              </div>
             </div>
-            <a
-              href={previewUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="block text-xs break-all text-blue-600 underline"
-            >
-              {previewUrl}
-            </a>
           </section>
         </div>
       </div>

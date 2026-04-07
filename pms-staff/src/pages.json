@@ -61,9 +61,15 @@
       }
     },
     {
-      "path": "pages/complaints/detail",
+      "path": "pages/complaints/complaints",
       "style": {
         "navigationBarTitleText": "卫生吐槽"
+      }
+    },
+    {
+      "path": "pages/complaints/detail",
+      "style": {
+        "navigationBarTitleText": "吐槽详情"
       }
     },
     {

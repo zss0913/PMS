@@ -39,6 +39,44 @@ async function loadComplaintPayload(companyId: number, complaintId: number) {
     if (c.handledBy) handledByName = m[c.handledBy] ?? null
   }
 
+  const tenantRoomRows = await prisma.tenantRoom.findMany({
+    where: {
+      tenantId: c.tenantId,
+      room: {
+        buildingId: c.buildingId,
+        companyId,
+      },
+    },
+    include: {
+      room: {
+        select: {
+          name: true,
+          roomNumber: true,
+          floor: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { id: 'asc' },
+  })
+  const tenantRooms = tenantRoomRows.map((tr) => ({
+    floorName: tr.room.floor.name,
+    roomNumber: tr.room.roomNumber,
+    roomName: tr.room.name,
+  }))
+
+  const activityLogs = await prisma.complaintActivityLog.findMany({
+    where: { complaintId, companyId },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      action: true,
+      summary: true,
+      operatorType: true,
+      operatorName: true,
+      createdAt: true,
+    },
+  })
+
   return {
     id: c.id,
     location: c.location,
@@ -49,11 +87,20 @@ async function loadComplaintPayload(companyId: number, complaintId: number) {
     resultImages: serializeComplaintImages(c.resultImages),
     buildingName: building?.name ?? '-',
     tenantName: c.tenant?.companyName ?? '-',
+    tenantRooms,
     createdAt: c.createdAt.toISOString(),
     handledAt: c.handledAt?.toISOString() ?? null,
     assignedTo: c.assignedTo,
     assignedToName,
     handledByName,
+    activityLogs: activityLogs.map((log) => ({
+      id: log.id,
+      action: log.action,
+      summary: log.summary,
+      operatorType: log.operatorType,
+      operatorName: log.operatorName,
+      createdAt: log.createdAt.toISOString(),
+    })),
   }
 }
 
@@ -153,6 +200,13 @@ export async function PUT(
     )
   }
 
-  const data = await loadComplaintPayload(user.companyId, complaintId)
-  return NextResponse.json({ success: true, data })
+  const base = await loadComplaintPayload(user.companyId, complaintId)
+  if (!base) {
+    return NextResponse.json({ success: false, message: '记录不存在' }, { status: 404 })
+  }
+  const assignees = await loadAssignees(user.companyId)
+  return NextResponse.json({
+    success: true,
+    data: { ...base, assignees, currentUserId: user.id },
+  })
 }

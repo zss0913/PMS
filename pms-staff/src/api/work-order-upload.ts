@@ -10,6 +10,10 @@ function uploadAbsoluteUrl(): string {
   return p
 }
 
+export function isMediaVideoUrl(path: string): boolean {
+  return /\.(mp4|mov|webm)(\?.*)?$/i.test(path)
+}
+
 export function resolveMediaUrl(path: string): string {
   if (!path) return ''
   if (/^https?:\/\//i.test(path)) return path
@@ -52,12 +56,14 @@ async function uploadWithFetch(filePath: string, url: string, token: string): Pr
   }
   const blob = await blobRes.blob()
   if (!blob.size) {
-    throw new Error('图片为空')
+    throw new Error('文件为空')
   }
   const mime = (blob.type || '').toLowerCase()
-  const ext =
-    mime.includes('png') ? 'png' : mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : 'jpg'
-  const fileName = `photo.${ext}`
+  let ext = 'jpg'
+  if (mime.includes('png')) ext = 'png'
+  else if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpg'
+  else if (mime.includes('mp4') || mime.includes('video')) ext = 'mp4'
+  const fileName = ext === 'mp4' ? 'clip.mp4' : `photo.${ext}`
 
   const fd = new FormData()
   fd.append('file', blob, fileName)

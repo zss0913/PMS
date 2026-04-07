@@ -7,6 +7,8 @@
 
 <style lang="scss">
 page {
+  overflow-x: hidden;
+  max-width: 100%;
   background-color: $pms-bg;
   color: $pms-text;
   font-size: 28rpx;

@@ -6,26 +6,31 @@ import { randomUUID } from 'crypto'
 
 export const runtime = 'nodejs'
 
-const MAX_SIZE = 10 * 1024 * 1024 // 10MB（原始二进制大小）
+const MAX_IMAGE = 10 * 1024 * 1024 // 10MB
+const MAX_VIDEO = 50 * 1024 * 1024 // 50MB（卫生吐槽/工单附件短视频）
 
-function extFromFileName(name: string): 'png' | 'jpg' | null {
+type MediaExt = 'png' | 'jpg' | 'mp4'
+
+function extFromFileName(name: string): MediaExt | null {
   const lower = name.toLowerCase()
   if (lower.endsWith('.png')) return 'png'
   if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'jpg'
+  if (lower.endsWith('.mp4')) return 'mp4'
   return null
 }
 
-function extFromFile(file: File): 'png' | 'jpg' | null {
+function extFromFile(file: File): MediaExt | null {
   const fromName = extFromFileName(file.name)
   if (fromName) return fromName
   const t = file.type.toLowerCase()
   if (t === 'image/png') return 'png'
   if (t === 'image/jpeg' || t === 'image/jpg') return 'jpg'
+  if (t === 'video/mp4' || t === 'video/quicktime') return 'mp4'
   return null
 }
 
 function mimeOkExt(ext: string): boolean {
-  return ext === 'png' || ext === 'jpg'
+  return ext === 'png' || ext === 'jpg' || ext === 'mp4'
 }
 
 function imageExtFromBuffer(buf: Buffer): 'png' | 'jpg' | null {
@@ -38,16 +43,26 @@ function imageExtFromBuffer(buf: Buffer): 'png' | 'jpg' | null {
   return null
 }
 
+function mp4Magic(buf: Buffer): boolean {
+  return buf.length >= 12 && buf.subarray(4, 8).toString('ascii') === 'ftyp'
+}
+
 function mimeOkFile(file: File): boolean {
   if (!file.type) return true
   const t = file.type.toLowerCase()
-  return t === 'image/png' || t === 'image/jpeg' || t === 'image/jpg'
+  return (
+    t === 'image/png' ||
+    t === 'image/jpeg' ||
+    t === 'image/jpg' ||
+    t === 'video/mp4' ||
+    t === 'video/quicktime'
+  )
 }
 
 async function saveWorkOrderImage(
   user: NonNullable<Awaited<ReturnType<typeof getRequestAuthUser>>>,
   buf: Buffer,
-  ext: 'png' | 'jpg'
+  ext: MediaExt
 ): Promise<string> {
   const storedName = `${randomUUID()}.${ext}`
   const dir = join(process.cwd(), 'public', 'uploads', 'work-orders', String(user.companyId))
@@ -75,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     const ct = request.headers.get('content-type') || ''
     let buf: Buffer
-    let ext: 'png' | 'jpg'
+    let ext: MediaExt
 
     if (ct.includes('application/json')) {
       const body = (await request.json()) as { fileBase64?: string; fileName?: string }
@@ -91,20 +106,28 @@ export async function POST(request: NextRequest) {
       if (buf.length === 0) {
         return NextResponse.json({ success: false, message: '文件为空' }, { status: 400 })
       }
-      if (buf.length > MAX_SIZE) {
-        return NextResponse.json({ success: false, message: '单张图片不能超过 10MB' }, { status: 400 })
-      }
       const fromMagic = imageExtFromBuffer(buf)
+      const fromMp4 = mp4Magic(buf) ? ('mp4' as const) : null
       const fromName =
         typeof body.fileName === 'string' ? extFromFileName(body.fileName) : null
-      const guessed: 'png' | 'jpg' = fromMagic ?? fromName ?? 'jpg'
+      const guessed: MediaExt = (fromName as MediaExt) ?? fromMagic ?? fromMp4 ?? 'jpg'
       if (!mimeOkExt(guessed)) {
         return NextResponse.json(
-          { success: false, message: '仅支持 PNG、JPG、JPEG 格式' },
+          { success: false, message: '仅支持 PNG、JPG、JPEG、MP4 格式' },
           { status: 400 }
         )
       }
       ext = guessed
+      const maxSz = ext === 'mp4' ? MAX_VIDEO : MAX_IMAGE
+      if (buf.length > maxSz) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: ext === 'mp4' ? '单个视频不能超过 50MB' : '单张图片不能超过 10MB',
+          },
+          { status: 400 }
+        )
+      }
     } else {
       const formData = await request.formData()
       const file = formData.get('file')
@@ -114,18 +137,25 @@ export async function POST(request: NextRequest) {
       if (file.size === 0) {
         return NextResponse.json({ success: false, message: '文件为空' }, { status: 400 })
       }
-      if (file.size > MAX_SIZE) {
-        return NextResponse.json({ success: false, message: '单张图片不能超过 10MB' }, { status: 400 })
-      }
 
       const extRaw = extFromFile(file)
       if (!extRaw || !mimeOkFile(file)) {
         return NextResponse.json(
-          { success: false, message: '仅支持 PNG、JPG、JPEG 格式' },
+          { success: false, message: '仅支持 PNG、JPG、JPEG、MP4 格式' },
           { status: 400 }
         )
       }
       ext = extRaw
+      const maxSz = ext === 'mp4' ? MAX_VIDEO : MAX_IMAGE
+      if (file.size > maxSz) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: ext === 'mp4' ? '单个视频不能超过 50MB' : '单张图片不能超过 10MB',
+          },
+          { status: 400 }
+        )
+      }
       buf = Buffer.from(await file.arrayBuffer())
     }
 

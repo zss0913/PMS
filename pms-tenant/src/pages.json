@@ -13,6 +13,12 @@
       }
     },
     {
+      "path": "pages/messages/category",
+      "style": {
+        "navigationBarTitleText": "消息分类"
+      }
+    },
+    {
       "path": "pages/login/login",
       "style": {
         "navigationBarTitleText": "登录"
@@ -21,7 +27,14 @@
     {
       "path": "pages/bills/bills",
       "style": {
-        "navigationBarTitleText": "我的账单"
+        "navigationBarTitleText": "我的账单",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/bills/filter",
+      "style": {
+        "navigationBarTitleText": "筛选条件"
       }
     },
     {

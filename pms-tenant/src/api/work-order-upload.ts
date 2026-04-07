@@ -11,6 +11,11 @@ function uploadAbsoluteUrl(): string {
   return p
 }
 
+/** 是否为视频类附件（与上传接口允许的扩展一致） */
+export function isMediaVideoUrl(path: string): boolean {
+  return /\.(mp4|mov|webm)(\?.*)?$/i.test(path)
+}
+
 /** 展示用：相对路径 /uploads/... 在 H5 开发下走同源代理 */
 export function resolveMediaUrl(path: string): string {
   if (!path) return ''
@@ -58,9 +63,11 @@ async function uploadWithFetch(filePath: string, url: string, token: string): Pr
     throw new Error('图片为空')
   }
   const mime = (blob.type || '').toLowerCase()
-  const ext =
-    mime.includes('png') ? 'png' : mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : 'jpg'
-  const fileName = `photo.${ext}`
+  let ext = 'jpg'
+  if (mime.includes('png')) ext = 'png'
+  else if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpg'
+  else if (mime.includes('mp4') || mime.includes('video')) ext = 'mp4'
+  const fileName = ext === 'mp4' ? 'clip.mp4' : `photo.${ext}`
 
   const fd = new FormData()
   fd.append('file', blob, fileName)

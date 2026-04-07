@@ -9,11 +9,19 @@ export type MyMessageItem = {
   title: string
   summary: string
   time: string
+  /** 业务通知：是否已读（StaffNotification.readAt） */
+  read?: boolean
   link?: { type: 'work_order' | 'inspection_task' | 'complaint'; id: number }
   content?: string
 }
 
-/** 员工端：物业公告 + 业务通知统一时间线 */
+export type StaffMessageUnreadCounts = {
+  work_order: number
+  inspection_task: number
+  complaint: number
+}
+
+/** 员工端：物业公告 + 业务通知（工单/巡检/吐槽）；业务类含已读状态与分类未读数 */
 export async function GET(request: NextRequest) {
   const user = await getMpAuthUser(request)
   if (!user) {
@@ -25,15 +33,13 @@ export async function GET(request: NextRequest) {
 
   const buildingId = request.nextUrl.searchParams.get('buildingId')
 
-  const announcements = await prisma.announcement.findMany({
+  const announcementRows = await prisma.announcement.findMany({
     where: {
       companyId: user.companyId,
       status: { in: ['published', '已发布'] },
       OR: [
         { scope: 'all' },
-        ...(buildingId
-          ? [{ scope: 'specified', buildingIds: { contains: buildingId } }]
-          : []),
+        ...(buildingId ? [{ scope: 'specified', buildingIds: { contains: buildingId } }] : []),
       ],
     },
     orderBy: { publishTime: 'desc' },
@@ -51,57 +57,78 @@ export async function GET(request: NextRequest) {
       take: 100,
     })
   } catch {
-    // 表未迁移时仍返回公告列表
     staffRows = []
   }
 
-  const items: MyMessageItem[] = []
-
-  for (const a of announcements) {
+  const announcements: MyMessageItem[] = []
+  for (const a of announcementRows) {
     const t = a.publishTime ?? a.createdAt
-    items.push({
+    announcements.push({
       kind: 'announcement',
       id: a.id,
       title: a.title,
       summary: a.content.length > 120 ? `${a.content.slice(0, 120)}…` : a.content,
       time: t.toISOString(),
+      read: true,
       content: a.content,
     })
   }
 
+  const businessItems: MyMessageItem[] = []
   for (const n of staffRows) {
     const cat = n.category
+    const read = n.readAt != null
     if (cat === 'work_order') {
-      items.push({
+      businessItems.push({
         kind: 'work_order',
         id: n.id,
         title: n.title,
         summary: n.summary ?? '',
         time: n.createdAt.toISOString(),
+        read,
         link: { type: 'work_order', id: n.entityId },
       })
     } else if (cat === 'inspection_task') {
-      items.push({
+      businessItems.push({
         kind: 'inspection_task',
         id: n.id,
         title: n.title,
         summary: n.summary ?? '',
         time: n.createdAt.toISOString(),
+        read,
         link: { type: 'inspection_task', id: n.entityId },
       })
     } else if (cat === 'complaint') {
-      items.push({
+      businessItems.push({
         kind: 'complaint',
         id: n.id,
         title: n.title,
         summary: n.summary ?? '',
         time: n.createdAt.toISOString(),
+        read,
         link: { type: 'complaint', id: n.entityId },
       })
     }
   }
 
-  items.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+  businessItems.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
 
-  return NextResponse.json({ success: true, list: items })
+  const unreadCounts: StaffMessageUnreadCounts = {
+    work_order: staffRows.filter((n) => n.category === 'work_order' && n.readAt == null).length,
+    inspection_task: staffRows.filter((n) => n.category === 'inspection_task' && n.readAt == null).length,
+    complaint: staffRows.filter((n) => n.category === 'complaint' && n.readAt == null).length,
+  }
+
+  /** 兼容旧端：合并时间线（公告 + 业务） */
+  const list: MyMessageItem[] = [...announcements, ...businessItems].sort(
+    (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()
+  )
+
+  return NextResponse.json({
+    success: true,
+    announcements,
+    list,
+    business: businessItems,
+    unreadCounts,
+  })
 }

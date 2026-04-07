@@ -49,7 +49,8 @@ model Company {
   inspectionTasks InspectionTask[]
   inspectionRecords InspectionRecord[]
   announcements   Announcement[]
-  complaints      Complaint[]
+  complaints            Complaint[]
+  complaintActivityLogs ComplaintActivityLog[]
   devices         Device[]
   deviceMaintenances DeviceMaintenance[]
   accounts            Account[]
@@ -63,6 +64,7 @@ model Company {
   receiptIssueRecords ReceiptIssueRecord[]
   invoiceIssueRecords InvoiceIssueRecord[]
   staffNotifications StaffNotification[]
+  inspectionPoints InspectionPoint[]
 }
 
 model Department {
@@ -175,6 +177,7 @@ model Building {
   tenants   Tenant[]
   bills     Bill[]
   workOrders WorkOrder[]
+  inspectionPoints InspectionPoint[]
 }
 
 model Floor {
@@ -187,6 +190,7 @@ model Floor {
 
   building Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
   rooms    Room[]
+  inspectionPoints InspectionPoint[]
 }
 
 model Room {
@@ -267,8 +271,22 @@ model TenantUser {
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   relations TenantUserRelation[]
+  notificationReads TenantNotificationRead[]
 
   // 租客端账号：手机号不按物业公司唯一；同一手机号可在多个租客下各有一条记录（与 Employee 表无关）
+}
+
+/// 租客端「消息通知」聚合项已读（key 与 /api/mp/notifications 中 item.key 一致）
+model TenantNotificationRead {
+  id              Int      @id @default(autoincrement())
+  tenantUserId    Int
+  notificationKey String
+  readAt          DateTime @default(now())
+
+  tenantUser TenantUser @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantUserId, notificationKey])
+  @@index([tenantUserId])
 }
 
 model TenantUserRelation {
@@ -717,6 +735,45 @@ model NfcTag {
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   building Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  inspectionPoints InspectionPoint[]
+}
+
+/// 巡检点（用于巡检计划勾选；启用须绑定与本点类型一致的 NFC；设备巡检须关联设备）
+model InspectionPoint {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  buildingId  Int
+  floorId     Int?
+  /// 工程巡检 / 设备巡检 / 安保巡检 / 绿化巡检
+  inspectionCategory String @default("工程巡检")
+  name        String
+  location    String   @default("")
+  description String?
+  /// JSON 字符串数组，图片 URL 列表
+  images      String?
+  nfcTagId    Int?
+  status      String   @default("disabled")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  building  Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  floor     Floor?   @relation(fields: [floorId], references: [id], onDelete: SetNull)
+  nfcTag    NfcTag?  @relation(fields: [nfcTagId], references: [id], onDelete: SetNull)
+  devices   InspectionPointDevice[]
+
+  @@index([companyId, buildingId])
+  @@index([companyId, inspectionCategory])
+}
+
+model InspectionPointDevice {
+  inspectionPointId Int
+  deviceId          Int
+
+  inspectionPoint InspectionPoint @relation(fields: [inspectionPointId], references: [id], onDelete: Cascade)
+  device          Device          @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@id([inspectionPointId, deviceId])
 }
 
 model InspectionPlan {
@@ -727,9 +784,15 @@ model InspectionPlan {
   cycleValue     Int      @default(1)
   cycleWeekday   Int?
   cycleMonthDay  Int?
+  /// JSON：周期执行时刻（每天/每周/每月若干次），见 lib/inspection-cycle-schedule
+  cycleSchedule  String?
+  /// 是否要求每个巡检点 NFC 打卡后必须拍照
+  requirePhoto   Boolean  @default(true)
   userIds        String?
   route          String?
   checkItems     String?
+  /// JSON number[]，从巡检点生成检查项时记录所选巡检点 id（已生成的任务仍以 checkItems 为准）
+  inspectionPointIds String?
   buildingId     Int?
   companyId      Int
   status         String   @default("active")
@@ -748,6 +811,8 @@ model InspectionTask {
   planName       String
   inspectionType String
   scheduledDate  DateTime
+  /// 自计划生成任务时复制；打卡时若 true 须上传照片
+  requirePhoto   Boolean  @default(true)
   userIds        String?
   route          String?
   checkItems     String?
@@ -847,8 +912,29 @@ model Complaint {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  tenant  Tenant @relation(fields: [tenantId], references: [id])
+  company      Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tenant       Tenant                  @relation(fields: [tenantId], references: [id])
+  activityLogs ComplaintActivityLog[]
+
+  @@index([companyId, createdAt])
+}
+
+/// 卫生吐槽操作日志（提交、受理指派、办结等）
+model ComplaintActivityLog {
+  id           Int      @id @default(autoincrement())
+  complaintId  Int
+  companyId    Int
+  action       String
+  summary      String
+  operatorType String
+  operatorId   Int?
+  operatorName String?
+  createdAt    DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, complaintId, createdAt])
 }
 
 // ========== 设备 ==========
@@ -874,6 +960,7 @@ model Device {
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   building    Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
   maintenances DeviceMaintenance[]
+  inspectionPointDevices InspectionPointDevice[]
 
   @@unique([companyId, code])
 }

@@ -87,6 +87,16 @@ export async function POST(
     return NextResponse.json({ success: false, message: '该巡检点已提交过' }, { status: 400 })
   }
 
+  if (task.requirePhoto) {
+    const imgs = body.images?.filter(Boolean) ?? []
+    if (imgs.length === 0) {
+      return NextResponse.json(
+        { success: false, message: '本任务要求拍照，请先拍摄并上传现场照片' },
+        { status: 400 }
+      )
+    }
+  }
+
   const payload = {
     remark: body.remark?.trim() || undefined,
     images: body.images?.filter(Boolean) ?? [],

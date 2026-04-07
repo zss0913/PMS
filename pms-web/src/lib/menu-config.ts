@@ -16,6 +16,7 @@ export const MENU_OPTIONS = [
   { id: 13, label: '催缴管理', path: '/reminders' },
   { id: 14, label: 'NFC标签', path: '/nfc-tags' },
   { id: 15, label: '设备台账', path: '/devices' },
+  { id: 29, label: '巡检点', path: '/inspection-points' },
   { id: 16, label: '工单类型', path: '/work-order-types' },
   { id: 17, label: '工单管理', path: '/work-orders' },
   { id: 18, label: '巡检计划', path: '/inspection-plans' },

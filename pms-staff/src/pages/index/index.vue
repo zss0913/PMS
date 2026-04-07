@@ -26,8 +26,8 @@ function goInspectionTasks() {
   uni.navigateTo({ url: '/pages/inspection-tasks/inspection-tasks' })
 }
 
-function goMessages() {
-  uni.switchTab({ url: '/pages/messages/messages' })
+function goComplaints() {
+  uni.navigateTo({ url: '/pages/complaints/complaints' })
 }
 </script>
 
@@ -65,12 +65,12 @@ function goMessages() {
         <text class="menu-label">巡检任务</text>
         <text class="menu-hint">计划与执行</text>
       </view>
-      <view class="menu-card" @click="goMessages">
+      <view class="menu-card" @click="goComplaints">
         <view class="icon-wrap">
-          <text class="icon-char">讯</text>
+          <text class="icon-char">吐</text>
         </view>
-        <text class="menu-label">消息通知</text>
-        <text class="menu-hint">公告与通知</text>
+        <text class="menu-label">卫生吐槽</text>
+        <text class="menu-hint">查看租客反馈，指派与办结</text>
       </view>
     </view>
   </view>
@@ -179,4 +179,5 @@ function goMessages() {
   font-size: 22rpx;
   color: $pms-text-dim;
 }
+
 </style>

@@ -7,28 +7,48 @@ import {
   validatePlanCheckItems,
   type InspectionCheckItemJson,
 } from '@/lib/inspection-check-items'
+import { buildCheckItemsFromInspectionPointIds } from '@/lib/inspection-plan-from-points'
+import {
+  parseCycleSchedule,
+  validateCycleSchedule,
+  formatCycleScheduleSummary,
+  type CycleScheduleV1,
+  type DailySlot,
+  type WeeklySlot,
+  type MonthlySlot,
+} from '@/lib/inspection-cycle-schedule'
 
 const INSPECTION_TYPES = ['工程', '安保', '设备', '绿化']
 const CYCLE_TYPES = ['每天', '每周', '每月']
-
-const checkItemSchema = z.array(
-  z.object({
-    name: z.string().min(1, '检查项名称不能为空'),
-    nfcTagId: z.number().int().positive(),
-  })
-)
 
 const createSchema = z.object({
   name: z.string().min(1, '计划名称必填'),
   inspectionType: z.enum(['工程', '安保', '设备', '绿化']),
   cycleType: z.enum(['每天', '每周', '每月']),
   cycleValue: z.number().min(1).default(1),
-  cycleWeekday: z.number().int().min(1).max(7).optional().nullable(),
-  cycleMonthDay: z.number().int().min(1).max(28).optional().nullable(),
+  /** JSON：{ v, kind, slots } */
+  cycleSchedule: z.any(),
+  requirePhoto: z.boolean().optional().default(true),
   buildingId: z.number().int().min(1, '请选择楼宇'),
   userIds: z.array(z.number()).optional().default([]),
-  checkItems: checkItemSchema.optional().default([]),
+  inspectionPointIds: z.array(z.number().int().positive()).min(1, '请至少选择一个巡检点'),
 })
+
+function normalizeSchedule(cycleType: string, raw: unknown): CycleScheduleV1 | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  if (o.v !== 1 || !Array.isArray(o.slots)) return null
+  if (cycleType === '每天') {
+    return { v: 1, kind: 'daily', slots: o.slots as DailySlot[] }
+  }
+  if (cycleType === '每周') {
+    return { v: 1, kind: 'weekly', slots: o.slots as WeeklySlot[] }
+  }
+  if (cycleType === '每月') {
+    return { v: 1, kind: 'monthly', slots: o.slots as MonthlySlot[] }
+  }
+  return null
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -60,21 +80,38 @@ export async function GET(request: NextRequest) {
       orderBy: { id: 'asc' },
     })
 
-    const list = plans.map((p) => ({
-      id: p.id,
-      name: p.name,
-      inspectionType: p.inspectionType,
-      cycleType: p.cycleType,
-      cycleValue: p.cycleValue,
-      cycleWeekday: p.cycleWeekday,
-      cycleMonthDay: p.cycleMonthDay,
-      cycleLabel: p.cycleValue === 1 ? p.cycleType : `每${p.cycleValue}${p.cycleType.replace('每', '')}`,
-      userIds: p.userIds ? (JSON.parse(p.userIds) as number[]) : [],
-      checkItems: parseCheckItemsJson(p.checkItems),
-      buildingId: p.buildingId,
-      status: p.status,
-      createdAt: p.createdAt.toISOString(),
-    }))
+    const list = plans.map((p) => {
+      let inspectionPointIds: number[] = []
+      if (p.inspectionPointIds?.trim()) {
+        try {
+          const arr = JSON.parse(p.inspectionPointIds) as unknown
+          if (Array.isArray(arr)) {
+            inspectionPointIds = arr.filter((x): x is number => typeof x === 'number' && x > 0)
+          }
+        } catch {
+          inspectionPointIds = []
+        }
+      }
+      const scheduleObj = parseCycleSchedule(p.cycleSchedule)
+      return {
+        id: p.id,
+        name: p.name,
+        inspectionType: p.inspectionType,
+        cycleType: p.cycleType,
+        cycleValue: p.cycleValue,
+        cycleWeekday: p.cycleWeekday,
+        cycleMonthDay: p.cycleMonthDay,
+        cycleSchedule: scheduleObj,
+        requirePhoto: p.requirePhoto,
+        cycleLabel: formatCycleScheduleSummary(p.cycleType, p.cycleValue, p.cycleSchedule),
+        userIds: p.userIds ? (JSON.parse(p.userIds) as number[]) : [],
+        checkItems: parseCheckItemsJson(p.checkItems),
+        inspectionPointIds,
+        buildingId: p.buildingId,
+        status: p.status,
+        createdAt: p.createdAt.toISOString(),
+      }
+    })
 
     return NextResponse.json({
       success: true,
@@ -117,6 +154,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const parsed = createSchema.parse(body)
 
+    const scheduleNorm = normalizeSchedule(parsed.cycleType, parsed.cycleSchedule)
+    if (!scheduleNorm) {
+      return NextResponse.json({ success: false, message: '请配置周期执行时刻' }, { status: 400 })
+    }
+    const vs = validateCycleSchedule(parsed.cycleType, parsed.cycleValue, scheduleNorm)
+    if (!vs.ok) {
+      return NextResponse.json({ success: false, message: vs.message }, { status: 400 })
+    }
+
     const building = await prisma.building.findFirst({
       where: { id: parsed.buildingId, companyId: user.companyId },
     })
@@ -124,14 +170,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: '楼宇不存在' }, { status: 400 })
     }
 
-    const items: InspectionCheckItemJson[] = parsed.checkItems.map((c) => ({
-      name: c.name.trim(),
-      nfcTagId: c.nfcTagId,
-    }))
+    const built = await buildCheckItemsFromInspectionPointIds(
+      prisma,
+      user.companyId,
+      parsed.buildingId,
+      parsed.inspectionType,
+      parsed.inspectionPointIds
+    )
+    if (!built.ok) {
+      return NextResponse.json({ success: false, message: built.message }, { status: 400 })
+    }
+    const items: InspectionCheckItemJson[] = built.items
+
     const v = await validatePlanCheckItems(prisma, user.companyId, parsed.inspectionType, parsed.buildingId, items)
     if (!v.ok) {
       return NextResponse.json({ success: false, message: v.message }, { status: 400 })
     }
+
+    const seen = new Set<number>()
+    const ordered: number[] = []
+    for (const id of parsed.inspectionPointIds) {
+      if (!seen.has(id)) {
+        seen.add(id)
+        ordered.push(id)
+      }
+    }
+    const inspectionPointIdsJson = JSON.stringify(ordered)
 
     const tags = await prisma.nfcTag.findMany({
       where: { id: { in: items.map((i) => i.nfcTagId) }, companyId: user.companyId },
@@ -152,11 +216,14 @@ export async function POST(request: NextRequest) {
         inspectionType: parsed.inspectionType,
         cycleType: parsed.cycleType,
         cycleValue: parsed.cycleValue,
-        cycleWeekday: parsed.cycleWeekday ?? null,
-        cycleMonthDay: parsed.cycleMonthDay ?? null,
+        cycleWeekday: null,
+        cycleMonthDay: null,
+        cycleSchedule: JSON.stringify(scheduleNorm),
+        requirePhoto: parsed.requirePhoto,
         buildingId: parsed.buildingId,
         userIds: parsed.userIds.length > 0 ? JSON.stringify(parsed.userIds) : null,
         checkItems: JSON.stringify(enriched),
+        inspectionPointIds: inspectionPointIdsJson,
         status: 'active',
         companyId: user.companyId,
       },
