@@ -75,8 +75,15 @@ export async function GET() {
     })
   } catch (e) {
     console.error(e)
+    const detail = e instanceof Error ? e.message : String(e)
     return NextResponse.json(
-      { success: false, message: '服务器错误' },
+      {
+        success: false,
+        message:
+          process.env.NODE_ENV === 'development'
+            ? `服务器错误: ${detail}`
+            : '服务器错误',
+      },
       { status: 500 }
     )
   }

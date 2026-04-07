@@ -3,6 +3,28 @@ import { getMpAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { formatBillRoomsDisplay } from '@/lib/bill-merged-rooms'
 
+function parseYmdLocal(ymd: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim())
+  if (!m) return null
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  const d = Number(m[3])
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null
+  const dt = new Date(y, mo - 1, d, 0, 0, 0, 0)
+  return Number.isNaN(dt.getTime()) ? null : dt
+}
+
+function endOfYmdLocal(ymd: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim())
+  if (!m) return null
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  const d = Number(m[3])
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null
+  const dt = new Date(y, mo - 1, d, 23, 59, 59, 999)
+  return Number.isNaN(dt.getTime()) ? null : dt
+}
+
 async function resolveEffectiveTenantIds(userId: number, jwtRelations: { tenantId: number; buildingId: number }[] = []) {
   const tenantUser = await prisma.tenantUser.findUnique({
     where: { id: userId },
@@ -42,12 +64,42 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, list: [] })
   }
 
-  const buildingId = request.nextUrl.searchParams.get('buildingId')
+  const sp = request.nextUrl.searchParams
+  const buildingId = sp.get('buildingId')
   const where: Record<string, unknown> = {
     tenantId: { in: tenantIds },
     companyId: user.companyId,
   }
-  if (buildingId) where.buildingId = parseInt(buildingId, 10)
+  if (buildingId) {
+    const n = parseInt(buildingId, 10)
+    if (!Number.isNaN(n)) where.buildingId = n
+  }
+
+  const dueFrom = sp.get('dueDateFrom')?.trim()
+  const dueTo = sp.get('dueDateTo')?.trim()
+  const dueRange: { gte?: Date; lte?: Date } = {}
+  if (dueFrom) {
+    const d = parseYmdLocal(dueFrom)
+    if (d) dueRange.gte = d
+  }
+  if (dueTo) {
+    const d = endOfYmdLocal(dueTo)
+    if (d) dueRange.lte = d
+  }
+  if (Object.keys(dueRange).length > 0) {
+    where.dueDate = dueRange
+  }
+
+  const feeType = sp.get('feeType')?.trim()
+  if (feeType) where.feeType = feeType
+
+  /** 与列表展示一致：已缴=paid，其余为待缴 */
+  const payState = sp.get('payState')?.trim()
+  if (payState === 'paid') {
+    where.paymentStatus = 'paid'
+  } else if (payState === 'unpaid') {
+    where.paymentStatus = { not: 'paid' }
+  }
 
   const bills = await prisma.bill.findMany({
     where,

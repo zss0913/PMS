@@ -24,14 +24,14 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     })
     const buildingIds = [...new Set(complaints.map((c) => c.buildingId))]
-    const buildings =
+    const complaintBuildings =
       buildingIds.length > 0
         ? await prisma.building.findMany({
             where: { id: { in: buildingIds } },
             select: { id: true, name: true },
           })
         : []
-    const buildingMap = Object.fromEntries(buildings.map((b) => [b.id, b.name]))
+    const buildingMap = Object.fromEntries(complaintBuildings.map((b) => [b.id, b.name]))
 
     const empIds = new Set<number>()
     complaints.forEach((c) => {
@@ -69,9 +69,15 @@ export async function GET() {
       orderBy: { id: 'asc' },
     })
 
+    const buildings = await prisma.building.findMany({
+      where: { companyId: user.companyId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    })
+
     return NextResponse.json({
       success: true,
-      data: { list, employees, currentUserId: user.id },
+      data: { list, employees, buildings, currentUserId: user.id },
     })
   } catch (e) {
     console.error(e)

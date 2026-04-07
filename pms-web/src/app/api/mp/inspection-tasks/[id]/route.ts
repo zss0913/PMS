@@ -96,6 +96,7 @@ export async function GET(
       progress,
       doneTagIds: [...doneSet],
       route: task.route,
+      requirePhoto: task.requirePhoto,
     },
   })
 }

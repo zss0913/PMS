@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
     buildingName: t.building?.name ?? null,
     startedAt: t.startedAt?.toISOString() ?? null,
     completedAt: t.completedAt?.toISOString() ?? null,
+    requirePhoto: t.requirePhoto,
   }))
 
   return NextResponse.json({ success: true, data: { list } })

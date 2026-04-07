@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { get } from '@/api/request'
-import { resolveMediaUrl } from '@/api/work-order-upload'
+import { resolveMediaUrl, isMediaVideoUrl } from '@/api/work-order-upload'
 
 interface ComplaintItem {
   id: number
@@ -14,20 +15,60 @@ interface ComplaintItem {
   images?: string[]
 }
 
+type StatusTab = 'all' | 'pending' | 'processing' | 'completed'
+
+const TABS: { key: StatusTab; label: string }[] = [
+  { key: 'all', label: '全部' },
+  { key: 'pending', label: '待处理' },
+  { key: 'processing', label: '处理中' },
+  { key: 'completed', label: '已处理' },
+]
+
 const list = ref<ComplaintItem[]>([])
 const loading = ref(true)
+const activeTab = ref<StatusTab>('all')
+const counts = ref({ all: 0, pending: 0, processing: 0, completed: 0 })
 
-onMounted(async () => {
+async function loadList() {
+  loading.value = true
   try {
-    const res = await get<{ list: ComplaintItem[] }>('/api/mp/complaints')
+    const res = (await get('/api/mp/complaints', { statusTab: activeTab.value })) as {
+      success?: boolean
+      data?: { list?: ComplaintItem[]; counts?: typeof counts.value }
+    }
     if (res.success && res.data?.list) {
       list.value = res.data.list
+    } else {
+      list.value = []
+    }
+    if (res.data?.counts) {
+      counts.value = {
+        all: res.data.counts.all ?? 0,
+        pending: res.data.counts.pending ?? 0,
+        processing: res.data.counts.processing ?? 0,
+        completed: res.data.counts.completed ?? 0,
+      }
     }
   } catch {
     uni.showToast({ title: '加载失败', icon: 'none' })
+    list.value = []
   } finally {
     loading.value = false
   }
+}
+
+function setTab(key: StatusTab) {
+  if (activeTab.value === key) return
+  activeTab.value = key
+  void loadList()
+}
+
+function tabCount(key: StatusTab): number {
+  return counts.value[key]
+}
+
+onShow(() => {
+  void loadList()
 })
 
 function goSubmit() {
@@ -52,8 +93,27 @@ function fmtTime(s: string) {
     <view class="toolbar">
       <button class="btn" type="primary" @click="goSubmit">我要吐槽</button>
     </view>
+
+    <view class="tabs-card">
+      <scroll-view scroll-x class="tabs-scroll" :show-scrollbar="false" :enable-flex="true">
+        <view class="tabs-inner">
+          <view
+            v-for="tab in TABS"
+            :key="tab.key"
+            class="tab-item"
+            :class="{ active: activeTab === tab.key }"
+            @click="setTab(tab.key)"
+          >
+            {{ tab.label }}（{{ tabCount(tab.key) }}）
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
     <view v-if="loading" class="loading">加载中…</view>
-    <view v-else-if="list.length === 0" class="empty">暂无吐槽，点击上方提交</view>
+    <view v-else-if="list.length === 0" class="empty">
+      {{ activeTab === 'all' ? '暂无吐槽，点击上方提交' : '该状态下暂无记录' }}
+    </view>
     <view v-else class="list">
       <view v-for="item in list" :key="item.id" class="card" @click="goDetail(item.id)">
         <view class="row-top">
@@ -67,13 +127,22 @@ function fmtTime(s: string) {
         </view>
         <view class="desc">{{ item.description }}</view>
         <view v-if="item.images?.length" class="thumbs">
-          <image
-            v-for="(u, i) in item.images.slice(0, 3)"
-            :key="i"
-            :src="resolveMediaUrl(u)"
-            mode="aspectFill"
-            class="thumb"
-          />
+          <template v-for="(u, i) in item.images.slice(0, 3)" :key="i">
+            <video
+              v-if="isMediaVideoUrl(u)"
+              :src="resolveMediaUrl(u)"
+              class="thumb thumb-video"
+              muted
+              :show-center-play-btn="false"
+              :controls="false"
+            />
+            <image
+              v-else
+              :src="resolveMediaUrl(u)"
+              mode="aspectFill"
+              class="thumb"
+            />
+          </template>
         </view>
       </view>
     </view>
@@ -86,6 +155,7 @@ function fmtTime(s: string) {
   min-height: 100vh;
   box-sizing: border-box;
   padding-bottom: 48rpx;
+  background: $pms-bg-deep;
 }
 
 .toolbar {
@@ -98,10 +168,49 @@ function fmtTime(s: string) {
   font-size: 30rpx;
 }
 
+.tabs-card {
+  @include pms-card;
+  padding: 16rpx 8rpx 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.tabs-scroll {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.tabs-inner {
+  display: inline-flex;
+  flex-direction: row;
+  gap: 8rpx;
+  padding: 4rpx 8rpx 8rpx;
+  min-width: 100%;
+  box-sizing: border-box;
+}
+
+.tab-item {
+  flex-shrink: 0;
+  padding: 14rpx 22rpx;
+  border-radius: 12rpx;
+  font-size: 26rpx;
+  color: $pms-text-muted;
+  border: 1rpx solid transparent;
+  background: transparent;
+  @include pms-tap;
+}
+
+.tab-item.active {
+  color: $pms-accent;
+  font-weight: 600;
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(14, 165, 233, 0.12);
+  box-shadow: inset 0 -4rpx 0 0 $pms-accent;
+}
+
 .loading,
 .empty {
   text-align: center;
-  padding: 100rpx 40rpx;
+  padding: 80rpx 40rpx;
   color: $pms-text-muted;
   font-size: 28rpx;
 }
@@ -150,6 +259,10 @@ function fmtTime(s: string) {
     width: 160rpx;
     height: 160rpx;
     border-radius: 12rpx;
+  }
+  .thumb-video {
+    object-fit: cover;
+    background: rgba(0, 0, 0, 0.35);
   }
 }
 </style>

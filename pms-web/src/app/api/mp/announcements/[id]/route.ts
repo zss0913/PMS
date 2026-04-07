@@ -32,6 +32,9 @@ export async function GET(
           : []),
       ],
     },
+    include: {
+      company: { select: { name: true } },
+    },
   })
 
   if (!row) {
@@ -46,6 +49,8 @@ export async function GET(
       content: row.content,
       publishTime: row.publishTime?.toISOString() ?? '',
       scope: row.scope,
+      publisherName: row.publisherName ?? null,
+      companyName: row.company.name,
     },
   })
 }

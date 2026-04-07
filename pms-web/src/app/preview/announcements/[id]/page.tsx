@@ -30,6 +30,7 @@ export default async function AnnouncementPreviewPage({
 
   const row = await prisma.announcement.findUnique({
     where: { id: nid },
+    include: { company: { select: { name: true } } },
   })
 
   if (!row) {
@@ -44,20 +45,21 @@ export default async function AnnouncementPreviewPage({
   const publishTime = row.publishTime || (status === 'draft' ? row.createdAt : null)
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4 flex items-start justify-center">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div className="min-h-screen bg-slate-100 p-4 flex items-start justify-center overflow-x-hidden">
+      <div className="w-full max-w-sm min-w-0 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100">
           <h1 className="text-lg font-semibold">公告预览</h1>
         </div>
         <div className="p-4">
-          <h2 className="text-xl font-bold leading-8">{row.title}</h2>
+          <h2 className="text-xl font-bold leading-8 break-words">{row.title}</h2>
           <div className="mt-3 text-xs text-slate-500 space-y-1">
+            <p>物业公司：{row.company.name}</p>
             <p>发布人：{row.publisherName || '待发布'}</p>
             <p>发布时间：{formatTime(publishTime)}</p>
           </div>
-          <div className="mt-4 text-sm leading-7 text-slate-700">
+          <div className="mt-4 min-w-0 text-sm leading-7 text-slate-700">
             <div
-              className="prose prose-sm max-w-none"
+              className="prose prose-sm max-w-none [&_img]:max-w-full [&_img]:h-auto [&_video]:max-w-full [&_table]:max-w-full"
               dangerouslySetInnerHTML={{ __html: row.content || '<p>（无内容）</p>' }}
             />
           </div>

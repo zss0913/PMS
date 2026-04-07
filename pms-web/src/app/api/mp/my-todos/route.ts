@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client'
 import { getMpAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { mpEmployeeWorkOrderVisibilityWhere } from '@/lib/mp-employee-work-order-scope'
+import { normalizeComplaintStatus } from '@/lib/complaint-status'
 
 /** 巡检任务：视为「待办」的状态（与库内历史值兼容） */
 const ACTIVE_INSPECTION_STATUSES = [
@@ -22,7 +23,7 @@ const TODO_WORK_ORDER_STATUSES = [
   '待租客确认费用',
 ] as const
 
-/** 员工端：待办列表（工单 + 巡检）+ 汇总数字 */
+/** 员工端：待办列表（工单 + 巡检 + 卫生吐槽）+ 汇总数字 */
 export async function GET(request: Request) {
   const authUser = await getMpAuthUser(request)
   if (!authUser || authUser.type !== 'employee') {
@@ -41,7 +42,15 @@ export async function GET(request: Request) {
     AND: [baseWo, { status: { in: [...TODO_WORK_ORDER_STATUSES] } }],
   }
 
-  const [woRows, inspectionRaw] = await Promise.all([
+  const complaintTodoWhere: Prisma.ComplaintWhereInput = {
+    companyId,
+    OR: [
+      { assignedTo: userId, status: { in: ['处理中', 'processing'] } },
+      ...(isLeader ? [{ status: { in: ['待处理', 'pending'] } }] : []),
+    ],
+  }
+
+  const [woRows, inspectionRaw, complaintTodoRows] = await Promise.all([
     prisma.workOrder.findMany({
       where: woListWhere,
       orderBy: { updatedAt: 'desc' },
@@ -63,6 +72,12 @@ export async function GET(request: Request) {
         status: true,
         userIds: true,
       },
+    }),
+    prisma.complaint.findMany({
+      where: complaintTodoWhere,
+      orderBy: { updatedAt: 'desc' },
+      take: 40,
+      select: { id: true, description: true, status: true },
     }),
   ])
 
@@ -93,6 +108,17 @@ export async function GET(request: Request) {
     status: o.status,
   }))
 
+  const complaints = complaintTodoRows.map((c) => {
+    const desc = c.description || ''
+    return {
+      id: c.id,
+      code: 'C' + String(c.id).padStart(5, '0'),
+      title: desc.length > 44 ? `${desc.slice(0, 44)}…` : desc,
+      type: '卫生吐槽',
+      status: normalizeComplaintStatus(c.status),
+    }
+  })
+
   const [pendingAssign, pendingProcess, pendingInspection, overdueBills] = await Promise.all([
     isLeader
       ? prisma.workOrder.count({
@@ -122,6 +148,7 @@ export async function GET(request: Request) {
     data: {
       workOrders,
       inspectionTasks,
+      complaints,
     },
     todos: {
       pendingAssign,

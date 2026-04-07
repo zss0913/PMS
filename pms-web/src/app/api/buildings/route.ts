@@ -4,6 +4,30 @@ import { getAuthUser } from '@/lib/auth'
 import { z } from 'zod'
 import { Decimal } from '@prisma/client/runtime/library'
 
+export async function GET() {
+  try {
+    const user = await getAuthUser()
+    if (!user) {
+      return NextResponse.json({ success: false, message: '未登录' }, { status: 401 })
+    }
+    if (user.companyId === 0) {
+      return NextResponse.json(
+        { success: false, message: '超级管理员请使用员工账号登录后操作' },
+        { status: 403 }
+      )
+    }
+    const list = await prisma.building.findMany({
+      where: { companyId: user.companyId },
+      select: { id: true, name: true },
+      orderBy: { id: 'asc' },
+    })
+    return NextResponse.json({ success: true, data: { list } })
+  } catch (e) {
+    console.error(e)
+    return NextResponse.json({ success: false, message: '服务器错误' }, { status: 500 })
+  }
+}
+
 const createSchema = z.object({
   name: z.string().min(1, '楼宇名称必填'),
   area: z.union([z.number(), z.string()]).transform((v) => Number(v)),

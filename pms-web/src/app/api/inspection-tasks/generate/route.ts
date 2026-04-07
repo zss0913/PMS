@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 import { writeInspectionTaskNotifications } from '@/lib/staff-notification-write'
-import { shouldGenerateOnDate } from '@/lib/inspection-cycle'
 import { parseCheckItemsJson } from '@/lib/inspection-check-items'
+import { getScheduledDatetimesForRunDate } from '@/lib/inspection-cycle-schedule'
 
 function genTaskCode() {
   return 'IT' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 6).toUpperCase()
@@ -16,8 +16,8 @@ function startOfDay(d: Date): Date {
 }
 
 /**
- * 按巡检计划周期，为「运行日」应生成的计划各创建一条任务（若该计划日尚无任务则创建）。
- * 默认运行日为当天，也可由 query ?date=YYYY-MM-DD 指定（便于补跑）。
+ * 按巡检计划周期，在「运行日」的各执行时刻创建任务（同一计划同一时刻不重复）。
+ * query ?date=YYYY-MM-DD 指定运行日（便于补跑）。
  */
 export async function POST(request: Request) {
   try {
@@ -47,70 +47,78 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: '暂无启用的巡检计划' }, { status: 400 })
     }
 
-    const dayStart = runDate
-    const dayEnd = new Date(dayStart.getTime() + 86400000)
-
     const created: string[] = []
+    let taskCount = 0
+
     for (const plan of plans) {
       if (!plan.buildingId) continue
       const items = parseCheckItemsJson(plan.checkItems)
       if (items.length === 0) continue
 
-      const hit = shouldGenerateOnDate(
+      const datetimes = getScheduledDatetimesForRunDate(
         {
           cycleType: plan.cycleType,
           cycleValue: plan.cycleValue,
+          cycleSchedule: plan.cycleSchedule,
           cycleWeekday: plan.cycleWeekday,
           cycleMonthDay: plan.cycleMonthDay,
           createdAt: plan.createdAt,
         },
         runDate
       )
-      if (!hit) continue
 
-      const existing = await prisma.inspectionTask.findFirst({
-        where: {
-          planId: plan.id,
+      for (const scheduledDate of datetimes) {
+        const existing = await prisma.inspectionTask.findFirst({
+          where: {
+            planId: plan.id,
+            companyId: user.companyId,
+            scheduledDate,
+          },
+        })
+        if (existing) continue
+
+        let code = genTaskCode()
+        while (await prisma.inspectionTask.findUnique({ where: { code } })) {
+          code = genTaskCode()
+        }
+
+        const task = await prisma.inspectionTask.create({
+          data: {
+            code,
+            planId: plan.id,
+            planName: plan.name,
+            inspectionType: plan.inspectionType,
+            scheduledDate,
+            requirePhoto: plan.requirePhoto,
+            userIds: plan.userIds,
+            route: plan.route,
+            checkItems: plan.checkItems,
+            buildingId: plan.buildingId,
+            status: '待执行',
+            companyId: user.companyId,
+          },
+        })
+        taskCount += 1
+        await writeInspectionTaskNotifications(prisma, {
           companyId: user.companyId,
-          scheduledDate: { gte: dayStart, lt: dayEnd },
-        },
-      })
-      if (existing) continue
-
-      let code = genTaskCode()
-      while (await prisma.inspectionTask.findUnique({ where: { code } })) {
-        code = genTaskCode()
-      }
-
-      const task = await prisma.inspectionTask.create({
-        data: {
-          code,
-          planId: plan.id,
+          taskId: task.id,
           planName: plan.name,
+          taskCode: task.code,
           inspectionType: plan.inspectionType,
-          scheduledDate: dayStart,
-          userIds: plan.userIds,
-          route: plan.route,
-          checkItems: plan.checkItems,
-          buildingId: plan.buildingId,
-          status: '待执行',
-          companyId: user.companyId,
-        },
-      })
-      await writeInspectionTaskNotifications(prisma, {
-        companyId: user.companyId,
-        taskId: task.id,
-        planName: plan.name,
-        taskCode: task.code,
-        inspectionType: plan.inspectionType,
-        planUserIds: plan.userIds,
-      })
-      created.push(plan.name)
+          planUserIds: plan.userIds,
+        })
+        if (!created.includes(plan.name)) created.push(plan.name)
+      }
     }
 
     return NextResponse.json({
       success: true,
-      data: { created: created.length, plans: created, runDate: dayStart.toISOString() },
+      data: {
+        taskCount,
+        plansTouched: created.length,
+        plans: created,
+        runDate: runDate.toISOString(),
+      },
     })
   } catch (e) {
     console.error(e)
