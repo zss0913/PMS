@@ -16,7 +16,7 @@ type InspectionPlan = {
   cycleMonthDay?: number | null
   cycleLabel: string
   userIds: number[]
-  checkItems: { name: string; nfcTagId?: number }[]
+  checkItems: { name: string; nfcTagId: number }[]
   buildingId?: number | null
   status: string
   createdAt: string

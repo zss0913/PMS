@@ -12,7 +12,7 @@ const schema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const user = await getMpAuthUser(request)
-    if (!user || user.type !== 'tenant') {
+    if (!user || (user.type !== 'tenant' && user.type !== 'employee')) {
       return NextResponse.json(
         { success: false, message: '未登录或无权限' },
         { status: 401 }
@@ -28,7 +28,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const row = await prisma.tenantUser.findFirst({
+    if (user.type === 'tenant') {
+      const row = await prisma.tenantUser.findFirst({
+        where: { id: user.id, companyId: user.companyId },
+      })
+      if (!row) {
+        return NextResponse.json({ success: false, message: '用户不存在' }, { status: 404 })
+      }
+
+      const ok = await bcrypt.compare(oldPassword, row.password)
+      if (!ok) {
+        return NextResponse.json({ success: false, message: '原密码错误' }, { status: 400 })
+      }
+
+      const hash = await bcrypt.hash(newPassword, 10)
+      await prisma.tenantUser.update({
+        where: { id: row.id },
+        data: { password: hash },
+      })
+
+      return NextResponse.json({ success: true, message: '密码已更新' })
+    }
+
+    const row = await prisma.employee.findFirst({
       where: { id: user.id, companyId: user.companyId },
     })
     if (!row) {
@@ -41,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     const hash = await bcrypt.hash(newPassword, 10)
-    await prisma.tenantUser.update({
+    await prisma.employee.update({
       where: { id: row.id },
       data: { password: hash },
     })

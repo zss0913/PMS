@@ -1,9 +1,13 @@
-import type { PrismaClient } from '@prisma/client'
+import { Prisma, type PrismaClient } from '@prisma/client'
 import {
   findRecipientEmployeeIds,
   findRecipientEmployeeIdsForInspectionPlan,
 } from '@/lib/staff-notification-recipients'
 import { businessTagForInspectionType, type StaffNotificationCategory } from '@/lib/staff-notification-routing'
+
+function isDuplicateNotificationError(err: unknown) {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002'
+}
 
 export async function writeStaffNotifications(
   prisma: PrismaClient,
@@ -35,22 +39,28 @@ export async function writeStaffNotifications(
   }
 
   try {
-    await prisma.staffNotification.createMany({
-      data: recipientIds.map((employeeId) => ({
-        companyId,
-        employeeId,
-        category,
-        entityType,
-        entityId,
-        buildingId,
-        title,
-        summary: summary ?? null,
-      })),
-      skipDuplicates: true,
-    })
+    for (const employeeId of recipientIds) {
+      try {
+        await prisma.staffNotification.create({
+          data: {
+            companyId,
+            employeeId,
+            category,
+            entityType,
+            entityId,
+            buildingId,
+            title,
+            summary: summary ?? null,
+          },
+        })
+      } catch (err) {
+        if (isDuplicateNotificationError(err)) continue
+        throw err
+      }
+    }
   } catch (err) {
     console.error(
-      '[staff-notification] createMany failed（请执行 prisma migrate / db push 并 prisma generate）',
+      '[staff-notification] create failed（请执行 prisma migrate / db push 并 prisma generate）',
       err
     )
   }
@@ -87,21 +97,27 @@ export async function writeInspectionTaskNotifications(
   }
 
   try {
-    await prisma.staffNotification.createMany({
-      data: recipientIds.map((employeeId) => ({
-        companyId: args.companyId,
-        employeeId,
-        category: 'inspection_task' as const,
-        entityType: 'inspection_task',
-        entityId: args.taskId,
-        buildingId: null,
-        title: `巡检任务：${args.planName}`,
-        summary: `${args.taskCode} · ${args.inspectionType}`,
-      })),
-      skipDuplicates: true,
-    })
+    for (const employeeId of recipientIds) {
+      try {
+        await prisma.staffNotification.create({
+          data: {
+            companyId: args.companyId,
+            employeeId,
+            category: 'inspection_task' as const,
+            entityType: 'inspection_task',
+            entityId: args.taskId,
+            buildingId: null,
+            title: `巡检任务：${args.planName}`,
+            summary: `${args.taskCode} · ${args.inspectionType}`,
+          },
+        })
+      } catch (err) {
+        if (isDuplicateNotificationError(err)) continue
+        throw err
+      }
+    }
   } catch (err) {
-    console.error('[staff-notification] inspection createMany failed', err)
+    console.error('[staff-notification] inspection create failed', err)
   }
 }
 

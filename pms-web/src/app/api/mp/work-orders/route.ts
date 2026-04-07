@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
 
     const status = request.nextUrl.searchParams.get('status')
     const titleQ = request.nextUrl.searchParams.get('titleQ')?.trim() ?? ''
+    const mine = request.nextUrl.searchParams.get('mine') === '1'
 
     let whereInput: Prisma.WorkOrderWhereInput
     if (user.type === 'tenant') {
@@ -58,6 +59,7 @@ export async function GET(request: NextRequest) {
     } else {
       whereInput = {
         ...mpEmployeeWorkOrderVisibilityWhere(user),
+        ...(mine ? { reporterId: user.id } : {}),
         ...(status ? { status } : {}),
         ...(titleQ
           ? { title: { contains: titleQ } }

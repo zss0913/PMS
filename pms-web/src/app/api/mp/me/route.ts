@@ -56,7 +56,12 @@ export async function GET(request: Request) {
 
   const employee = await prisma.employee.findUnique({
     where: { id: user.id },
-    include: { role: true },
+    include: {
+      role: true,
+      department: { select: { id: true, name: true } },
+      project: { select: { id: true, name: true } },
+      company: { select: { id: true, name: true, contact: true, phone: true, address: true } },
+    },
   })
   if (!employee) {
     return NextResponse.json(
@@ -64,15 +69,31 @@ export async function GET(request: Request) {
       { status: 404 }
     )
   }
+
+  const displayName = employee.name +
+    (employee.department?.name ? ` (${employee.department.name})` : '')
+
   return NextResponse.json({
     success: true,
     user: {
       id: employee.id,
       name: employee.name,
+      displayName,
       phone: employee.phone,
       type: 'employee',
       companyId: employee.companyId,
+      companyName: employee.company?.name ?? '',
+      companyContact: employee.company?.contact ?? '',
+      companyPhone: employee.company?.phone ?? '',
+      companyAddress: employee.company?.address ?? '',
       roleId: employee.roleId,
+      roleName: employee.role?.name ?? '',
+      projectId: employee.projectId,
+      projectName: employee.project?.name ?? '',
+      departmentId: employee.departmentId,
+      departmentName: employee.department?.name ?? '',
+      position: employee.position,
+      isLeader: employee.isLeader,
     },
   })
 }
