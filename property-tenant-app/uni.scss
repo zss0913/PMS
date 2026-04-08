@@ -1,0 +1,40 @@
+/* 引入 uview-plus 变量 */
+@import 'uview-plus/theme.scss';
+
+$uni-color-primary: #2979ff;
+$uni-color-success: #18bc9c;
+$uni-color-warning: #f3a73f;
+$uni-color-error: #e43d33;
+
+$uni-bg-color: #f5f6f7;
+$uni-bg-color-grey: #f8f8f8;
+$uni-bg-color-hover: #f1f1f1;
+$uni-bg-color-mask: rgba(0, 0, 0, 0.4);
+
+$uni-text-color: #333;
+$uni-text-color-inverse: #fff;
+$uni-text-color-grey: #999;
+$uni-text-color-placeholder: #808080;
+
+/* 强制修改 checkbox 和 radio 的选中样式为内部打勾而不是全填充 */
+/* H5 and App */
+::v-deep .u-checkbox__icon-wrap--checked,
+::v-deep .u-radio__icon-wrap--checked {
+  background-color: transparent !important;
+  border-color: #2979ff !important;
+}
+
+::v-deep .u-checkbox__icon-wrap--checked .u-icon__icon,
+::v-deep .u-radio__icon-wrap--checked .u-icon__icon {
+  color: #2979ff !important;
+}
+
+/* Wechat Miniprogram global style override */
+.u-checkbox__icon-wrap--checked,
+.u-radio__icon-wrap--checked {
+  background-color: transparent !important;
+}
+.u-checkbox__icon-wrap--checked .u-icon__icon,
+.u-radio__icon-wrap--checked .u-icon__icon {
+  color: #2979ff !important;
+}
