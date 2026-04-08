@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { get } from '@/api/request'
 
@@ -19,6 +20,11 @@ const switchOptions = ref<SwitchOpt[]>([])
 const switchPanelOpen = ref(false)
 const switching = ref(false)
 
+/** 当前账号在任一已关联租客主体下是否为管理员 */
+const isTenantAdmin = computed(() =>
+  (userStore.user?.relations ?? []).some((r) => r.isAdmin === true)
+)
+
 const activeTenantLabel = computed(() => {
   const rels = userStore.user?.relations ?? []
   if (rels.length === 0) return ''
@@ -34,7 +40,7 @@ const showSwitchEntry = computed(
   () => switchOptions.value.filter((o) => !o.isCurrent).length > 0
 )
 
-onMounted(() => {
+onShow(() => {
   if (!userStore.token) {
     uni.navigateTo({ url: '/pages/login/login' })
     return
@@ -99,20 +105,16 @@ function optionSub(opt: SwitchOpt) {
   return `${opt.propertyCompanyName} · ${opt.accountName}`
 }
 
-function goBills() {
-  uni.navigateTo({ url: '/pages/bills/bills' })
+function goChangePassword() {
+  uni.navigateTo({ url: '/pages/profile/change-password' })
 }
 
-function goWorkOrders() {
-  uni.navigateTo({ url: '/pages/work-orders/work-orders' })
-}
-
-function goAnnouncements() {
-  uni.navigateTo({ url: '/pages/announcements/announcements' })
-}
-
-function goComplaints() {
-  uni.navigateTo({ url: '/pages/complaints/complaints' })
+function goTenantStaff() {
+  if (!isTenantAdmin.value) {
+    uni.showToast({ title: '暂无权限', icon: 'none' })
+    return
+  }
+  uni.navigateTo({ url: '/pages/profile/tenant-staff' })
 }
 
 function logout() {
@@ -149,20 +151,12 @@ function logout() {
       </view>
     </view>
     <view class="menu-list">
-      <view class="menu-item" @click="goBills">
-        <text class="menu-text">我的账单</text>
+      <view class="menu-item" @click="goChangePassword">
+        <text class="menu-text">修改密码</text>
         <text class="arrow">›</text>
       </view>
-      <view class="menu-item" @click="goWorkOrders">
-        <text class="menu-text">报事报修</text>
-        <text class="arrow">›</text>
-      </view>
-      <view class="menu-item" @click="goAnnouncements">
-        <text class="menu-text">公告</text>
-        <text class="arrow">›</text>
-      </view>
-      <view class="menu-item" @click="goComplaints">
-        <text class="menu-text">卫生吐槽</text>
+      <view class="menu-item" @click="goTenantStaff">
+        <text class="menu-text">员工管理</text>
         <text class="arrow">›</text>
       </view>
     </view>

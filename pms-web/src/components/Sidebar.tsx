@@ -32,8 +32,12 @@ import {
   ScrollText,
   Landmark,
   UserCircle,
+  History,
+  Smartphone,
 } from 'lucide-react'
 import type { AuthUser } from '@/lib/auth'
+import { MENU_PATH_TO_ID } from '@/lib/menu-config'
+import { useRolePermissions } from '@/hooks/useRolePermissions'
 import { cn } from '@/lib/utils'
 
 // Flower Spinner Icon - 来自 epic-spinners（缩小尺寸）
@@ -163,6 +167,7 @@ const menuItems = [
       { href: '/inspection-plans', label: '巡检计划', icon: ClipboardList },
       { href: '/inspection-tasks', label: '巡检任务', icon: ClipboardList },
       { href: '/inspection-records', label: '巡检记录', icon: ClipboardList },
+      { href: '/device-maintenance-records', label: '设备维保记录', icon: History },
       { href: '/complaints', label: '卫生吐槽', icon: MessageSquare },
       { href: '/announcements', label: '公告管理', icon: Bell },
     ],
@@ -172,6 +177,7 @@ const menuItems = [
     icon: Settings,
     children: [
       { href: '/companies', label: '物业公司', icon: Building2 },
+      { href: '/platform/mp-settings', label: '全局小程序配置', icon: Smartphone },
       { href: '/departments', label: '部门管理', icon: Building },
       { href: '/roles', label: '角色管理', icon: UserCog },
       { href: '/employees', label: '员工账号', icon: Users },
@@ -189,6 +195,7 @@ interface SidebarProps {
 export function Sidebar({ user, collapsed: propCollapsed, onCollapseChange }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
+  const { canMenu } = useRolePermissions()
   const [collapsed, setCollapsed] = useState(propCollapsed ?? false)
   const [mounted, setMounted] = useState(false)
 
@@ -232,6 +239,14 @@ export function Sidebar({ user, collapsed: propCollapsed, onCollapseChange }: Si
   }
 
   const isSuperAdmin = user.type === 'super_admin'
+  const restrictEmployeeMenu = user.type === 'employee' && !isSuperAdmin
+
+  const menuHrefAllowed = (href: string) => {
+    if (!restrictEmployeeMenu) return true
+    const mid = MENU_PATH_TO_ID[href]
+    if (mid == null) return true
+    return canMenu(mid)
+  }
 
   if (!mounted) {
     return null
@@ -277,11 +292,14 @@ export function Sidebar({ user, collapsed: propCollapsed, onCollapseChange }: Si
         {menuItems.map((item) => {
           if ('children' in item) {
             const children = item.children ?? []
-            const hasActive = children.some((c) => pathname === c.href || pathname.startsWith(c.href + '/'))
             const filtered = isSuperAdmin
               ? children
-              : children.filter((c) => c.href !== '/companies')
-            if (filtered.length === 0) return null
+              : children.filter(
+                  (c) => c.href !== '/companies' && c.href !== '/platform/mp-settings'
+                )
+            const visible = filtered.filter((c) => menuHrefAllowed(c.href))
+            const hasActive = visible.some((c) => pathname === c.href || pathname.startsWith(c.href + '/'))
+            if (visible.length === 0) return null
 
             return (
               <div key={item.label} className={cn('mb-1', collapsed && 'mb-2')}>
@@ -301,9 +319,10 @@ export function Sidebar({ user, collapsed: propCollapsed, onCollapseChange }: Si
                   <div className="h-px bg-slate-700/50 mx-2 my-2" />
                 )}
 
-                {filtered.map((child) => {
+                {visible.map((child) => {
                   const Icon = child.icon
-                  const isActive = pathname === child.href
+                  const isActive =
+                    pathname === child.href || pathname.startsWith(`${child.href}/`)
                   return (
                     <button
                       key={child.href}
@@ -329,6 +348,7 @@ export function Sidebar({ user, collapsed: propCollapsed, onCollapseChange }: Si
 
           const Icon = item.icon
           const isActive = pathname === item.href
+          if (!menuHrefAllowed(item.href)) return null
           return (
             <button
               key={item.href}

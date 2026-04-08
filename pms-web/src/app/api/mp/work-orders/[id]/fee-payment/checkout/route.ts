@@ -2,18 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getMpAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { createFeeCheckoutPayment } from '@/lib/mp-work-order-fee-pay'
+import { completeWorkOrderFeePayment, createFeeCheckoutPayment } from '@/lib/mp-work-order-fee-pay'
+import { matchesPmsWechatPayMockConfig } from '@/lib/wechat-pay-mock'
 import { operatorFromAuthUser } from '@/lib/work-order-activity-log'
 import {
   buildMiniProgramPayParams,
   createWechatJsapiOrder,
   getWechatOpenId,
-  getWechatPayConfig,
+  getWechatPayConfigAsync,
 } from '@/lib/wechat-pay'
 
 const bodySchema = z.object({
   billId: z.number().int().min(1),
-  channel: z.enum(['wechat', 'alipay']),
+  /** 仅支持微信（小程序 / 微信内 H5） */
+  channel: z.enum(['wechat']).default('wechat'),
   loginCode: z.string().min(1).optional(),
 })
 
@@ -66,12 +68,6 @@ export async function POST(
 
     const json = await request.json()
     const parsed = bodySchema.parse(json)
-    if (parsed.channel !== 'wechat') {
-      return NextResponse.json({ success: false, message: '当前仅支持微信支付' }, { status: 400 })
-    }
-    if (!parsed.loginCode) {
-      return NextResponse.json({ success: false, message: '缺少微信登录凭证' }, { status: 400 })
-    }
 
     const bill = await prisma.bill.findFirst({
       where: {
@@ -103,8 +99,6 @@ export async function POST(
     const company = await prisma.company.findUnique({
       where: { id: user.companyId },
       select: {
-        appId: true,
-        appSecret: true,
         wechatMchId: true,
         wechatMchSerialNo: true,
         wechatApiV3Key: true,
@@ -113,6 +107,11 @@ export async function POST(
     })
     if (!company) {
       return NextResponse.json({ success: false, message: '公司不存在' }, { status: 404 })
+    }
+
+    const isMockPay = matchesPmsWechatPayMockConfig(company)
+    if (!parsed.loginCode && !isMockPay) {
+      return NextResponse.json({ success: false, message: '缺少微信登录凭证' }, { status: 400 })
     }
 
     const payer =
@@ -133,9 +132,33 @@ export async function POST(
       )
     }
 
+    if (isMockPay) {
+      const done = await completeWorkOrderFeePayment(prisma, {
+        paymentId: checkout.payment.id,
+        companyId: user.companyId,
+        tenantIds,
+        user,
+        gatewayTradeNo: `MOCK-WX-SIM-${checkout.payment.code}`,
+      })
+      if (!done.ok) {
+        return NextResponse.json(
+          { success: false, message: done.message },
+          { status: done.status }
+        )
+      }
+      return NextResponse.json({
+        success: true,
+        data: {
+          payment: checkout.payment,
+          mockPaymentCompleted: true,
+          wechatPayParams: null,
+        },
+      })
+    }
+
     try {
-      const config = getWechatPayConfig(company)
-      const openId = await getWechatOpenId(config, parsed.loginCode)
+      const config = await getWechatPayConfigAsync(company, 'tenant')
+      const openId = await getWechatOpenId(config, parsed.loginCode!)
       const prepayId = await createWechatJsapiOrder(config, {
         description: buildPayDescription(workOrder.code, checkout.payment.code),
         outTradeNo: checkout.payment.code,

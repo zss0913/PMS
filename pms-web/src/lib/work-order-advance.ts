@@ -11,6 +11,7 @@ import {
   logWorkOrderActivity,
   operatorFromAuthUser,
 } from '@/lib/work-order-activity-log'
+import { refundWorkOrderFeeAndCancelOrder } from '@/lib/work-order-fee-refund-cancel'
 
 export const workOrderAdvanceBodySchema = z.object({
   action: z.enum([
@@ -25,16 +26,27 @@ export const workOrderAdvanceBodySchema = z.object({
     'mark_evaluated',
     /** 租客报修工单：仅租客可提交，进入评价完成 */
     'submit_tenant_evaluation',
+    /** 待处理：员工退费冲账并取消工单 */
+    'refund_fee_cancel',
+    /** 待员工确认费用：有费用但不走租客支付，不产生账单，直接待处理 */
+    'confirm_fee_internal_pending',
     'cancel',
   ]),
   feeRemark: z.string().optional(),
-  /** 费用合计（元），提交「待员工确认费用」时必填且须 > 0 */
+  refundReason: z.string().max(500).optional(),
+  /** 费用合计（元），提交「待员工确认费用」时必填；允许 0 表示免费用（送租客时将自动跳过支付） */
   feeTotal: z.union([z.number(), z.string()]).optional(),
   /** 办结待评价：现场照片 URL，1～10 张 */
   completionImages: z.array(z.string().min(1)).max(10).optional(),
   completionRemark: z.string().max(2000).optional(),
   /** 评价说明：员工 mark_evaluated 或租客 submit_tenant_evaluation 选填 */
   evaluationContent: z.string().max(2000).optional(),
+  /** 租客 submit_tenant_evaluation：1～5 星，必填（由接口校验） */
+  evaluationStars: z.number().int().min(1).max(5).optional(),
+  /** 租客评价附图 URL，0～10 张，选填 */
+  evaluationImages: z.array(z.string().min(1)).max(10).optional(),
+  /** 工单无 tenantId 时送租客支付：指定费用承担租客 */
+  assignTenantId: z.number().int().positive().optional(),
 })
 
 /** 解析请求体中的费用合计（元）：必填场景由调用方保证传入 */
@@ -54,8 +66,8 @@ function parseWorkOrderFeeTotalYuan(
     return { ok: false, message: '费用合计须为有效数字' }
   }
   const rounded = Math.round(n * 100) / 100
-  if (rounded <= 0) {
-    return { ok: false, message: '费用合计须大于 0' }
+  if (rounded < 0) {
+    return { ok: false, message: '费用合计不能为负数' }
   }
   if (rounded > 1e9) {
     return { ok: false, message: '费用合计金额过大' }
@@ -253,24 +265,149 @@ export async function runWorkOrderAdvance(
           status: 400,
         }
       }
+      const feeNum =
+        wo.feeTotal != null && Number.isFinite(Number(wo.feeTotal)) ? Number(wo.feeTotal) : NaN
+      if (feeNum === 0) {
+        await prisma.workOrder.update({
+          where: { id: workOrderId },
+          data: { status: '处理中', feeConfirmedAt: now },
+        })
+        await logWorkOrderActivity(prisma, {
+          workOrderId,
+          workOrderCode: wo.code,
+          companyId: user.companyId,
+          action: WORK_ORDER_ACTION.FEE_ZERO_SKIP_TENANT,
+          summary:
+            '待员工确认费用 → 处理中；费用合计为 0 元，无需租客确认与在线支付，可继续维修',
+          changes: [
+            {
+              field: 'status',
+              label: '状态',
+              from: '待员工确认费用',
+              to: '处理中',
+            },
+          ],
+          meta: { feeTotal: 0, skipTenantFee: true },
+          ...op,
+        })
+        break
+      }
+
+      let billTenantId = wo.tenantId
+      let assignedTenantName: string | null = null
+      if (billTenantId == null) {
+        const aid = parsed.assignTenantId
+        if (aid == null || !Number.isInteger(aid) || aid < 1) {
+          return {
+            ok: false,
+            message:
+              '本工单未关联租客：送租客在线支付前须选择「费用承担租客」，或改用「仅内部确认」（不产生账单，直接进入待处理）。',
+            status: 400,
+          }
+        }
+        const tenantRow = await prisma.tenant.findFirst({
+          where: { id: aid, companyId: user.companyId },
+        })
+        if (!tenantRow) {
+          return { ok: false, message: '所选租客不存在', status: 400 }
+        }
+        billTenantId = tenantRow.id
+        assignedTenantName = tenantRow.companyName
+      }
+
+      const publishChanges: {
+        field: string
+        label: string
+        from: string
+        to: string
+      }[] = [
+        {
+          field: 'status',
+          label: '状态',
+          from: '待员工确认费用',
+          to: '待租客确认费用',
+        },
+      ]
+      if (wo.tenantId == null && billTenantId != null) {
+        publishChanges.push({
+          field: 'tenantId',
+          label: '费用承担租客',
+          from: '（未关联）',
+          to: assignedTenantName ?? `ID ${billTenantId}`,
+        })
+      }
+
       await prisma.workOrder.update({
         where: { id: workOrderId },
-        data: { status: '待租客确认费用' },
+        data: {
+          status: '待租客确认费用',
+          ...(wo.tenantId == null && billTenantId != null ? { tenantId: billTenantId } : {}),
+        },
       })
       await logWorkOrderActivity(prisma, {
         workOrderId,
         workOrderCode: wo.code,
         companyId: user.companyId,
         action: WORK_ORDER_ACTION.PUBLISH_FEE_FOR_TENANT,
-        summary: '待员工确认费用 → 待租客确认费用（员工已确认并送租客核对）',
+        summary:
+          assignedTenantName != null
+            ? `待员工确认费用 → 待租客确认费用（指定租客：${assignedTenantName.slice(0, 60)}${assignedTenantName.length > 60 ? '…' : ''}）`
+            : '待员工确认费用 → 待租客确认费用（员工已确认并送租客核对）',
+        changes: publishChanges,
+        meta:
+          assignedTenantName != null
+            ? { assignTenantId: billTenantId, assignTenantName: assignedTenantName }
+            : undefined,
+        ...op,
+      })
+      break
+    }
+    case 'confirm_fee_internal_pending': {
+      if (user.type !== 'employee') {
+        return { ok: false, message: '仅物业员工可操作', status: 403 }
+      }
+      if (wo.status !== '待员工确认费用') {
+        return {
+          ok: false,
+          message: '仅「待员工确认费用」时可内部确认入待处理',
+          status: 400,
+        }
+      }
+      const feeNum =
+        wo.feeTotal != null && Number.isFinite(Number(wo.feeTotal)) ? Number(wo.feeTotal) : NaN
+      if (!Number.isFinite(feeNum) || feeNum <= 0) {
+        return {
+          ok: false,
+          message:
+            '仅费用合计大于 0 时可「仅内部确认」入待处理；若为 0 元请点「确认并送租客核对」将回到处理中。',
+          status: 400,
+        }
+      }
+      await prisma.workOrder.update({
+        where: { id: workOrderId },
+        data: { status: '待处理', feeConfirmedAt: now },
+      })
+      await logWorkOrderActivity(prisma, {
+        workOrderId,
+        workOrderCode: wo.code,
+        companyId: user.companyId,
+        action: WORK_ORDER_ACTION.FEE_CONFIRM_INTERNAL_PENDING,
+        summary: `待员工确认费用 → 待处理；内部确认费用 ${formatFeeTotalForLog(feeNum)}，不产生账单、无需租客在线支付`,
         changes: [
           {
             field: 'status',
             label: '状态',
             from: '待员工确认费用',
-            to: '待租客确认费用',
+            to: '待处理',
+          },
+          {
+            field: 'feeConfirmedAt',
+            label: '费用确认时间',
+            from: '—',
+            to: now.toLocaleString('zh-CN'),
           },
         ],
+        meta: { feeTotal: feeNum, internalFeeConfirm: true, noBill: true },
         ...op,
       })
       break
@@ -279,8 +416,12 @@ export async function runWorkOrderAdvance(
       if (user.type !== 'employee') {
         return { ok: false, message: '仅物业员工可办结工单', status: 403 }
       }
-      if (wo.status !== '处理中') {
-        return { ok: false, message: '仅「处理中」的工单可办结并进入待评价', status: 400 }
+      if (!['处理中', '待处理'].includes(wo.status)) {
+        return {
+          ok: false,
+          message: '仅「处理中」或「待处理」的工单可办结并进入待评价',
+          status: 400,
+        }
       }
       const imgCheck = validateWorkOrderCompletionImageUrls(parsed.completionImages)
       if (!imgCheck.ok) {
@@ -297,13 +438,20 @@ export async function runWorkOrderAdvance(
           completionRemark: compRemark || null,
         },
       })
+      const fromStatusLabel = wo.status === '待处理' ? '待处理' : '处理中'
       await logWorkOrderActivity(prisma, {
         workOrderId,
         workOrderCode: wo.code,
         companyId: user.companyId,
         action: WORK_ORDER_ACTION.COMPLETE_FOR_EVALUATION,
-        summary: `处理中 → 待评价（办结）；现场照片 ${imgCheck.urls.length} 张${compRemark ? `；说明：${compRemark.slice(0, 80)}${compRemark.length > 80 ? '…' : ''}` : ''}`,
+        summary: `${fromStatusLabel} → 待评价（办结）；现场照片 ${imgCheck.urls.length} 张${compRemark ? `；说明：${compRemark.slice(0, 80)}${compRemark.length > 80 ? '…' : ''}` : ''}`,
         changes: [
+          {
+            field: 'status',
+            label: '状态',
+            from: fromStatusLabel,
+            to: '待评价',
+          },
           {
             field: 'completionImages',
             label: '办结照片',
@@ -368,22 +516,79 @@ export async function runWorkOrderAdvance(
       if (wo.status !== '待评价') {
         return { ok: false, message: '仅「待评价」时可提交评价', status: 400 }
       }
+      const stars = parsed.evaluationStars
+      if (stars == null || !Number.isInteger(stars) || stars < 1 || stars > 5) {
+        return { ok: false, message: '请选择 1～5 星评价', status: 400 }
+      }
       const evalNote = parsed.evaluationContent?.trim() ?? ''
+      let evaluationImagesJson: string | null = null
+      if (parsed.evaluationImages && parsed.evaluationImages.length > 0) {
+        const imgCheck = validateWorkOrderCompletionImageUrls(parsed.evaluationImages)
+        if (!imgCheck.ok) {
+          return { ok: false, message: imgCheck.message, status: 400 }
+        }
+        evaluationImagesJson = JSON.stringify(imgCheck.urls)
+      }
+      const imgCount = parsed.evaluationImages?.length ?? 0
+      const summaryParts = [`待评价 → 评价完成（租客 ${stars} 星）`]
+      if (evalNote) {
+        summaryParts.push(`说明：${evalNote.slice(0, 100)}${evalNote.length > 100 ? '…' : ''}`)
+      }
+      if (imgCount > 0) summaryParts.push(`附图 ${imgCount} 张`)
+      const changes: { field: string; label: string; from: string; to: string }[] = [
+        { field: 'status', label: '状态', from: '待评价', to: '评价完成' },
+        { field: 'evaluationStars', label: '评价星级', from: '—', to: `${stars} 星` },
+      ]
+      if (evalNote) {
+        changes.push({ field: 'evaluationNote', label: '评价说明', from: '—', to: evalNote })
+      }
+      if (imgCount > 0) {
+        changes.push({
+          field: 'evaluationImages',
+          label: '评价图片',
+          from: '—',
+          to: `${imgCount} 张`,
+        })
+      }
       await prisma.workOrder.update({
         where: { id: workOrderId },
-        data: { status: '评价完成', evaluatedAt: now, evaluationNote: evalNote || null },
+        data: {
+          status: '评价完成',
+          evaluatedAt: now,
+          evaluationNote: evalNote || null,
+          evaluationStars: stars,
+          evaluationImages: evaluationImagesJson,
+        },
       })
       await logWorkOrderActivity(prisma, {
         workOrderId,
         workOrderCode: wo.code,
         companyId: user.companyId,
         action: WORK_ORDER_ACTION.TENANT_SUBMIT_EVALUATION,
-        summary: evalNote
-          ? `待评价 → 评价完成（租客评价）：${evalNote.slice(0, 120)}${evalNote.length > 120 ? '…' : ''}`
-          : '待评价 → 评价完成（租客评价）',
-        meta: evalNote ? { evaluationNote: evalNote } : undefined,
+        summary: summaryParts.join('；'),
+        changes,
+        meta: {
+          evaluationStars: stars,
+          ...(evalNote ? { evaluationNote: evalNote } : {}),
+          ...(imgCount > 0 ? { evaluationImageCount: imgCount } : {}),
+        },
         ...op,
       })
+      break
+    }
+    case 'refund_fee_cancel': {
+      if (user.type !== 'employee') {
+        return { ok: false, message: '仅物业员工可操作退费并取消', status: 403 }
+      }
+      const rr = await refundWorkOrderFeeAndCancelOrder(prisma, {
+        workOrderId,
+        companyId: user.companyId,
+        user,
+        reason: parsed.refundReason,
+      })
+      if (!rr.ok) {
+        return { ok: false, message: rr.message, status: rr.status }
+      }
       break
     }
     case 'cancel': {

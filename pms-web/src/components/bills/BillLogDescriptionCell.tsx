@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import type { BillActivityLogDTO } from '@/lib/bill-activity-log-db'
+import { billPaymentIngressHeadline } from '@/lib/bill-log-display'
 
 type ChangeEntry = { field: string; label: string; from: string; to: string }
 
@@ -50,19 +51,21 @@ export function BillLogDescriptionCell({
       meta.paymentMethod != null && meta.paymentMethod !== ''
         ? String(meta.paymentMethod)
         : ''
+    const ingress = billPaymentIngressHeadline(method, log.summary)
     if (Number.isFinite(pid)) {
       head = (
         <div className="space-y-1 mb-1">
           <p className="text-slate-800 dark:text-slate-200">
-            线下缴费入账 · 缴费单{' '}
+            {ingress} · 缴费单{' '}
             <Link href={`/payments/${pid}?returnTo=${rt}`} className={linkCls}>
               {code}
             </Link>
           </p>
-          {Number.isFinite(amt) && (
+          {(Number.isFinite(amt) || method) && (
             <p className="text-sm text-slate-600 dark:text-slate-400">
-              本次入账金额：¥{amt.toFixed(2)}
-              {method ? ` · 支付方式：${method}` : ''}
+              {Number.isFinite(amt) ? `本次入账金额：¥${amt.toFixed(2)}` : null}
+              {Number.isFinite(amt) && method ? ' · ' : ''}
+              {method ? `支付方式：${method}` : null}
             </p>
           )}
         </div>

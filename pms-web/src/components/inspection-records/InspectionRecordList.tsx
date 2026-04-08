@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
-import { Search } from 'lucide-react'
+import { PopoverDateRangeField } from '@/components/ui/PopoverDateRangeField'
 
 type InspectionRecord = {
   id: number
@@ -18,6 +20,7 @@ type InspectionRecord = {
   checkedByName: string
   status: string
   detail: string | null
+  linkedWorkOrder: { id: number; code: string } | null
 }
 
 type Building = { id: number; name: string }
@@ -27,54 +30,92 @@ export function InspectionRecordList({
 }: {
   isSuperAdmin?: boolean
 }) {
-  const [keyword, setKeyword] = useState('')
-  const [taskCode, setTaskCode] = useState('')
-  const [buildingId, setBuildingId] = useState('')
-  const [inspectionType, setInspectionType] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [taskCodeInput, setTaskCodeInput] = useState('')
+  const [buildingIdInput, setBuildingIdInput] = useState('')
+  const [inspectionTypeInput, setInspectionTypeInput] = useState('')
+  const [resultStatusInput, setResultStatusInput] = useState('')
+  const [dateFromInput, setDateFromInput] = useState('')
+  const [dateToInput, setDateToInput] = useState('')
   const [list, setList] = useState<InspectionRecord[]>([])
   const [buildings, setBuildings] = useState<Building[]>([])
   const [inspectionTypes, setInspectionTypes] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [detailRow, setDetailRow] = useState<InspectionRecord | null>(null)
 
-  const fetchData = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const params = new URLSearchParams()
-      if (keyword.trim()) params.set('keyword', keyword.trim())
-      if (taskCode.trim()) params.set('taskCode', taskCode.trim())
-      if (buildingId) params.set('buildingId', buildingId)
-      if (inspectionType) params.set('inspectionType', inspectionType)
-      if (dateFrom) params.set('dateFrom', dateFrom)
-      if (dateTo) params.set('dateTo', dateTo)
-      const res = await fetch(`/api/inspection-records?${params}`, { credentials: 'include' })
-      const json = await res.json()
-      if (!json.success) {
-        setError(json.message || '加载失败')
-        setList([])
-        return
-      }
-      setList(json.data?.list ?? [])
-      setBuildings(json.data?.buildings ?? [])
-      setInspectionTypes(json.data?.inspectionTypes ?? [])
-    } catch {
-      setError('网络错误')
-      setList([])
-    } finally {
-      setLoading(false)
-    }
-  }
+  const listReturnPath = useMemo(() => {
+    const q = searchParams.toString()
+    return q ? `/inspection-records?${q}` : '/inspection-records'
+  }, [searchParams])
 
   useEffect(() => {
-    if (!isSuperAdmin) fetchData()
-  }, [isSuperAdmin])
+    setTaskCodeInput(searchParams.get('taskCode') ?? '')
+    setBuildingIdInput(searchParams.get('buildingId') ?? '')
+    setInspectionTypeInput(searchParams.get('inspectionType') ?? '')
+    const rs = searchParams.get('resultStatus') ?? ''
+    setResultStatusInput(rs === 'normal' || rs === 'abnormal' ? rs : '')
+    setDateFromInput(searchParams.get('dateFrom') ?? '')
+    setDateToInput(searchParams.get('dateTo') ?? '')
+  }, [searchParams])
+
+  useEffect(() => {
+    if (isSuperAdmin) return
+    const params = new URLSearchParams()
+    const tc = searchParams.get('taskCode')?.trim()
+    if (tc) params.set('taskCode', tc)
+    const bid = searchParams.get('buildingId')?.trim()
+    if (bid) params.set('buildingId', bid)
+    const it = searchParams.get('inspectionType')?.trim()
+    if (it) params.set('inspectionType', it)
+    const df = searchParams.get('dateFrom')?.trim()
+    if (df) params.set('dateFrom', df)
+    const dt = searchParams.get('dateTo')?.trim()
+    if (dt) params.set('dateTo', dt)
+    const rs = searchParams.get('resultStatus')?.trim()
+    if (rs === 'normal' || rs === 'abnormal') params.set('resultStatus', rs)
+
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    void (async () => {
+      try {
+        const res = await fetch(`/api/inspection-records?${params}`, { credentials: 'include' })
+        const json = await res.json()
+        if (cancelled) return
+        if (!json.success) {
+          setError(json.message || '加载失败')
+          setList([])
+          return
+        }
+        setList(json.data?.list ?? [])
+        setBuildings(json.data?.buildings ?? [])
+        setInspectionTypes(json.data?.inspectionTypes ?? [])
+      } catch {
+        if (!cancelled) {
+          setError('网络错误')
+          setList([])
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isSuperAdmin, searchParams])
 
   const applyFilters = () => {
-    void fetchData()
+    const p = new URLSearchParams()
+    if (taskCodeInput.trim()) p.set('taskCode', taskCodeInput.trim())
+    if (buildingIdInput) p.set('buildingId', buildingIdInput)
+    if (inspectionTypeInput) p.set('inspectionType', inspectionTypeInput)
+    if (dateFromInput) p.set('dateFrom', dateFromInput)
+    if (dateToInput) p.set('dateTo', dateToInput)
+    if (resultStatusInput === 'normal' || resultStatusInput === 'abnormal') {
+      p.set('resultStatus', resultStatusInput)
+    }
+    router.replace(`/inspection-records?${p.toString()}`, { scroll: false })
   }
 
   const filtered = useMemo(() => list, [list])
@@ -114,54 +155,34 @@ export function InspectionRecordList({
     }
   }
 
-  const statusLabel: Record<string, string> = {
-    normal: '正常',
-    abnormal: '异常',
-  }
-
   const buildingName = (id: number | null) =>
     id == null ? '—' : buildings.find((b) => b.id === id)?.name ?? `#${id}`
 
-  const parseDetail = (raw: string | null) => {
-    if (!raw) return null as { remark?: string; images?: string[] } | null
-    try {
-      return JSON.parse(raw) as { remark?: string; images?: string[] }
-    } catch {
-      return null
-    }
-  }
+  const recordDetailHref = (recordId: number) =>
+    `/inspection-records/${recordId}?returnTo=${encodeURIComponent(listReturnPath)}`
+
+  const workOrderDetailHref = (workOrderId: number) =>
+    `/work-orders/${workOrderId}?returnTo=${encodeURIComponent(listReturnPath)}`
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700 space-y-3">
         <div className="flex flex-wrap gap-3 items-end">
-          <div className="min-w-[160px] flex-1">
-            <label className="block text-xs text-slate-500 mb-1">关键词</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="任务编号、位置、NFC、类型"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
-              />
-            </div>
-          </div>
-          <div className="min-w-[120px]">
-            <label className="block text-xs text-slate-500 mb-1">任务编号</label>
+          <div className="min-w-[140px] flex-1 sm:max-w-xs">
+            <label className="block text-xs text-slate-500 mb-1">任务编号 / 任务名称</label>
             <input
               type="text"
-              value={taskCode}
-              onChange={(e) => setTaskCode(e.target.value)}
+              placeholder="模糊查询任务编号或计划名称"
+              value={taskCodeInput}
+              onChange={(e) => setTaskCodeInput(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
             />
           </div>
           <div className="min-w-[120px]">
             <label className="block text-xs text-slate-500 mb-1">楼宇</label>
             <select
-              value={buildingId}
-              onChange={(e) => setBuildingId(e.target.value)}
+              value={buildingIdInput}
+              onChange={(e) => setBuildingIdInput(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
             >
               <option value="">全部</option>
@@ -175,8 +196,8 @@ export function InspectionRecordList({
           <div className="min-w-[100px]">
             <label className="block text-xs text-slate-500 mb-1">巡检类型</label>
             <select
-              value={inspectionType}
-              onChange={(e) => setInspectionType(e.target.value)}
+              value={inspectionTypeInput}
+              onChange={(e) => setInspectionTypeInput(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
             >
               <option value="">全部</option>
@@ -187,24 +208,28 @@ export function InspectionRecordList({
               ))}
             </select>
           </div>
-          <div className="min-w-[130px]">
-            <label className="block text-xs text-slate-500 mb-1">检查时间起</label>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
+          <div className="min-w-[100px]">
+            <label className="block text-xs text-slate-500 mb-1">巡检结果</label>
+            <select
+              value={resultStatusInput}
+              onChange={(e) => setResultStatusInput(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
-            />
+            >
+              <option value="">全部</option>
+              <option value="normal">正常</option>
+              <option value="abnormal">异常</option>
+            </select>
           </div>
-          <div className="min-w-[130px]">
-            <label className="block text-xs text-slate-500 mb-1">检查时间止</label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
-            />
-          </div>
+          <PopoverDateRangeField
+            label="检查时间"
+            start={dateFromInput}
+            end={dateToInput}
+            onChange={({ start, end }) => {
+              setDateFromInput(start)
+              setDateToInput(end)
+            }}
+            className="min-w-[260px] sm:min-w-[320px] max-w-md"
+          />
           <button
             type="button"
             onClick={applyFilters}
@@ -218,44 +243,69 @@ export function InspectionRecordList({
         <table className="w-full">
           <thead>
             <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
-              <th className="text-left p-4 font-medium">记录ID</th>
               <th className="text-left p-4 font-medium">任务编号</th>
               <th className="text-left p-4 font-medium">计划</th>
               <th className="text-left p-4 font-medium">楼宇</th>
               <th className="text-left p-4 font-medium">NFC</th>
               <th className="text-left p-4 font-medium">巡检类型</th>
               <th className="text-left p-4 font-medium">位置</th>
+              <th className="text-left p-4 font-medium">巡检结果</th>
               <th className="text-left p-4 font-medium">检查时间</th>
               <th className="text-left p-4 font-medium">检查人</th>
+              <th className="text-left p-4 font-medium">关联工单</th>
               <th className="text-left p-4 font-medium w-20">操作</th>
             </tr>
           </thead>
           <tbody>
-            {paginatedItems.map((r) => (
+            {paginatedItems.map((r) => {
+              const abnormal = r.status === 'abnormal'
+              return (
               <tr
                 key={r.id}
                 className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
               >
-                <td className="p-4">{r.id}</td>
                 <td className="p-4 font-medium">{r.taskCode}</td>
                 <td className="p-4">{r.planName ?? '—'}</td>
                 <td className="p-4">{buildingName(r.buildingId)}</td>
                 <td className="p-4 font-mono text-xs">{r.tagId}</td>
                 <td className="p-4">{r.inspectionType}</td>
                 <td className="p-4">{r.location}</td>
+                <td className="p-4">
+                  <span
+                    className={
+                      abnormal
+                        ? 'font-medium text-red-600 dark:text-red-400'
+                        : 'font-medium text-emerald-600 dark:text-emerald-400'
+                    }
+                  >
+                    {abnormal ? '异常' : '正常'}
+                  </span>
+                </td>
                 <td className="p-4">{formatDate(r.checkedAt)}</td>
                 <td className="p-4">{r.checkedByName}</td>
                 <td className="p-4">
-                  <button
-                    type="button"
-                    onClick={() => setDetailRow(r)}
+                  {r.linkedWorkOrder ? (
+                    <Link
+                      href={workOrderDetailHref(r.linkedWorkOrder.id)}
+                      className="text-blue-600 hover:underline text-sm font-medium"
+                    >
+                      {r.linkedWorkOrder.code}
+                    </Link>
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
+                </td>
+                <td className="p-4">
+                  <Link
+                    href={recordDetailHref(r.id)}
                     className="text-blue-600 hover:underline text-sm"
                   >
                     详情
-                  </button>
+                  </Link>
                 </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -270,63 +320,6 @@ export function InspectionRecordList({
           onPageChange={handlePageChange}
           onPageSizeChange={handlePageSizeChange}
         />
-      )}
-
-      {detailRow && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setDetailRow(null)}
-        >
-          <div
-            className="bg-white dark:bg-slate-800 rounded-xl max-w-lg w-full p-4 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="font-semibold mb-2">巡检记录详情</h3>
-            <div className="text-sm space-y-1 text-slate-600 dark:text-slate-300">
-              <div>任务：{detailRow.taskCode}</div>
-              <div>NFC：{detailRow.tagId}</div>
-              <div>位置：{detailRow.location}</div>
-              <div>时间：{formatDate(detailRow.checkedAt)}</div>
-              <div>检查人：{detailRow.checkedByName}</div>
-              <div>状态：{statusLabel[detailRow.status] ?? detailRow.status}</div>
-            </div>
-            {(() => {
-              const d = parseDetail(detailRow.detail)
-              if (!d) return null
-              return (
-                <div className="mt-3 text-sm space-y-2">
-                  {d.remark && (
-                    <div>
-                      <span className="font-medium">情况说明：</span>
-                      {d.remark}
-                    </div>
-                  )}
-                  {d.images && d.images.length > 0 && (
-                    <div>
-                      <span className="font-medium">图片：</span>
-                      <ul className="list-disc pl-5 mt-1">
-                        {d.images.map((u, i) => (
-                          <li key={i} className="break-all">
-                            <a href={u} target="_blank" rel="noreferrer" className="text-blue-600">
-                              {u}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
-            <button
-              type="button"
-              onClick={() => setDetailRow(null)}
-              className="mt-4 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600"
-            >
-              关闭
-            </button>
-          </div>
-        </div>
       )}
     </div>
   )

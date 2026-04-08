@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
+import { PermissionGate } from '@/components/permissions/PermissionGate'
+import { MENU_ID } from '@/lib/menu-config'
 import { Plus, Pencil, Trash2, Search, UserCheck, UserX } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 import { EmployeeForm, type EmployeeFormData } from './EmployeeForm'
@@ -210,14 +212,16 @@ export function EmployeeList({
             />
           </div>
         </div>
-        <button
-          type="button"
-          onClick={handleAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
-        >
-          <Plus className="w-4 h-4" />
-          新增员工
-        </button>
+        <PermissionGate menuId={MENU_ID.EMPLOYEES} action="create">
+          <button
+            type="button"
+            onClick={handleAdd}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
+          >
+            <Plus className="w-4 h-4" />
+            新增员工
+          </button>
+        </PermissionGate>
       </div>
       <div className="overflow-x-auto">
         {loading ? (
@@ -271,34 +275,40 @@ export function EmployeeList({
                   </td>
                   <td className="p-4">
                     <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleEdit(e)}
-                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
-                        title="编辑"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleStatus(e)}
-                        className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
-                        title={e.status === 'active' ? '禁用' : '启用'}
-                      >
-                        {e.status === 'active' ? (
-                          <UserX className="w-4 h-4" />
-                        ) : (
-                          <UserCheck className="w-4 h-4" />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(e)}
-                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
-                        title="删除"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <PermissionGate menuId={MENU_ID.EMPLOYEES} action="update">
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(e)}
+                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
+                          title="编辑"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      </PermissionGate>
+                      <PermissionGate menuId={MENU_ID.EMPLOYEES} action="toggle_status">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(e)}
+                          className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
+                          title={e.status === 'active' ? '禁用' : '启用'}
+                        >
+                          {e.status === 'active' ? (
+                            <UserX className="w-4 h-4" />
+                          ) : (
+                            <UserCheck className="w-4 h-4" />
+                          )}
+                        </button>
+                      </PermissionGate>
+                      <PermissionGate menuId={MENU_ID.EMPLOYEES} action="delete">
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(e)}
+                          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
+                          title="删除"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </PermissionGate>
                     </div>
                   </td>
                 </tr>

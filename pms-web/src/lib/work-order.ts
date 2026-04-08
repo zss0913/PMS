@@ -13,6 +13,15 @@ export function displayWorkOrderSource(raw: string | null | undefined): string {
   if (!raw) return '-'
   if (raw === '租客端') return '租客自建'
   if (raw === 'PC端') return 'PC自建'
+  /** 早期巡检异常工单存的是「巡检异常」，与筛选项「巡检发现」口径统一 */
+  if (raw === '巡检异常') return '巡检发现'
+  return raw
+}
+
+/** 类型列展示（与「巡检发现」筛选口径一致） */
+export function displayWorkOrderType(raw: string | null | undefined): string {
+  if (!raw) return '-'
+  if (raw === '巡检异常') return '巡检发现'
   return raw
 }
 
@@ -23,6 +32,8 @@ export const WORK_ORDER_STATUS_OPTIONS = [
   '处理中',
   '待员工确认费用',
   '待租客确认费用',
+  /** 租客已支付工单费用，物业继续维修；可办结待评价或退费关单 */
+  '待处理',
   '待评价',
   '评价完成',
   '已取消',

@@ -17,9 +17,15 @@ export const WORK_ORDER_ACTION = {
   NO_FEE_CONTINUE: 'no_fee_continue',
   /** 员工确认后送租客核对费用 */
   PUBLISH_FEE_FOR_TENANT: 'publish_fee_for_tenant',
+  /** 费用合计为 0 元，不进入租客支付，直接回到处理中 */
+  FEE_ZERO_SKIP_TENANT: 'fee_zero_skip_tenant',
+  /** 有费用但无需租客支付：不产生账单，直接进入待处理 */
+  FEE_CONFIRM_INTERNAL_PENDING: 'fee_confirm_internal_pending',
   FEE_CONFIRM_TENANT: 'fee_confirm_tenant',
   /** 租客拒绝付费，工单取消 */
   FEE_REFUSE_TENANT: 'fee_refuse_tenant',
+  /** 待处理：员工退费冲账并取消工单 */
+  REFUND_FEE_CANCEL: 'refund_fee_cancel',
   COMPLETE_FOR_EVALUATION: 'complete_for_evaluation',
   MARK_EVALUATED: 'mark_evaluated',
   /** 租客在待评价节点提交评价并完结 */
@@ -35,8 +41,11 @@ export const WORK_ORDER_ACTION_LABELS: Record<string, string> = {
   [WORK_ORDER_ACTION.REQUEST_FEE_CONFIRMATION]: '提交费用（待员工确认）',
   [WORK_ORDER_ACTION.NO_FEE_CONTINUE]: '未产生任何费用（继续处理）',
   [WORK_ORDER_ACTION.PUBLISH_FEE_FOR_TENANT]: '送租客确认费用',
+  [WORK_ORDER_ACTION.FEE_ZERO_SKIP_TENANT]: '零元费用跳过租客确认',
+  [WORK_ORDER_ACTION.FEE_CONFIRM_INTERNAL_PENDING]: '费用内部确认（入待处理）',
   [WORK_ORDER_ACTION.FEE_CONFIRM_TENANT]: '确认费用并在线支付（租客）',
   [WORK_ORDER_ACTION.FEE_REFUSE_TENANT]: '拒绝付费（租客）',
+  [WORK_ORDER_ACTION.REFUND_FEE_CANCEL]: '退费并取消工单',
   [WORK_ORDER_ACTION.COMPLETE_FOR_EVALUATION]: '办结（待评价）',
   [WORK_ORDER_ACTION.MARK_EVALUATED]: '评价完成',
   [WORK_ORDER_ACTION.TENANT_SUBMIT_EVALUATION]: '提交评价（租客）',

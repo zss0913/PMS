@@ -1,23 +1,17 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
-import { writeInspectionTaskNotifications } from '@/lib/staff-notification-write'
-import { parseCheckItemsJson } from '@/lib/inspection-check-items'
-import { getScheduledDatetimesForRunDate } from '@/lib/inspection-cycle-schedule'
+import { generateInspectionTasksForCompany, getShanghaiYmd } from '@/lib/inspection-tasks-generate'
 
-function genTaskCode() {
-  return 'IT' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 6).toUpperCase()
-}
-
-function startOfDay(d: Date): Date {
-  const x = new Date(d)
-  x.setHours(0, 0, 0, 0)
-  return x
+type GenerateBody = {
+  date?: string
+  /** 指定要生成的计划 ID；不传或空数组表示全部启用中的计划 */
+  planIds?: number[]
 }
 
 /**
  * 按巡检计划周期，在「运行日」的各执行时刻创建任务（同一计划同一时刻不重复）。
- * query ?date=YYYY-MM-DD 指定运行日（便于补跑）。
+ * Body JSON: { date?: "YYYY-MM-DD", planIds?: number[] }；仍支持 query ?date=。
  */
 export async function POST(request: Request) {
   try {
@@ -33,91 +27,56 @@ export async function POST(request: Request) {
     }
 
     const url = new URL(request.url)
-    const dateParam = url.searchParams.get('date')?.trim()
-    const runDate = dateParam ? startOfDay(new Date(dateParam + 'T12:00:00')) : startOfDay(new Date())
-    if (Number.isNaN(runDate.getTime())) {
+    let body: GenerateBody = {}
+    try {
+      const ct = request.headers.get('content-type') ?? ''
+      if (ct.includes('application/json')) {
+        body = (await request.json()) as GenerateBody
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const dateParam = (typeof body.date === 'string' ? body.date : '').trim() || url.searchParams.get('date')?.trim()
+    /** 留空运行日：按上海日历「今天」，与生成逻辑统一用 YYYY-MM-DD（北京时间） */
+    const runYmd = dateParam
+      ? dateParam
+      : getShanghaiYmd()
+    if (dateParam && !/^\d{4}-\d{2}-\d{2}$/.test(runYmd)) {
       return NextResponse.json({ success: false, message: '日期参数无效' }, { status: 400 })
     }
 
-    const plans = await prisma.inspectionPlan.findMany({
-      where: { companyId: user.companyId, status: 'active' },
+    const rawIds = Array.isArray(body.planIds) ? body.planIds : []
+    const planIdFilter = [...new Set(rawIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))]
+
+    const out = await generateInspectionTasksForCompany(prisma, {
+      companyId: user.companyId,
+      runYmd,
+      planIdFilter: planIdFilter.length > 0 ? planIdFilter : undefined,
     })
 
-    if (plans.length === 0) {
+    if (!out.ok) {
+      return NextResponse.json({ success: false, message: out.message }, { status: 400 })
+    }
+
+    if (out.noActivePlans) {
       return NextResponse.json({ success: false, message: '暂无启用的巡检计划' }, { status: 400 })
     }
 
-    const created: string[] = []
-    let taskCount = 0
-
-    for (const plan of plans) {
-      if (!plan.buildingId) continue
-      const items = parseCheckItemsJson(plan.checkItems)
-      if (items.length === 0) continue
-
-      const datetimes = getScheduledDatetimesForRunDate(
-        {
-          cycleType: plan.cycleType,
-          cycleValue: plan.cycleValue,
-          cycleSchedule: plan.cycleSchedule,
-          cycleWeekday: plan.cycleWeekday,
-          cycleMonthDay: plan.cycleMonthDay,
-          createdAt: plan.createdAt,
-        },
-        runDate
-      )
-
-      for (const scheduledDate of datetimes) {
-        const existing = await prisma.inspectionTask.findFirst({
-          where: {
-            planId: plan.id,
-            companyId: user.companyId,
-            scheduledDate,
-          },
-        })
-        if (existing) continue
-
-        let code = genTaskCode()
-        while (await prisma.inspectionTask.findUnique({ where: { code } })) {
-          code = genTaskCode()
-        }
-
-        const task = await prisma.inspectionTask.create({
-          data: {
-            code,
-            planId: plan.id,
-            planName: plan.name,
-            inspectionType: plan.inspectionType,
-            scheduledDate,
-            requirePhoto: plan.requirePhoto,
-            userIds: plan.userIds,
-            route: plan.route,
-            checkItems: plan.checkItems,
-            buildingId: plan.buildingId,
-            status: '待执行',
-            companyId: user.companyId,
-          },
-        })
-        taskCount += 1
-        await writeInspectionTaskNotifications(prisma, {
-          companyId: user.companyId,
-          taskId: task.id,
-          planName: plan.name,
-          taskCode: task.code,
-          inspectionType: plan.inspectionType,
-          planUserIds: plan.userIds,
-        })
-        if (!created.includes(plan.name)) created.push(plan.name)
-      }
-    }
+    const ymdFromInput =
+      dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null
 
     return NextResponse.json({
       success: true,
       data: {
-        taskCount,
-        plansTouched: created.length,
-        plans: created,
-        runDate: runDate.toISOString(),
+        created: out.taskCount,
+        taskCount: out.taskCount,
+        plansTouched: out.plansTouched.length,
+        plans: out.plansTouched,
+        runDate: out.runDateIso,
+        /** 与界面「运行日」一致的日历日（北京时间），勿用 runDate 的 ISO 字符串截断 */
+        runDateYmd: ymdFromInput ?? out.runDateYmd,
+        zeroTaskHints: out.zeroTaskHints,
       },
     })
   } catch (e) {

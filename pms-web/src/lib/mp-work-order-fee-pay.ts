@@ -351,7 +351,7 @@ export async function completeWorkOrderFeePayment(
     })
     if (linkedBill?.workOrderId != null) {
       const w = await db.workOrder.findUnique({ where: { id: linkedBill.workOrderId } })
-      if (w?.status === '处理中' && w.feeConfirmedAt) {
+      if (w?.status === '待处理' || (w?.status === '处理中' && w.feeConfirmedAt)) {
         return { ok: true }
       }
     }
@@ -395,7 +395,7 @@ export async function completeWorkOrderFeePayment(
   }
 
   if (wo.status !== '待租客确认费用') {
-    if (wo.status === '处理中' && wo.feeConfirmedAt) {
+    if (wo.status === '待处理' || (wo.status === '处理中' && wo.feeConfirmedAt)) {
       return { ok: true }
     }
     return { ok: false, message: '工单状态已变更，无法完成该笔支付确认', status: 400 }
@@ -449,14 +449,14 @@ export async function completeWorkOrderFeePayment(
     await tx.workOrder.update({
       where: { id: wo.id },
       data: {
-        status: '处理中',
+        status: '待处理',
         feeConfirmedAt: new Date(),
       },
     })
   })
 
   const methodLabel = payment.paymentMethod
-  const summary = `待租客确认费用 → 处理中；租客已确认费用并在线支付 ${formatMoneyYuan(payAmount)}（${methodLabel}）；缴费单 ${payment.code}；第三方订单号 ${gatewayNo}；支付状态：成功`
+  const summary = `待租客确认费用 → 待处理；租客已在线支付 ${formatMoneyYuan(payAmount)}（${methodLabel}）；缴费单 ${payment.code}；第三方订单号 ${gatewayNo}；支付状态：成功`
 
   await logWorkOrderActivity(db, {
     workOrderId: wo.id,
@@ -508,6 +508,7 @@ export async function completeWorkOrderFeePayment(
         paymentId: payment.id,
         paymentCode: payment.code,
         paymentMethod: methodLabel,
+        allocatedAmount: payAmount,
         gatewayTradeNo: gatewayNo,
         workOrderId: wo.id,
         workOrderCode: wo.code,
@@ -536,4 +537,56 @@ export async function cancelPendingFeePaymentsForWorkOrderBill(
     },
     data: { paymentStatus: 'cancelled' },
   })
+}
+
+/** 租客端打开费用准备页时：若工单已为「待租客确认费用」且费用合计为 0，直接回到处理中（无需账单与支付） */
+export async function tryAdvanceWorkOrderZeroFeeOnTenantPrepare(
+  db: PrismaClient,
+  input: {
+    workOrderId: number
+    companyId: number
+    tenantIds: number[]
+    tenantUserId: number
+    operator: ReturnType<typeof operatorFromAuthUser>
+  }
+): Promise<{ advanced: boolean }> {
+  const wo = await db.workOrder.findFirst({
+    where: {
+      id: input.workOrderId,
+      companyId: input.companyId,
+      status: '待租客确认费用',
+      OR: [{ tenantId: { in: input.tenantIds } }, { reporterId: input.tenantUserId }],
+    },
+  })
+  if (!wo) return { advanced: false }
+
+  const feeNum =
+    wo.feeTotal != null && Number.isFinite(Number(wo.feeTotal)) ? Number(wo.feeTotal) : NaN
+  if (feeNum !== 0) return { advanced: false }
+
+  const op = input.operator
+  await db.workOrder.update({
+    where: { id: wo.id },
+    data: { status: '处理中', feeConfirmedAt: new Date() },
+  })
+  await logWorkOrderActivity(db, {
+    workOrderId: wo.id,
+    workOrderCode: wo.code,
+    companyId: input.companyId,
+    action: WORK_ORDER_ACTION.FEE_ZERO_SKIP_TENANT,
+    summary: '待租客确认费用 → 处理中；费用合计为 0 元，系统自动跳过在线支付',
+    changes: [
+      {
+        field: 'status',
+        label: '状态',
+        from: '待租客确认费用',
+        to: '处理中',
+      },
+    ],
+    meta: { feeTotal: 0, skipTenantFee: true },
+    operatorId: op.operatorId ?? null,
+    operatorName: op.operatorName ?? null,
+    operatorPhone: op.operatorPhone ?? null,
+  })
+  return { advanced: true }
 }

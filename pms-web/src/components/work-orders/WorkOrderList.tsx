@@ -2,11 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { AppLink } from '@/components/AppLink'
+import { PermissionGate } from '@/components/permissions/PermissionGate'
+import { useRolePermissions } from '@/hooks/useRolePermissions'
+import { MENU_ID } from '@/lib/menu-config'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { Eye, UserPlus, Search, RotateCcw, Users } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
-import { displayWorkOrderSource } from '@/lib/work-order'
+import { displayWorkOrderSource, displayWorkOrderType } from '@/lib/work-order'
 import { EmployeeAssigneeSelect } from '@/components/work-orders/EmployeeAssigneeSelect'
 
 const EMPTY_FILTERS = {
@@ -53,6 +56,7 @@ type ApiData = {
 }
 
 export function WorkOrderList() {
+  const { can } = useRolePermissions()
   const [data, setData] = useState<ApiData | null>(null)
   const [loading, setLoading] = useState(true)
   const [statusTab, setStatusTab] = useState('')
@@ -251,22 +255,26 @@ export function WorkOrderList() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0 sm:self-center">
-            <button
-              type="button"
-              onClick={openBatchAssign}
-              disabled={selectedIds.size === 0}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:pointer-events-none"
-            >
-              <Users className="w-4 h-4" />
-              批量派单
-              {selectedIds.size > 0 ? `（${selectedIds.size}）` : ''}
-            </button>
-            <AppLink
-              href="/work-orders/new"
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
-            >
-              新建工单
-            </AppLink>
+            <PermissionGate menuId={MENU_ID.WORK_ORDERS} action="batch_assign">
+              <button
+                type="button"
+                onClick={openBatchAssign}
+                disabled={selectedIds.size === 0}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:pointer-events-none"
+              >
+                <Users className="w-4 h-4" />
+                批量派单
+                {selectedIds.size > 0 ? `（${selectedIds.size}）` : ''}
+              </button>
+            </PermissionGate>
+            <PermissionGate menuId={MENU_ID.WORK_ORDERS} action="create">
+              <AppLink
+                href="/work-orders/new"
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
+              >
+                新建工单
+              </AppLink>
+            </PermissionGate>
           </div>
         </div>
 
@@ -371,14 +379,16 @@ export function WorkOrderList() {
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
                 <th className="p-4 w-12">
-                  <input
-                    type="checkbox"
-                    checked={allPageSelected}
-                    onChange={toggleSelectAllPage}
-                    disabled={loading || paginatedItems.length === 0}
-                    className="rounded border-slate-300"
-                    title="全选本页"
-                  />
+                  <PermissionGate menuId={MENU_ID.WORK_ORDERS} action="batch_assign">
+                    <input
+                      type="checkbox"
+                      checked={allPageSelected}
+                      onChange={toggleSelectAllPage}
+                      disabled={loading || paginatedItems.length === 0}
+                      className="rounded border-slate-300"
+                      title="全选本页"
+                    />
+                  </PermissionGate>
                 </th>
                 <th className="text-left p-4 font-medium">工单编号</th>
                 <th className="text-left p-4 font-medium">标题</th>
@@ -408,24 +418,30 @@ export function WorkOrderList() {
                     className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30"
                   >
                     <td className="p-4 w-12">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(wo.id)}
-                        onChange={() => toggleSelectId(wo.id)}
-                        className="rounded border-slate-300"
-                        aria-label={`选择 ${wo.code}`}
-                      />
+                      <PermissionGate menuId={MENU_ID.WORK_ORDERS} action="batch_assign">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(wo.id)}
+                          onChange={() => toggleSelectId(wo.id)}
+                          className="rounded border-slate-300"
+                          aria-label={`选择 ${wo.code}`}
+                        />
+                      </PermissionGate>
                     </td>
                     <td className="p-4">
-                      <AppLink
-                        href={`/work-orders/${wo.id}`}
-                        className="font-medium text-blue-600 hover:underline"
-                      >
-                        {wo.code}
-                      </AppLink>
+                      {can(MENU_ID.WORK_ORDERS, 'view') ? (
+                        <AppLink
+                          href={`/work-orders/${wo.id}`}
+                          className="font-medium text-blue-600 hover:underline"
+                        >
+                          {wo.code}
+                        </AppLink>
+                      ) : (
+                        <span className="font-medium text-slate-700 dark:text-slate-200">{wo.code}</span>
+                      )}
                     </td>
                     <td className="p-4">{wo.title}</td>
-                    <td className="p-4">{wo.type}</td>
+                    <td className="p-4">{displayWorkOrderType(wo.type)}</td>
                     <td className="p-4 text-sm">{displayWorkOrderSource(wo.source)}</td>
                     <td className="p-4 text-sm">{wo.facilityScope ?? '-'}</td>
                     <td className="p-4">{wo.building?.name ?? '-'}</td>
@@ -436,24 +452,28 @@ export function WorkOrderList() {
                     <td className="p-4">{formatDateTime(wo.createdAt)}</td>
                     <td className="p-4">
                       <div className="flex gap-2">
-                        <AppLink
-                          href={`/work-orders/${wo.id}`}
-                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded"
-                          title="查看详情"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </AppLink>
-                        {['待派单', '待响应'].includes(wo.status) && (
-                          <button
-                            onClick={() => {
-                              setAssignModal(wo)
-                              setAssigningTo(null)
-                            }}
+                        <PermissionGate menuId={MENU_ID.WORK_ORDERS} action="view">
+                          <AppLink
+                            href={`/work-orders/${wo.id}`}
                             className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded"
-                            title={wo.status === '待派单' ? '派单' : '改派'}
+                            title="查看详情"
                           >
-                            <UserPlus className="w-4 h-4" />
-                          </button>
+                            <Eye className="w-4 h-4" />
+                          </AppLink>
+                        </PermissionGate>
+                        {['待派单', '待响应'].includes(wo.status) && (
+                          <PermissionGate menuId={MENU_ID.WORK_ORDERS} action="assign">
+                            <button
+                              onClick={() => {
+                                setAssignModal(wo)
+                                setAssigningTo(null)
+                              }}
+                              className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded"
+                              title={wo.status === '待派单' ? '派单' : '改派'}
+                            >
+                              <UserPlus className="w-4 h-4" />
+                            </button>
+                          </PermissionGate>
                         )}
                       </div>
                     </td>

@@ -7,6 +7,19 @@ export interface MpUser {
   phone: string
   type: 'tenant' | 'employee'
   companyId: number
+  roleId?: number
+}
+
+/** GET /api/mp/me 返回的员工详情（员工端个人中心展示） */
+export interface MpEmployeeProfile extends MpUser {
+  companyName?: string
+  roleName?: string
+  departmentName?: string
+  projectName?: string
+  position?: string
+  businessTypes?: string | null
+  isLeader?: boolean
+  displayName?: string
 }
 
 export const useUserStore = defineStore('user', {
@@ -44,7 +57,7 @@ export const useUserStore = defineStore('user', {
       try {
         const res = await get('/api/mp/me')
         if (res.success && res.user) {
-          this.user = res.user as MpUser
+          this.user = res.user as MpUser & Partial<MpEmployeeProfile>
         }
       } catch {
         this.logout()

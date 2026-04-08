@@ -5,7 +5,8 @@ import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { Plus, Pencil, Trash2, Search } from 'lucide-react'
 import { RoleForm } from './RoleForm'
-import { DATA_SCOPE_OPTIONS, MENU_OPTIONS } from '@/lib/menu-config'
+import { PermissionGate } from '@/components/permissions/PermissionGate'
+import { DATA_SCOPE_OPTIONS, MENU_ID, MENU_OPTIONS } from '@/lib/menu-config'
 
 export type Role = {
   id: number
@@ -13,6 +14,8 @@ export type Role = {
   code: string
   dataScope: string
   menuIds: number[]
+  /** DB 原始 JSON 字符串；null 表示全部按钮 */
+  buttonPermissionKeys: string | null
   companyId: number
   companyName?: string
   accountCount: number
@@ -63,12 +66,20 @@ export function RoleList({
   const getDataScopeLabel = (scope: string) =>
     DATA_SCOPE_OPTIONS.find((o) => o.value === scope)?.label ?? scope
 
-  const getMenuPermissionText = (menuIds: number[]) => {
-    if (!menuIds?.length) return '全部'
-    const names = menuIds
-      .map((id) => MENU_OPTIONS.find((m) => m.id === id)?.label)
-      .filter(Boolean)
-    return names.length > 3 ? `${names.slice(0, 3).join('、')}等${names.length}项` : names.join('、')
+  const getMenuPermissionText = (menuIds: number[], buttonRaw: string | null) => {
+    const menuText = !menuIds?.length
+      ? '全部菜单'
+      : (() => {
+          const names = menuIds
+            .map((id) => MENU_OPTIONS.find((m) => m.id === id)?.label)
+            .filter(Boolean)
+          return names.length > 3
+            ? `${names.slice(0, 3).join('、')}等${names.length}项`
+            : names.join('、')
+        })()
+    const btnText =
+      buttonRaw == null || buttonRaw === '' ? '全部按钮' : '已配置按钮'
+    return `${menuText} · ${btnText}`
   }
 
   const handleDelete = async (role: Role) => {
@@ -121,16 +132,18 @@ export function RoleList({
             />
           </div>
         </div>
-        <button
-          onClick={() => {
-            setEditingRole(null)
-            setFormOpen(true)
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
-        >
-          <Plus className="w-4 h-4" />
-          新增角色
-        </button>
+        <PermissionGate menuId={MENU_ID.ROLES} action="create">
+          <button
+            onClick={() => {
+              setEditingRole(null)
+              setFormOpen(true)
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
+          >
+            <Plus className="w-4 h-4" />
+            新增角色
+          </button>
+        </PermissionGate>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -139,7 +152,7 @@ export function RoleList({
               <th className="text-left p-4 font-medium">角色名称</th>
               <th className="text-left p-4 font-medium">角色编码</th>
               <th className="text-left p-4 font-medium">数据权限</th>
-              <th className="text-left p-4 font-medium">菜单权限</th>
+              <th className="text-left p-4 font-medium">菜单/按钮</th>
               {isSuperAdmin && (
                 <th className="text-left p-4 font-medium">所属公司</th>
               )}
@@ -164,7 +177,7 @@ export function RoleList({
                   <td className="p-4">{r.code}</td>
                   <td className="p-4">{getDataScopeLabel(r.dataScope)}</td>
                   <td className="p-4 text-sm text-slate-600 dark:text-slate-400 max-w-[200px] truncate">
-                    {getMenuPermissionText(r.menuIds)}
+                    {getMenuPermissionText(r.menuIds, r.buttonPermissionKeys)}
                   </td>
                   {isSuperAdmin && (
                     <td className="p-4">{r.companyName || '-'}</td>
@@ -172,20 +185,24 @@ export function RoleList({
                   <td className="p-4">{r.accountCount}</td>
                   <td className="p-4">
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => handleEdit(r)}
-                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(r)}
-                        disabled={deleting === r.id || r.accountCount > 0}
-                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={r.accountCount > 0 ? '该角色下有员工，无法删除' : '删除'}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <PermissionGate menuId={MENU_ID.ROLES} action="update">
+                        <button
+                          onClick={() => handleEdit(r)}
+                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      </PermissionGate>
+                      <PermissionGate menuId={MENU_ID.ROLES} action="delete">
+                        <button
+                          onClick={() => handleDelete(r)}
+                          disabled={deleting === r.id || r.accountCount > 0}
+                          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={r.accountCount > 0 ? '该角色下有员工，无法删除' : '删除'}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </PermissionGate>
                     </div>
                   </td>
                 </tr>

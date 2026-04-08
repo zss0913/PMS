@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { AppLink } from '@/components/AppLink'
+import { PermissionGate } from '@/components/permissions/PermissionGate'
+import { MENU_ID } from '@/lib/menu-config'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import {
@@ -232,34 +234,40 @@ export function RoomList({
             <Search className="w-4 h-4" />
             筛选
           </button>
-          <AppLink
-            href={
-              lockedBuildingId != null
-                ? `/rooms/new?buildingId=${lockedBuildingId}`
-                : '/rooms/new'
-            }
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
-          >
-            <Plus className="w-4 h-4" />
-            新增房源
-          </AppLink>
-          <button
-            type="button"
-            onClick={() => setShowBatchImport(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500"
-          >
-            <Upload className="w-4 h-4" />
-            批量导入
-          </button>
-          {selectedIds.size > 0 && (
+          <PermissionGate menuId={MENU_ID.ROOMS} action="create">
+            <AppLink
+              href={
+                lockedBuildingId != null
+                  ? `/rooms/new?buildingId=${lockedBuildingId}`
+                  : '/rooms/new'
+              }
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
+            >
+              <Plus className="w-4 h-4" />
+              新增房源
+            </AppLink>
+          </PermissionGate>
+          <PermissionGate menuId={MENU_ID.ROOMS} action="import">
             <button
               type="button"
-              onClick={() => setShowBatchUpdate(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-500"
+              onClick={() => setShowBatchImport(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500"
             >
-              <Edit3 className="w-4 h-4" />
-              批量修改状态 ({selectedIds.size})
+              <Upload className="w-4 h-4" />
+              批量导入
             </button>
+          </PermissionGate>
+          {selectedIds.size > 0 && (
+            <PermissionGate menuId={MENU_ID.ROOMS} action="batch_update">
+              <button
+                type="button"
+                onClick={() => setShowBatchUpdate(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-500"
+              >
+                <Edit3 className="w-4 h-4" />
+                批量修改状态 ({selectedIds.size})
+              </button>
+            </PermissionGate>
           )}
         </div>
       </form>
@@ -341,32 +349,38 @@ export function RoomList({
                 <td className="p-4">{formatDateTime(r.createdAt)}</td>
                 <td className="p-4">
                   <div className="flex gap-2">
-                    <AppLink
-                      href={`/rooms/${r.id}/edit`}
-                      className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
-                      title="编辑"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </AppLink>
-                    <AppLink
-                      href={
-                        lockedBuildingId != null
-                          ? `/rooms/${r.id}/tenants?buildingId=${lockedBuildingId}`
-                          : `/rooms/${r.id}/tenants`
-                      }
-                      className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
-                      title="查看该房源租客列表"
-                    >
-                      <Users className="w-4 h-4" />
-                    </AppLink>
-                    <button
-                      onClick={() => handleDelete(r.id)}
-                      disabled={deletingId === r.id}
-                      className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded disabled:opacity-50"
-                      title="删除"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <PermissionGate menuId={MENU_ID.ROOMS} action="update">
+                      <AppLink
+                        href={`/rooms/${r.id}/edit`}
+                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
+                        title="编辑"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </AppLink>
+                    </PermissionGate>
+                    <PermissionGate menuId={MENU_ID.ROOMS} action="tenants">
+                      <AppLink
+                        href={
+                          lockedBuildingId != null
+                            ? `/rooms/${r.id}/tenants?buildingId=${lockedBuildingId}`
+                            : `/rooms/${r.id}/tenants`
+                        }
+                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
+                        title="查看该房源租客列表"
+                      >
+                        <Users className="w-4 h-4" />
+                      </AppLink>
+                    </PermissionGate>
+                    <PermissionGate menuId={MENU_ID.ROOMS} action="delete">
+                      <button
+                        onClick={() => handleDelete(r.id)}
+                        disabled={deletingId === r.id}
+                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded disabled:opacity-50"
+                        title="删除"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </PermissionGate>
                   </div>
                 </td>
               </tr>

@@ -109,11 +109,12 @@ export async function POST(
     return NextResponse.json({ success: false, message: '该检查点已上报过异常' }, { status: 400 })
   }
 
-  const recordPayload = {
+  const recordPayloadBase = {
     pointName: body.pointName.trim(),
     severity: body.severity,
     description: body.description.trim(),
     images: body.images?.filter(Boolean) ?? [],
+    submitWorkOrder: true as const,
   }
 
   let code = genWorkOrderCode()
@@ -122,6 +123,33 @@ export async function POST(
   }
 
   const created = await prisma.$transaction(async (tx) => {
+    const workOrder = await tx.workOrder.create({
+      data: {
+        code,
+        buildingId: task.buildingId ?? matched.buildingId,
+        reporterId: user.id,
+        source: '巡检发现',
+        type: '巡检发现',
+        title: `${body.pointName.trim()}异常`,
+        description: body.description.trim(),
+        images: recordPayloadBase.images.length
+          ? JSON.stringify(recordPayloadBase.images)
+          : null,
+        location: matched.location,
+        severity: severityLabel(body.severity),
+        taskId: task.id,
+        tagId: matched.tagId,
+        status: '待派单',
+        companyId: user.companyId,
+      },
+    })
+
+    const checkItemsStored = {
+      ...recordPayloadBase,
+      workOrderId: workOrder.id,
+      workOrderCode: workOrder.code,
+    }
+
     const inspectionRecord = await tx.inspectionRecord.create({
       data: {
         taskId,
@@ -132,26 +160,7 @@ export async function POST(
         checkedAt: new Date(),
         checkedBy: user.id,
         status: 'abnormal',
-        checkItems: JSON.stringify(recordPayload),
-        companyId: user.companyId,
-      },
-    })
-
-    const workOrder = await tx.workOrder.create({
-      data: {
-        code,
-        buildingId: task.buildingId ?? matched.buildingId,
-        reporterId: user.id,
-        source: '巡检异常',
-        type: '巡检异常',
-        title: `${body.pointName.trim()}异常`,
-        description: body.description.trim(),
-        images: recordPayload.images.length ? JSON.stringify(recordPayload.images) : null,
-        location: matched.location,
-        severity: severityLabel(body.severity),
-        taskId: task.id,
-        tagId: matched.tagId,
-        status: '待派单',
+        checkItems: JSON.stringify(checkItemsStored),
         companyId: user.companyId,
       },
     })
@@ -161,7 +170,7 @@ export async function POST(
       workOrderCode: workOrder.code,
       companyId: user.companyId,
       action: WORK_ORDER_ACTION.CREATE,
-      summary: `巡检异常生成工单「${workOrder.title}」`,
+      summary: `巡检发现生成工单「${workOrder.title}」`,
       meta: {
         inspectionTaskId: task.id,
         inspectionRecordId: inspectionRecord.id,
@@ -184,7 +193,7 @@ export async function POST(
     businessTag: businessTagForInspectionType(task.inspectionType),
     category: 'work_order',
     entityId: created.workOrder.id,
-    title: `巡检异常工单：${created.workOrder.title}`,
+        title: `巡检发现工单：${created.workOrder.title}`,
     summary: `${created.workOrder.code} · ${created.workOrder.status} · ${severityLabel(body.severity)}`,
   })
 

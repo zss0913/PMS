@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppLink } from '@/components/AppLink'
+import { PermissionGate } from '@/components/permissions/PermissionGate'
+import { MENU_ID } from '@/lib/menu-config'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import {
@@ -82,13 +84,15 @@ export function BuildingList({
             />
           </div>
         </div>
-        <AppLink
-          href="/buildings/new"
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
-        >
-          <Plus className="w-4 h-4" />
-          新增楼宇
-        </AppLink>
+        <PermissionGate menuId={MENU_ID.BUILDINGS} action="create">
+          <AppLink
+            href="/buildings/new"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
+          >
+            <Plus className="w-4 h-4" />
+            新增楼宇
+          </AppLink>
+        </PermissionGate>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -125,23 +129,27 @@ export function BuildingList({
                 </td>
                 <td className="p-4">
                   <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/buildings/${b.id}/edit`)}
-                      className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded cursor-pointer"
-                      title="编辑"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(b)}
-                      disabled={deletingId === b.id}
-                      className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 rounded disabled:opacity-50"
-                      title={b._count?.rooms ? '楼宇下存在房源无法删除' : '删除'}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <PermissionGate menuId={MENU_ID.BUILDINGS} action="update">
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/buildings/${b.id}/edit`)}
+                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded cursor-pointer"
+                        title="编辑"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    </PermissionGate>
+                    <PermissionGate menuId={MENU_ID.BUILDINGS} action="delete">
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(b)}
+                        disabled={deletingId === b.id}
+                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 rounded disabled:opacity-50"
+                        title={b._count?.rooms ? '楼宇下存在房源无法删除' : '删除'}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </PermissionGate>
                   </div>
                 </td>
               </tr>

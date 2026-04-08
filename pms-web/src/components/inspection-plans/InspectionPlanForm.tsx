@@ -15,6 +15,8 @@ type InspectionPlan = {
   cycleMonthDay?: number | null
   cycleSchedule?: CycleScheduleV1 | null
   requirePhoto?: boolean
+  /** 是否参与每日定时自动生成任务 */
+  autoGenerateTasks?: boolean
   userIds: number[]
   checkItems: { name: string; nfcTagId?: number }[]
   inspectionPointIds?: number[]
@@ -127,6 +129,7 @@ export function InspectionPlanForm({
   const [userIds, setUserIds] = useState<number[]>([])
   const [selectedPointIds, setSelectedPointIds] = useState<number[]>([])
   const [requirePhoto, setRequirePhoto] = useState(true)
+  const [autoGenerateTasks, setAutoGenerateTasks] = useState(true)
   const [status, setStatus] = useState('active')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -202,6 +205,7 @@ export function InspectionPlanForm({
       setUserIds(plan.userIds)
       setSelectedPointIds(plan.inspectionPointIds ?? [])
       setRequirePhoto(plan.requirePhoto !== false)
+      setAutoGenerateTasks(plan.autoGenerateTasks !== false)
       setStatus(plan.status)
     } else {
       const ct = cycleTypes[0] || '每天'
@@ -214,6 +218,7 @@ export function InspectionPlanForm({
       setUserIds([])
       setSelectedPointIds([])
       setRequirePhoto(true)
+      setAutoGenerateTasks(true)
       setStatus('active')
     }
   }, [plan, inspectionTypes, cycleTypes, buildings])
@@ -285,6 +290,7 @@ export function InspectionPlanForm({
         cycleValue,
         cycleSchedule: schedulePayload,
         requirePhoto,
+        autoGenerateTasks,
         buildingId,
         userIds,
         inspectionPointIds: selectedPointIds,
@@ -634,6 +640,21 @@ export function InspectionPlanForm({
             <label htmlFor="requirePhoto" className="text-sm cursor-pointer">
               必须拍照（每个巡检点 NFC 打卡后须上传照片才能完成）
             </label>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">定时自动生成巡检任务</label>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+              选「是」则每日定时任务会按本计划周期生成任务；选「否」则不会进入定时任务，仍可在「巡检任务」页手动「按周期生成」时勾选本计划。
+            </p>
+            <select
+              value={autoGenerateTasks ? 'yes' : 'no'}
+              onChange={(e) => setAutoGenerateTasks(e.target.value === 'yes')}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+            >
+              <option value="yes">是（参与每日自动）</option>
+              <option value="no">否（不参与每日自动）</option>
+            </select>
           </div>
 
           <div>

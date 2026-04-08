@@ -1,21 +1,27 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
+import type { MpEmployeeProfile } from '@/store/user'
 
 const userStore = useUserStore()
 
-onMounted(() => {
-  if (!userStore.token) {
-    uni.navigateTo({ url: '/pages/login/login' })
-  }
+const emp = computed(() => {
+  const u = userStore.user
+  if (!u || u.type !== 'employee') return null
+  return u as MpEmployeeProfile
 })
 
-function goInspectionTasks() {
-  uni.navigateTo({ url: '/pages/inspection-tasks/inspection-tasks' })
-}
+onShow(() => {
+  if (!userStore.token) {
+    uni.navigateTo({ url: '/pages/login/login' })
+    return
+  }
+  void userStore.fetchUser()
+})
 
-function goMessages() {
-  uni.switchTab({ url: '/pages/messages/messages' })
+function goChangePassword() {
+  uni.navigateTo({ url: '/pages/profile/change-password' })
 }
 
 function logout() {
@@ -38,17 +44,35 @@ function logout() {
       <view class="user-glow" />
       <text class="name">{{ userStore.user.name }}</text>
       <text class="phone">{{ userStore.user.phone }}</text>
+
+      <view v-if="emp" class="meta-block">
+        <view class="meta-row">
+          <text class="meta-label">物业公司</text>
+          <text class="meta-value">{{ emp.companyName?.trim() || '—' }}</text>
+        </view>
+        <view class="meta-section">
+          <text class="meta-label">职责</text>
+          <view class="duty-lines">
+            <text v-if="emp.roleName" class="duty-line">角色：{{ emp.roleName }}</text>
+            <text v-if="emp.departmentName" class="duty-line">部门：{{ emp.departmentName }}</text>
+            <text v-if="emp.projectName" class="duty-line">项目：{{ emp.projectName }}</text>
+            <text v-if="emp.position" class="duty-line">岗位：{{ emp.position }}</text>
+            <text v-if="emp.businessTypes" class="duty-line">负责范围：{{ emp.businessTypes }}</text>
+            <text class="duty-line leader">
+              {{ emp.isLeader ? '组长' : '组员' }}
+            </text>
+          </view>
+        </view>
+      </view>
     </view>
+
     <view class="menu-list">
-      <view class="menu-item" @click="goInspectionTasks">
-        <text class="menu-text">巡检任务</text>
-        <text class="arrow">›</text>
-      </view>
-      <view class="menu-item" @click="goMessages">
-        <text class="menu-text">消息通知</text>
+      <view class="menu-item" @click="goChangePassword">
+        <text class="menu-text">修改密码</text>
         <text class="arrow">›</text>
       </view>
     </view>
+
     <view class="logout-wrap">
       <button class="btn-logout" @click="logout">退出登录</button>
     </view>
@@ -100,6 +124,54 @@ function logout() {
   font-size: 26rpx;
   color: $pms-text-muted;
   margin-top: 12rpx;
+}
+
+.meta-block {
+  position: relative;
+  z-index: 1;
+  margin-top: 28rpx;
+  padding-top: 28rpx;
+  border-top: 1rpx solid rgba(148, 163, 184, 0.2);
+}
+
+.meta-row {
+  margin-bottom: 20rpx;
+}
+
+.meta-section {
+  margin-top: 8rpx;
+}
+
+.meta-label {
+  display: block;
+  font-size: 22rpx;
+  color: $pms-text-dim;
+  margin-bottom: 8rpx;
+  letter-spacing: 0.02em;
+}
+
+.meta-value {
+  font-size: 28rpx;
+  color: $pms-text;
+  line-height: 1.5;
+}
+
+.duty-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.duty-line {
+  font-size: 26rpx;
+  color: $pms-text-muted;
+  line-height: 1.45;
+}
+
+.duty-line.leader {
+  color: #86efac;
+  font-weight: 600;
+  margin-top: 4rpx;
 }
 
 .menu-list {

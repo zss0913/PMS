@@ -11,6 +11,7 @@ import { safeReturnPath } from '@/lib/safe-return-path'
 import { BillDetailTabs } from '@/components/bills/BillDetailTabs'
 import { BillAttachmentsPanel } from '@/components/bills/BillAttachmentsPanel'
 import { BillLogDescriptionCell } from '@/components/bills/BillLogDescriptionCell'
+import { billLogActionTypeLabel } from '@/lib/bill-log-display'
 import { ArrowLeft } from 'lucide-react'
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
@@ -21,22 +22,6 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
 const STATUS_LABELS: Record<string, string> = {
   open: '开启',
   closed: '关闭',
-}
-
-const ACTION_LABELS: Record<string, string> = {
-  create: '创建账单',
-  update: '修改账单',
-  delete: '删除账单',
-  payment: '线下缴费',
-  refund: '退费',
-  receipt_export: '生成收据',
-  receipt_void: '作废收据',
-  invoice_export: '生成发票（历史导出）',
-  invoice_issue: '开票登记',
-  invoice_void: '作废开票',
-  invoice_reversal: '红冲开票',
-  dunning_export: '生成催缴单',
-  reminder_record: '催缴记录',
 }
 
 export default async function BillDetailPage({
@@ -323,7 +308,7 @@ export default async function BillDetailPage({
                       {formatDateTime(log.createdAt)}
                     </td>
                     <td className="py-3 pr-3 whitespace-nowrap">
-                      {ACTION_LABELS[log.action] ?? log.action}
+                      {billLogActionTypeLabel(log)}
                     </td>
                     <td className="py-3 pr-3">{log.operatorName ?? '-'}</td>
                     <td className="py-3 pr-3 font-mono text-xs">{log.operatorPhone ?? '-'}</td>

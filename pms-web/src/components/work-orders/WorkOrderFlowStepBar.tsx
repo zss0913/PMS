@@ -6,6 +6,7 @@ const STEP_LABELS = [
   '响应',
   '处理',
   '费用确认',
+  '待处理',
   '待评价',
   '完成',
 ] as const
@@ -26,8 +27,10 @@ export function getWorkOrderFlowStepState(status: string): WorkOrderFlowStepStat
     处理中: 3,
     待员工确认费用: 4,
     待租客确认费用: 4,
-    待评价: 5,
-    评价完成: 6,
+    /** 租客已付费，物业继续维修 */
+    待处理: 5,
+    待评价: 6,
+    评价完成: 7,
   }
   return { activeIndex: map[status] ?? 0, cancelled: false }
 }

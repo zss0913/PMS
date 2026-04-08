@@ -1,8 +1,8 @@
 import { getAuthUser } from '@/lib/auth'
 import { redirect, notFound } from 'next/navigation'
-import { AppLink } from '@/components/AppLink'
-import { ArrowLeft } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
+import { safeReturnPath } from '@/lib/safe-return-path'
+import { WorkOrderDetailBackButton } from '@/components/work-orders/WorkOrderDetailBackButton'
 import { fetchWorkOrderActivityLogs } from '@/lib/work-order-activity-log-db'
 import { WorkOrderDetail } from '@/components/work-orders/WorkOrderDetail'
 import { resolveWorkOrderReporter } from '@/lib/work-order-reporter'
@@ -10,14 +10,22 @@ import { parseWorkOrderImageUrls } from '@/lib/work-order'
 
 export default async function WorkOrderDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const user = await getAuthUser()
   if (!user) redirect('/login')
   if (user.companyId === 0) redirect('/')
 
   const { id } = await params
+  const sp = await searchParams
+  const rawRt = sp.returnTo
+  const returnToParam =
+    typeof rawRt === 'string' ? rawRt : Array.isArray(rawRt) ? rawRt[0] : undefined
+  const presetReturnHref = safeReturnPath(returnToParam)
+
   const workOrderId = parseInt(id, 10)
   if (isNaN(workOrderId)) notFound()
 
@@ -48,25 +56,27 @@ export default async function WorkOrderDetailPage({
     })
   }
 
-  const [employees, activityLogs] = await Promise.all([
+  const [employees, activityLogs, workOrderFeeBillRow] = await Promise.all([
     prisma.employee.findMany({
       where: { companyId: user.companyId, status: 'active' },
       select: { id: true, name: true, phone: true },
       orderBy: { id: 'asc' },
     }),
     fetchWorkOrderActivityLogs(prisma, user.companyId, workOrderId),
+    prisma.bill.findFirst({
+      where: {
+        companyId: user.companyId,
+        workOrderId,
+        billSource: 'work_order_fee',
+      },
+      select: { id: true },
+    }),
   ])
 
   return (
     <div className="p-6">
-      <div className="flex items-center gap-4 mb-6">
-        <AppLink
-          href="/work-orders"
-          className="flex items-center gap-2 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          返回
-        </AppLink>
+      <div className="flex flex-wrap items-center gap-4 mb-6">
+        <WorkOrderDetailBackButton presetReturnHref={presetReturnHref} />
         <h1 className="text-2xl font-bold">工单详情 - {workOrder.code}</h1>
       </div>
       <WorkOrderDetail
@@ -98,8 +108,11 @@ export default async function WorkOrderDetailPage({
           completionImageUrls: parseWorkOrderImageUrls(workOrder.completionImages),
           completionRemark: workOrder.completionRemark,
           evaluationNote: workOrder.evaluationNote,
+          evaluationStars: workOrder.evaluationStars,
+          evaluationImageUrls: parseWorkOrderImageUrls(workOrder.evaluationImages),
           createdAt: workOrder.createdAt.toISOString(),
           updatedAt: workOrder.updatedAt.toISOString(),
+          hasWorkOrderFeeBill: workOrderFeeBillRow != null,
         }}
         employees={employees}
         activityLogs={activityLogs}

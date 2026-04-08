@@ -10,6 +10,8 @@ const REQUIRED_DELEGATES = [
   'receiptIssueRecord',
   'workOrder',
   'workOrderActivityLog',
+  'deviceMaintenanceRecord',
+  'deviceMaintenanceItem',
 ] as const
 
 function prismaClientIsComplete(p: PrismaClient): boolean {

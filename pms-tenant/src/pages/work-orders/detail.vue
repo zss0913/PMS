@@ -6,6 +6,7 @@ import { useUserStore } from '@/store/user'
 import { resolveMediaUrl, uploadWorkOrderImage } from '@/api/work-order-upload'
 
 const MAX_EDIT_IMAGES = 10
+const MAX_EVAL_IMAGES = 10
 
 const userStore = useUserStore()
 const loading = ref(true)
@@ -13,7 +14,7 @@ const errMsg = ref('')
 const id = ref(0)
 
 /** 与 PC `WorkOrderFlowStepBar` 一致 */
-const STEP_LABELS = ['创建', '派单', '响应', '处理', '费用确认', '待评价', '完成'] as const
+const STEP_LABELS = ['创建', '派单', '响应', '处理', '费用确认', '待处理', '待评价', '完成'] as const
 
 const ACTION_LABELS: Record<string, string> = {
   create: '创建',
@@ -29,6 +30,7 @@ const ACTION_LABELS: Record<string, string> = {
   complete_for_evaluation: '办结（待评价）',
   mark_evaluated: '评价完成',
   tenant_submit_evaluation: '提交评价（租客）',
+  refund_fee_cancel: '退费并取消工单',
 }
 
 function getFlowState(status: string): { activeIndex: number; cancelled: boolean } {
@@ -41,8 +43,9 @@ function getFlowState(status: string): { activeIndex: number; cancelled: boolean
     处理中: 3,
     待员工确认费用: 4,
     待租客确认费用: 4,
-    待评价: 5,
-    评价完成: 6,
+    待处理: 5,
+    待评价: 6,
+    评价完成: 7,
   }
   return { activeIndex: map[status] ?? 0, cancelled: false }
 }
@@ -93,6 +96,8 @@ type WorkOrderDetail = {
   completionImageUrls?: string[]
   completionRemark?: string | null
   evaluationNote?: string | null
+  evaluationStars?: number | null
+  evaluationImageUrls?: string[]
 }
 
 const wo = ref<WorkOrderDetail | null>(null)
@@ -122,6 +127,10 @@ const feePay = ref<FeePayPrepared | null>(null)
 const actionBusy = ref(false)
 const evalDraft = ref('')
 const evalBusy = ref(false)
+/** 租客评价：1～5 星，默认 5 */
+const evalStars = ref(5)
+const evalImageUrls = ref<string[]>([])
+const evalUploading = ref(false)
 const editing = ref(false)
 const editTitle = ref('')
 const editDescription = ref('')
@@ -131,8 +140,11 @@ const uploadingEditPhotos = ref(false)
 
 const flowState = computed(() => (wo.value ? getFlowState(wo.value.status) : { activeIndex: 0, cancelled: false }))
 
+/** 租客：费用支付进入待处理后不可再改标题/描述/图片（与「待评价」及终态一致） */
 const canEditBasics = computed(
-  () => wo.value != null && !['评价完成', '已取消'].includes(wo.value.status)
+  () =>
+    wo.value != null &&
+    !['待处理', '待评价', '评价完成', '已取消'].includes(wo.value.status)
 )
 
 const showTenantCancel = computed(
@@ -160,7 +172,7 @@ const showPendingEval = computed(
     isTenantSubmittedSource(wo.value.source)
 )
 
-/** 待租客确认费用可确认/拒绝；待员工确认费用仅提示；未结束可编辑；仅待派单/待响应可取消；待评价且租客单可提交评价 */
+/** 待租客确认费用可确认/拒绝；待员工确认费用仅提示；待处理前可编辑；仅待派单/待响应可取消；待评价且租客单可提交评价 */
 const showFooterBar = computed(
   () =>
     showConfirmFee.value ||
@@ -238,6 +250,56 @@ function previewCompletionImage(current: string) {
   uni.previewImage({ urls, current: urls.includes(cur) ? cur : urls[0] })
 }
 
+function previewEvaluationResultImage(current: string) {
+  const urls = (wo.value?.evaluationImageUrls ?? []).map((u) => resolveMediaUrl(u))
+  if (urls.length === 0) return
+  const cur = resolveMediaUrl(current)
+  uni.previewImage({ urls, current: urls.includes(cur) ? cur : urls[0] })
+}
+
+function setEvalStar(n: number) {
+  if (n >= 1 && n <= 5) evalStars.value = n
+}
+
+function previewEvalDraftImage(index: number) {
+  const urls = evalImageUrls.value.map((u) => resolveMediaUrl(u))
+  if (!urls.length) return
+  const i = Math.max(0, Math.min(index, urls.length - 1))
+  uni.previewImage({ urls, current: urls[i] })
+}
+
+function addEvalDraftPhotos() {
+  const remain = MAX_EVAL_IMAGES - evalImageUrls.value.length
+  if (remain <= 0) {
+    uni.showToast({ title: `最多 ${MAX_EVAL_IMAGES} 张`, icon: 'none' })
+    return
+  }
+  uni.chooseImage({
+    count: Math.min(remain, 9),
+    sizeType: ['compressed'],
+    sourceType: ['album', 'camera'],
+    success: async (res) => {
+      const paths = res.tempFilePaths as string[]
+      evalUploading.value = true
+      try {
+        for (const fp of paths) {
+          if (evalImageUrls.value.length >= MAX_EVAL_IMAGES) break
+          const url = await uploadWorkOrderImage(fp)
+          evalImageUrls.value = [...evalImageUrls.value, url]
+        }
+      } catch (e: unknown) {
+        uni.showToast({ title: (e as Error)?.message || '上传失败', icon: 'none' })
+      } finally {
+        evalUploading.value = false
+      }
+    },
+  })
+}
+
+function removeEvalDraftPhoto(idx: number) {
+  evalImageUrls.value = evalImageUrls.value.filter((_, i) => i !== idx)
+}
+
 async function load() {
   if (!userStore.token) {
     uni.navigateTo({ url: '/pages/login/login' })
@@ -258,6 +320,9 @@ async function load() {
         imageUrls: Array.isArray(res.workOrder.imageUrls) ? res.workOrder.imageUrls : [],
       }
       activityLogs.value = Array.isArray(res.activityLogs) ? res.activityLogs : []
+      if (['待处理', '待评价', '评价完成', '已取消'].includes(res.workOrder.status)) {
+        editing.value = false
+      }
       if (!editing.value) {
         editTitle.value = res.workOrder.title
         editDescription.value = res.workOrder.description
@@ -267,6 +332,11 @@ async function load() {
         await prepareFeePay()
       } else {
         feePay.value = null
+      }
+      if (res.workOrder.status === '待评价' && isTenantSubmittedSource(res.workOrder.source)) {
+        evalStars.value = 5
+        evalDraft.value = ''
+        evalImageUrls.value = []
       }
     } else {
       wo.value = null
@@ -304,6 +374,7 @@ async function prepareFeePay() {
       success?: boolean
       message?: string
       data?: {
+        zeroFeeSkipped?: boolean
         bill: {
           id: number
           code: string
@@ -322,6 +393,10 @@ async function prepareFeePay() {
           paymentStatus: string
         } | null
       }
+    }
+    if (res.success && res.data?.zeroFeeSkipped) {
+      await load()
+      return
     }
     if (res.success && res.data?.bill) {
       const b = res.data.bill
@@ -348,20 +423,28 @@ async function prepareFeePay() {
   }
 }
 
-async function checkoutFeePay(channel: 'wechat' | 'alipay') {
+async function checkoutFeePay() {
   if (!id.value || actionBusy.value || !feePay.value) return
   actionBusy.value = true
   try {
     const res = (await post(`/api/mp/work-orders/${id.value}/fee-payment/checkout`, {
       billId: feePay.value.billId,
-      channel,
+      channel: 'wechat',
     })) as {
       success?: boolean
       message?: string
-      data?: { payment: { id: number; code: string; paymentMethod: string } }
+      data?: {
+        mockPaymentCompleted?: boolean
+        payment: { id: number; code: string; paymentMethod: string }
+      }
     }
     if (!res.success || !res.data?.payment) {
       uni.showToast({ title: res.message || '下单失败', icon: 'none' })
+      return
+    }
+    if (res.data.mockPaymentCompleted) {
+      uni.showToast({ title: '模拟支付成功', icon: 'success' })
+      await load()
       return
     }
     const p = res.data.payment
@@ -439,17 +522,26 @@ async function doRefuseFee() {
 
 async function submitTenantEvaluation() {
   if (!id.value || evalBusy.value) return
+  const stars = evalStars.value
+  if (!Number.isInteger(stars) || stars < 1 || stars > 5) {
+    uni.showToast({ title: '请选择 1～5 星', icon: 'none' })
+    return
+  }
   evalBusy.value = true
   try {
     const res = (await post(`/api/mp/work-orders/${id.value}/advance`, {
       action: 'submit_tenant_evaluation',
+      evaluationStars: stars,
       evaluationContent: evalDraft.value.trim() || undefined,
+      evaluationImages: evalImageUrls.value.length > 0 ? evalImageUrls.value : undefined,
     })) as { success?: boolean; message?: string }
     if (!res.success) {
       uni.showToast({ title: res.message || '提交失败', icon: 'none' })
       return
     }
     evalDraft.value = ''
+    evalStars.value = 5
+    evalImageUrls.value = []
     uni.showToast({ title: '已完结', icon: 'success' })
     await load()
   } catch {
@@ -773,9 +865,38 @@ function previewEditPhoto(index: number) {
         <text class="desc">本单由物业发起，评价由物业在员工端确认后即可完结。</text>
       </view>
 
-      <view v-if="wo.evaluationNote?.trim() && wo.status === '评价完成'" class="card">
-        <text class="card-title">评价说明</text>
-        <text class="desc">{{ wo.evaluationNote }}</text>
+      <view
+        v-if="
+          wo.status === '评价完成' &&
+          (wo.evaluationStars != null ||
+            wo.evaluationNote?.trim() ||
+            (wo.evaluationImageUrls?.length ?? 0) > 0)
+        "
+        class="card"
+      >
+        <text class="card-title">我的评价</text>
+        <view v-if="wo.evaluationStars != null && wo.evaluationStars >= 1 && wo.evaluationStars <= 5" class="eval-result-stars">
+          <text
+            v-for="s in [1, 2, 3, 4, 5]"
+            :key="'ers' + s"
+            class="eval-result-star"
+            :class="{ 'eval-result-star--on': s <= (wo.evaluationStars ?? 0) }"
+          >
+            ★
+          </text>
+          <text class="eval-result-star-num">{{ wo.evaluationStars }} 星</text>
+        </view>
+        <text v-if="wo.evaluationNote?.trim()" class="desc">{{ wo.evaluationNote }}</text>
+        <view v-if="(wo.evaluationImageUrls?.length ?? 0) > 0" class="imgs">
+          <view
+            v-for="(u, uix) in wo.evaluationImageUrls ?? []"
+            :key="'evr' + u + uix"
+            class="img-wrap"
+            @click="previewEvaluationResultImage(u)"
+          >
+            <image class="img" :src="resolveMediaUrl(u)" mode="aspectFill" />
+          </view>
+        </view>
       </view>
 
       <view class="card log-card">
@@ -837,11 +958,14 @@ function previewEditPhoto(index: number) {
 
     <!-- 底部固定操作栏（与 PC 逻辑一致，样式为底栏） -->
     <view v-if="wo && showFooterBar && !editing" class="footer-bar">
+      <text v-if="wo.status === '待处理'" class="footer-tip">
+        费用已支付，物业将继续处理；办结后您将收到待评价通知。本阶段无需再次支付。
+      </text>
       <text v-if="showFeeStaffReview" class="footer-tip">
         物业正在核对费用，核对完毕后将送您确认。
       </text>
       <text v-if="showConfirmFee" class="footer-tip">
-        须在线支付费用账单后方可继续维修；支付成功后工单将自动回到处理中。若有异议可拒绝付费（工单将取消）。
+        须通过微信支付结清费用账单。支付成功后工单进入「待处理」，由物业继续维修。若有异议可拒绝付费（工单将取消）。
       </text>
       <view v-if="showConfirmFee && feePay" class="footer-fee-actions">
         <text class="footer-tip footer-tip--bill">
@@ -853,18 +977,11 @@ function previewEditPhoto(index: number) {
           class="footer-pay-row"
         >
           <button
-            class="footer-btn footer-btn--wechat flex1"
+            class="footer-btn footer-btn--wechat footer-btn--wechat-full"
             :disabled="actionBusy"
-            @tap="checkoutFeePay('wechat')"
+            @tap="checkoutFeePay()"
           >
             微信支付
-          </button>
-          <button
-            class="footer-btn footer-btn--alipay flex1"
-            :disabled="actionBusy"
-            @tap="checkoutFeePay('alipay')"
-          >
-            支付宝
           </button>
         </view>
         <view
@@ -893,7 +1010,21 @@ function previewEditPhoto(index: number) {
         正在准备账单…
       </text>
       <view v-if="showPendingEval" class="footer-eval">
-        <text class="footer-tip">物业已办结，请提交评价（选填）以完结工单。</text>
+        <text class="footer-tip">物业已办结，请完成星级评价后提交以完结工单。说明与图片选填。</text>
+        <view class="eval-star-block">
+          <text class="eval-star-lbl">满意度（必填）</text>
+          <view class="eval-stars">
+            <text
+              v-for="s in [1, 2, 3, 4, 5]"
+              :key="'evs' + s"
+              class="eval-star"
+              :class="{ 'eval-star--on': s <= evalStars }"
+              @tap="setEvalStar(s)"
+            >
+              ★
+            </text>
+          </view>
+        </view>
         <textarea
           v-model="evalDraft"
           class="footer-eval-textarea"
@@ -901,9 +1032,30 @@ function previewEditPhoto(index: number) {
           :maxlength="2000"
           :disabled="evalBusy"
         />
+        <text class="eval-img-lbl">评价附图（选填，最多 {{ MAX_EVAL_IMAGES }} 张）</text>
+        <view class="eval-draft-imgs">
+          <view
+            v-for="(eu, eidx) in evalImageUrls"
+            :key="'evi' + eu + eidx"
+            class="eval-draft-cell"
+            @tap="previewEvalDraftImage(eidx)"
+          >
+            <image class="eval-draft-img" :src="resolveMediaUrl(eu)" mode="aspectFill" />
+            <view class="eval-draft-del" @tap.stop="removeEvalDraftPhoto(eidx)">
+              <text>×</text>
+            </view>
+          </view>
+          <view
+            v-if="evalImageUrls.length < MAX_EVAL_IMAGES"
+            class="eval-draft-add"
+            @tap="addEvalDraftPhotos"
+          >
+            <text class="eval-draft-add-txt">{{ evalUploading ? '上传中…' : '+' }}</text>
+          </view>
+        </view>
         <button
           class="footer-btn footer-btn--primary"
-          :disabled="evalBusy"
+          :disabled="evalBusy || evalUploading"
           @tap="submitTenantEvaluation"
         >
           {{ evalBusy ? '提交中…' : '提交评价并完结' }}
@@ -1110,10 +1262,9 @@ function previewEditPhoto(index: number) {
   font-size: 28rpx;
 }
 
-.footer-btn--alipay {
-  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-  color: #fff;
-  font-size: 28rpx;
+.footer-btn--wechat-full {
+  width: 100%;
+  flex: 1;
 }
 
 .footer-btn[disabled] {
@@ -1452,6 +1603,118 @@ function previewEditPhoto(index: number) {
   color: $pms-text;
   font-size: 26rpx;
   box-sizing: border-box;
+}
+
+.eval-star-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.eval-star-lbl {
+  font-size: 24rpx;
+  color: $pms-text-muted;
+}
+
+.eval-stars {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.eval-star {
+  font-size: 48rpx;
+  line-height: 1;
+  color: rgba(148, 163, 184, 0.55);
+  padding: 4rpx;
+}
+
+.eval-star--on {
+  color: #fbbf24;
+}
+
+.eval-img-lbl {
+  font-size: 24rpx;
+  color: $pms-text-muted;
+}
+
+.eval-draft-imgs {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.eval-draft-cell {
+  position: relative;
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 12rpx;
+  overflow: hidden;
+  border: 1rpx solid $pms-border;
+}
+
+.eval-draft-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.eval-draft-del {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 40rpx;
+  height: 40rpx;
+  background: rgba(220, 38, 38, 0.92);
+  color: #fff;
+  font-size: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom-left-radius: 10rpx;
+}
+
+.eval-draft-add {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 12rpx;
+  border: 2rpx dashed $pms-border;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.eval-draft-add-txt {
+  font-size: 48rpx;
+  color: $pms-text-muted;
+}
+
+.eval-result-stars {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6rpx;
+  margin-bottom: 16rpx;
+}
+
+.eval-result-star {
+  font-size: 40rpx;
+  color: rgba(148, 163, 184, 0.45);
+  line-height: 1;
+}
+
+.eval-result-star--on {
+  color: #fbbf24;
+}
+
+.eval-result-star-num {
+  font-size: 26rpx;
+  color: $pms-text-muted;
+  margin-left: 12rpx;
 }
 
 .fee-sum-line {

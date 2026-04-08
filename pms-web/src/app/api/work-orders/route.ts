@@ -58,13 +58,17 @@ export async function GET(request: NextRequest) {
       where.status = status
     }
     if (type) {
-      where.type = type
+      /** 列表「类型」选巡检发现时，须命中历史存为「巡检异常」的巡检工单 */
+      where.type =
+        type === '巡检发现' ? { in: ['巡检发现', '巡检异常'] } : type
     }
     if (source && (WORK_ORDER_SOURCE_OPTIONS as readonly string[]).includes(source)) {
       if (source === '租客自建') {
         where.source = { in: ['租客自建', '租客端'] }
       } else if (source === 'PC自建') {
         where.source = { in: ['PC自建', 'PC端'] }
+      } else if (source === '巡检发现') {
+        where.source = { in: ['巡检发现', '巡检异常'] }
       } else {
         where.source = source
       }

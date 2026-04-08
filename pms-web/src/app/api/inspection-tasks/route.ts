@@ -21,6 +21,16 @@ export async function GET(request: NextRequest) {
     const dateFrom = searchParams.get('dateFrom')?.trim()
     const dateTo = searchParams.get('dateTo')?.trim()
     const buildingIdStr = searchParams.get('buildingId')?.trim()
+    const category = searchParams.get('category')?.trim() || ''
+    const CATEGORY_KEYS = ['工程', '安保', '设备', '绿化'] as const
+
+    const pageRaw = parseInt(searchParams.get('page') ?? '1', 10)
+    const pageSizeRaw = parseInt(searchParams.get('pageSize') ?? '15', 10)
+    const page = Number.isInteger(pageRaw) && pageRaw > 0 ? pageRaw : 1
+    const allowedSizes = [15, 30, 100] as const
+    const pageSize = (allowedSizes as readonly number[]).includes(pageSizeRaw)
+      ? pageSizeRaw
+      : 15
 
     const where: Record<string, unknown> = { companyId: user.companyId }
     if (status) {
@@ -33,15 +43,24 @@ export async function GET(request: NextRequest) {
     if (dateFrom || dateTo) {
       const gte = dateFrom ? new Date(dateFrom + 'T00:00:00') : undefined
       const lte = dateTo ? new Date(dateTo + 'T23:59:59.999') : undefined
-      where.scheduledDate = {}
-      if (gte && !Number.isNaN(gte.getTime())) (where.scheduledDate as Record<string, Date>).gte = gte
-      if (lte && !Number.isNaN(lte.getTime())) (where.scheduledDate as Record<string, Date>).lte = lte
+      const scheduledFilter: { gte?: Date; lte?: Date } = {}
+      if (gte && !Number.isNaN(gte.getTime())) scheduledFilter.gte = gte
+      if (lte && !Number.isNaN(lte.getTime())) scheduledFilter.lte = lte
+      if (Object.keys(scheduledFilter).length > 0) {
+        where.scheduledDate = scheduledFilter
+      }
     }
     if (buildingIdStr) {
       const bid = parseInt(buildingIdStr, 10)
       if (!Number.isNaN(bid)) where.buildingId = bid
     }
+    if (category && (CATEGORY_KEYS as readonly string[]).includes(category)) {
+      where.inspectionType = { startsWith: category }
+    }
 
+    const total = await prisma.inspectionTask.count({ where })
+    const totalPages = Math.max(1, Math.ceil(total / pageSize))
+    const safePage = Math.min(Math.max(1, page), totalPages)
     const tasks = await prisma.inspectionTask.findMany({
       where,
       include: {
@@ -49,6 +68,8 @@ export async function GET(request: NextRequest) {
         building: { select: { id: true, name: true } },
       },
       orderBy: { scheduledDate: 'desc' },
+      skip: (safePage - 1) * pageSize,
+      take: pageSize,
     })
 
     const employeeIds = new Set<number>()
@@ -63,7 +84,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    const employees =
+    const assigneeRows =
       employeeIds.size > 0
         ? await prisma.employee.findMany({
             where: { id: { in: Array.from(employeeIds) }, companyId: user.companyId },
@@ -71,7 +92,7 @@ export async function GET(request: NextRequest) {
           })
         : []
 
-    const empMap = Object.fromEntries(employees.map((e) => [e.id, e.name]))
+    const empMap = Object.fromEntries(assigneeRows.map((e) => [e.id, e.name]))
 
     const list = tasks.map((t) => {
       let personnelNames = '-'
@@ -102,12 +123,45 @@ export async function GET(request: NextRequest) {
       orderBy: { id: 'asc' },
     })
 
+    const activePlans = await prisma.inspectionPlan.findMany({
+      where: {
+        companyId: user.companyId,
+        status: { in: ['active', '启用'] },
+      },
+      select: {
+        id: true,
+        name: true,
+        inspectionType: true,
+        autoGenerateTasks: true,
+        building: { select: { name: true } },
+      },
+      orderBy: { id: 'desc' },
+    })
+
+    const employees = await prisma.employee.findMany({
+      where: { companyId: user.companyId, status: 'active' },
+      select: { id: true, name: true },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    })
+
     return NextResponse.json({
       success: true,
       data: {
         list,
+        total,
+        page: safePage,
+        pageSize,
+        totalPages,
         buildings,
+        employees,
         statusOptions: ['待执行', '巡检中', '已完成', '已逾期'],
+        activePlans: activePlans.map((p) => ({
+          id: p.id,
+          name: p.name,
+          inspectionType: p.inspectionType,
+          autoGenerateTasks: p.autoGenerateTasks,
+          buildingName: p.building?.name ?? '—',
+        })),
       },
     })
   } catch (e) {

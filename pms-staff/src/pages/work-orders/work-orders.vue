@@ -20,6 +20,7 @@ const STATUS_TABS = [
   { value: '处理中', label: '处理中' },
   { value: '待员工确认费用', label: '待员工确认费用' },
   { value: '待租客确认费用', label: '待租客确认费用' },
+  { value: '待处理', label: '待处理' },
   { value: '待评价', label: '待评价' },
   { value: '评价完成', label: '评价完成' },
   { value: '已取消', label: '已取消' },

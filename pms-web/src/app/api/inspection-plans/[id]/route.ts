@@ -31,6 +31,7 @@ const updateSchema = z.object({
   cycleValue: z.number().min(1).optional(),
   cycleSchedule: z.any().optional(),
   requirePhoto: z.boolean().optional(),
+  autoGenerateTasks: z.boolean().optional(),
   buildingId: z.number().int().min(1).optional(),
   userIds: z.array(z.number()).optional(),
   inspectionPointIds: z.array(z.number().int().positive()).min(1).optional(),
@@ -109,6 +110,7 @@ export async function GET(
           cycleMonthDay: plan.cycleMonthDay,
           cycleSchedule: parseCycleSchedule(plan.cycleSchedule),
           requirePhoto: plan.requirePhoto,
+          autoGenerateTasks: plan.autoGenerateTasks,
           userIds: plan.userIds ? (JSON.parse(plan.userIds) as number[]) : [],
           checkItems: parseCheckItemsJson(plan.checkItems),
           inspectionPointIds: (() => {
@@ -260,6 +262,7 @@ export async function PUT(
       if (scheduleNorm) updateData.cycleSchedule = JSON.stringify(scheduleNorm)
     }
     if (parsed.requirePhoto !== undefined) updateData.requirePhoto = parsed.requirePhoto
+    if (parsed.autoGenerateTasks !== undefined) updateData.autoGenerateTasks = parsed.autoGenerateTasks
     if (parsed.buildingId !== undefined) updateData.buildingId = parsed.buildingId
     if (parsed.userIds !== undefined) {
       updateData.userIds = parsed.userIds.length > 0 ? JSON.stringify(parsed.userIds) : null

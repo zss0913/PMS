@@ -10,8 +10,6 @@ type FormData = {
   contact: string
   phone: string
   address: string
-  appId: string
-  appSecret: string
   wechatMchId: string
   wechatMchSerialNo: string
   wechatApiV3Key: string
@@ -35,8 +33,6 @@ export function CompanyForm({
     contact: '',
     phone: '',
     address: '',
-    appId: '',
-    appSecret: '',
     wechatMchId: '',
     wechatMchSerialNo: '',
     wechatApiV3Key: '',
@@ -65,8 +61,6 @@ export function CompanyForm({
           contact: c.contact ?? '',
           phone: c.phone ?? '',
           address: c.address ?? '',
-          appId: c.appId ?? '',
-          appSecret: c.appSecret ?? '',
           wechatMchId: c.wechatMchId ?? '',
           wechatMchSerialNo: c.wechatMchSerialNo ?? '',
           wechatApiV3Key: c.wechatApiV3Key ?? '',
@@ -103,8 +97,6 @@ export function CompanyForm({
         contact: form.contact.trim(),
         phone: form.phone.trim(),
         address: form.address.trim() || null,
-        appId: form.appId.trim() || null,
-        appSecret: form.appSecret.trim() || null,
         wechatMchId: form.wechatMchId.trim() || null,
         wechatMchSerialNo: form.wechatMchSerialNo.trim() || null,
         wechatApiV3Key: form.wechatApiV3Key.trim() || null,
@@ -204,28 +196,13 @@ export function CompanyForm({
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-2">AppId</label>
-          <input
-            type="text"
-            value={form.appId}
-            onChange={(e) => setForm((p) => ({ ...p, appId: e.target.value }))}
-            className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
-            placeholder="请输入 AppId（可选）"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-2">AppSecret</label>
-          <input
-            type="text"
-            value={form.appSecret}
-            onChange={(e) => setForm((p) => ({ ...p, appSecret: e.target.value }))}
-            className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
-            placeholder="请输入 AppSecret（可选）"
-          />
-        </div>
-
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
+          联调：四字段与代码中{' '}
+          <code className="text-[11px] bg-slate-100 dark:bg-slate-800 px-1 rounded">
+            wechat-pay-mock.ts
+          </code>{' '}
+          内置测试值完全一致时，租客端工单费用「微信支付」将不调微信网关、直接记为支付成功。上线前请改为真实商户资料并清除测试值。
+        </p>
         <div>
           <label className="block text-sm font-medium mb-2">微信商户号</label>
           <input

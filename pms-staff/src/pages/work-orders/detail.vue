@@ -48,6 +48,8 @@ type Wo = {
   evaluationNote?: string | null
   createdAt: string
   updatedAt: string
+  /** 是否存在工单费用账单；内部确认费用时为 false */
+  hasWorkOrderFeeBill?: boolean
 }
 
 const MAX_EDIT_IMAGES = 10
@@ -73,11 +75,14 @@ const ACTION_LABELS: Record<string, string> = {
   request_fee_confirmation: '提交费用（待员工确认）',
   no_fee_continue: '未产生任何费用（继续处理）',
   publish_fee_for_tenant: '送租客确认费用',
+  fee_zero_skip_tenant: '零元费用跳过租客确认',
+  fee_confirm_internal_pending: '费用内部确认（入待处理）',
   fee_confirm_tenant: '确认费用并在线支付（租客）',
   fee_refuse_tenant: '拒绝付费（租客）',
   complete_for_evaluation: '办结（待评价）',
   mark_evaluated: '评价完成',
   tenant_submit_evaluation: '提交评价（租客）',
+  refund_fee_cancel: '退费并取消工单',
 }
 
 const woId = ref(0)
@@ -102,6 +107,10 @@ const activityLogs = ref<ActivityLogItem[]>([])
 const employees = ref<EmployeeBrief[]>([])
 const assigningTo = ref<number | null>(null)
 const assignBusy = ref(false)
+
+/** 待员工确认费用且工单无租客：可选指定费用承担租客 */
+const feeTenantsBrief = ref<{ id: number; companyName: string }[]>([])
+const feeAssignPickerIndex = ref(0)
 
 const editing = ref(false)
 const editTitle = ref('')
@@ -156,7 +165,7 @@ function isTenantSubmittedWoSource(src: string | null | undefined): boolean {
 }
 
 /** 与 PC 端 WorkOrderFlowStepBar 一致：当前及之前节点高亮，之后置灰 */
-const STEP_LABELS = ['创建', '派单', '响应', '处理', '费用确认', '待评价', '完成'] as const
+const STEP_LABELS = ['创建', '派单', '响应', '处理', '费用确认', '待处理', '待评价', '完成'] as const
 
 function getFlowStepState(status: string): { activeIndex: number; cancelled: boolean } {
   if (status === '已取消') {
@@ -168,8 +177,9 @@ function getFlowStepState(status: string): { activeIndex: number; cancelled: boo
     处理中: 3,
     待员工确认费用: 4,
     待租客确认费用: 4,
-    待评价: 5,
-    评价完成: 6,
+    待处理: 5,
+    待评价: 6,
+    评价完成: 7,
   }
   return { activeIndex: map[status] ?? 0, cancelled: false }
 }
@@ -194,6 +204,11 @@ const employeePickerIndex = computed(() => {
   return i >= 0 ? i + 1 : 0
 })
 
+const feeTenantPickerLabels = computed(() => [
+  '请选择费用承担租客',
+  ...feeTenantsBrief.value.map((t) => t.companyName),
+])
+
 const showFooter = computed(() => {
   const w = wo.value
   if (!w || editing.value) return false
@@ -204,6 +219,7 @@ const showFooter = computed(() => {
     s === '处理中' ||
     s === '待员工确认费用' ||
     s === '待租客确认费用' ||
+    s === '待处理' ||
     s === '待评价'
   )
 })
@@ -237,11 +253,35 @@ async function load() {
         editImageUrls.value = [...(res.workOrder.imageUrls ?? [])]
       }
     }
+    await loadFeeTenantsForAssign()
   } catch {
     wo.value = null
+    feeTenantsBrief.value = []
+    feeAssignPickerIndex.value = 0
     errMsg.value = '网络错误'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadFeeTenantsForAssign() {
+  const w = wo.value
+  if (!w || w.status !== '待员工确认费用' || w.tenant != null) {
+    feeTenantsBrief.value = []
+    feeAssignPickerIndex.value = 0
+    return
+  }
+  try {
+    const bid = w.building?.id
+    const q = bid != null ? `?buildingId=${bid}` : ''
+    const res = (await get(`/api/mp/tenants-brief${q}`)) as {
+      success?: boolean
+      data?: { list?: { id: number; companyName: string }[] }
+    }
+    feeTenantsBrief.value = res.data?.list ?? []
+    feeAssignPickerIndex.value = 0
+  } catch {
+    feeTenantsBrief.value = []
   }
 }
 
@@ -260,8 +300,10 @@ type AdvanceAction =
   | 'request_fee_confirmation'
   | 'no_fee_continue'
   | 'publish_fee_for_tenant'
+  | 'confirm_fee_internal_pending'
   | 'complete_for_evaluation'
   | 'mark_evaluated'
+  | 'refund_fee_cancel'
   | 'cancel'
 
 function sanitizeFeeTotalInput(raw: string): string {
@@ -318,9 +360,11 @@ async function advance(
   opts?: {
     feeRemark?: string
     feeTotal?: number
+    assignTenantId?: number
     completionImages?: string[]
     completionRemark?: string
     evaluationContent?: string
+    refundReason?: string
   }
 ) {
   if (!woId.value || busy.value) return
@@ -359,6 +403,16 @@ async function advance(
       const ev = opts?.evaluationContent?.trim()
       if (ev) body.evaluationContent = ev
     }
+    if (action === 'refund_fee_cancel') {
+      const rr = opts?.refundReason?.trim()
+      if (rr) body.refundReason = rr
+    }
+    if (action === 'publish_fee_for_tenant') {
+      const aid = opts?.assignTenantId
+      if (aid != null && Number.isInteger(aid) && aid > 0) {
+        body.assignTenantId = aid
+      }
+    }
     const res = (await post(`/api/mp/work-orders/${woId.value}/advance`, body)) as {
       success?: boolean
       message?: string
@@ -379,6 +433,38 @@ async function advance(
   } finally {
     busy.value = false
   }
+}
+
+function onFeeTenantPickerChange(e: { detail?: { value?: string | number } }) {
+  const raw = e.detail?.value
+  feeAssignPickerIndex.value = raw === undefined || raw === '' ? 0 : Number(raw)
+}
+
+function publishFeeForTenantTap() {
+  const w = wo.value
+  if (!w) return
+  if (w.tenant == null) {
+    const i = feeAssignPickerIndex.value
+    if (i < 1 || i > feeTenantsBrief.value.length) {
+      uni.showToast({ title: '请先选择费用承担租客', icon: 'none' })
+      return
+    }
+    const t = feeTenantsBrief.value[i - 1]
+    if (!t) return
+    void advance('publish_fee_for_tenant', { assignTenantId: t.id })
+  } else {
+    void advance('publish_fee_for_tenant')
+  }
+}
+
+function confirmFeeInternalPending() {
+  uni.showModal({
+    title: '内部确认费用',
+    content: '不产生账单、无需租客在线支付，工单将进入「待处理」。确定？',
+    success: (r) => {
+      if (r.confirm) void advance('confirm_fee_internal_pending')
+    },
+  })
 }
 
 function openCompleteModal() {
@@ -457,6 +543,15 @@ function previewImgs(urls: string[], index: number) {
   uni.previewImage({ urls: list, current: list[i] })
 }
 
+/** 办结弹窗内已选照片：点击放大，系统预览支持左右滑动 */
+function previewCompletionModalPhotos(index: number) {
+  if (!completeModalUrls.value.length) return
+  const list = completeModalUrls.value.map((u) => resolveMediaUrl(u)).filter(Boolean)
+  if (!list.length) return
+  const i = Math.max(0, Math.min(index, list.length - 1))
+  uni.previewImage({ urls: list, current: list[i] })
+}
+
 function confirmCancel() {
   uni.showModal({
     title: '提示',
@@ -473,6 +568,20 @@ function confirmNoFeeContinue() {
     content: '确认后费用合计将记为 0 元，无需租客确认与支付，可继续处理直至办结。',
     success: (r) => {
       if (r.confirm) void advance('no_fee_continue')
+    },
+  })
+}
+
+function confirmRefundCancel() {
+  if (wo.value?.hasWorkOrderFeeBill !== true) {
+    uni.showToast({ title: '本单无租客费用账单，无需退费', icon: 'none' })
+    return
+  }
+  uni.showModal({
+    title: '退费并取消',
+    content: '确定退费冲账并取消工单？账单将回退已缴金额。',
+    success: (r) => {
+      if (r.confirm) void advance('refund_fee_cancel')
     },
   })
 }
@@ -701,7 +810,7 @@ function previewEditPhoto(index: number) {
             </view>
           </scroll-view>
           <text v-if="!flowState.cancelled" class="flow-tip">
-            当前及之前节点为高亮；未到达的步骤为灰色。无费用可在登记费用弹窗填 0 或点「未产生任何费用」。
+            当前及之前节点为高亮；未到达的步骤为灰色。租客支付费用后进入「待处理」；未走收费流程则保持「处理中」直至办结。
           </text>
           <text class="sub-sec-title">时间记录</text>
           <view class="kv">
@@ -1135,6 +1244,25 @@ function previewEditPhoto(index: number) {
             </button>
           </template>
 
+          <template v-else-if="wo.status === '待处理'">
+            <text class="footer-tip">
+              {{
+                wo.hasWorkOrderFeeBill === true
+                  ? '租客已在线付费，请继续维修。办结进入待评价；不可再登记费用。需关单并冲账请点「退费并取消工单」。'
+                  : '已通过内部确认费用（无租客费用账单），请继续维修。办结进入待评价；不可再登记费用。'
+              }}
+            </text>
+            <button class="btn ok" :disabled="busy" @tap="openCompleteModal">办结待评价</button>
+            <button
+              v-if="wo.hasWorkOrderFeeBill === true"
+              class="btn danger mt"
+              :disabled="busy"
+              @tap="confirmRefundCancel"
+            >
+              退费并取消工单
+            </button>
+          </template>
+
           <template v-else-if="wo.status === '待评价'">
             <text v-if="isTenantSubmittedWoSource(wo.source)" class="footer-tip">
               本单为租客报修，须租客在租客端评价后才会完结。
@@ -1145,13 +1273,41 @@ function previewEditPhoto(index: number) {
           </template>
 
           <template v-else-if="wo.status === '待员工确认费用'">
-            <text class="footer-tip">请核对费用无误后送租客确认。</text>
-            <button class="btn warn" :disabled="busy" @tap="advance('publish_fee_for_tenant')">
+            <text v-if="wo.tenant" class="footer-tip">请核对费用无误后送租客确认。</text>
+            <text v-else class="footer-tip">
+              本单未关联租客：可指定「费用承担租客」后送租客在线支付；或「仅内部确认」不产生账单，直接进入待处理。
+            </text>
+            <picker
+              v-if="!wo.tenant && feeTenantsBrief.length > 0"
+              mode="selector"
+              :range="feeTenantPickerLabels"
+              :value="feeAssignPickerIndex"
+              @change="onFeeTenantPickerChange"
+            >
+              <view class="fee-tenant-picker">
+                {{ feeTenantPickerLabels[feeAssignPickerIndex] }}
+              </view>
+            </picker>
+            <text
+              v-else-if="!wo.tenant && feeTenantsBrief.length === 0"
+              class="footer-tip muted"
+            >
+              当前筛选下无租客档案，请使用「仅内部确认」或先在后台维护该楼宇租客。
+            </text>
+            <button class="btn warn" :disabled="busy" @tap="publishFeeForTenantTap">
               确认并送租客核对
+            </button>
+            <button
+              v-if="!wo.tenant"
+              class="btn ghost mt"
+              :disabled="busy"
+              @tap="confirmFeeInternalPending"
+            >
+              仅内部确认（不产生账单）
             </button>
           </template>
           <view v-else-if="wo.status === '待租客确认费用'" class="footer-tip">
-            等待租客在租客端确认费用；若拒绝付费，工单将取消。
+            等待租客在租客端支付费用；支付成功后进入「待处理」。若拒绝付费，工单将取消。
           </view>
         </view>
       </view>
@@ -1202,11 +1358,16 @@ function previewEditPhoto(index: number) {
       <view class="fee-modal-panel" @tap.stop>
         <text class="fee-modal-title">办结并进入待评价</text>
         <text class="fee-modal-desc">
-          须上传至少 1 张、最多 10 张现场照片（jpg / jpeg / png）。办结说明选填。
+          须上传至少 1 张、最多 10 张现场照片（jpg / jpeg / png）。点击缩略图可放大，多张时可左右滑动查看。办结说明选填。
         </text>
         <view class="complete-thumb-row">
           <view v-for="(u, ci) in completeModalUrls" :key="u + ci" class="complete-thumb-wrap">
-            <image class="complete-thumb" :src="resolveMediaUrl(u)" mode="aspectFill" />
+            <image
+              class="complete-thumb"
+              :src="resolveMediaUrl(u)"
+              mode="aspectFill"
+              @tap.stop="previewCompletionModalPhotos(ci)"
+            />
             <view class="complete-thumb-del" @tap.stop="removeCompletionModalPhoto(ci)">
               <text>×</text>
             </view>
@@ -1819,6 +1980,21 @@ function previewEditPhoto(index: number) {
   color: #fbbf24;
   text-align: center;
   padding: 16rpx 8rpx;
+}
+.footer-tip.muted {
+  color: $pms-text-dim;
+}
+.fee-tenant-picker {
+  width: 100%;
+  padding: 20rpx 24rpx;
+  margin-bottom: 16rpx;
+  border-radius: 16rpx;
+  border: 1rpx solid $pms-border;
+  background: $pms-bg-deep;
+  color: $pms-text;
+  font-size: 28rpx;
+  text-align: center;
+  box-sizing: border-box;
 }
 
 .hint {

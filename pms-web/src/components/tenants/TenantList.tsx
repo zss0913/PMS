@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { AppLink } from '@/components/AppLink'
+import { PermissionGate } from '@/components/permissions/PermissionGate'
+import { useRolePermissions } from '@/hooks/useRolePermissions'
+import { MENU_ID } from '@/lib/menu-config'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import {
@@ -38,6 +41,7 @@ type ApiData = {
 }
 
 export function TenantList() {
+  const { can } = useRolePermissions()
   const [data, setData] = useState<ApiData | null>(null)
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({
@@ -157,21 +161,25 @@ export function TenantList() {
           <Search className="w-4 h-4" />
           筛选
         </button>
-        <button
-          type="button"
-          onClick={() => setBatchImportOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
-        >
-          <Upload className="w-4 h-4" />
-          批量导入
-        </button>
-        <AppLink
-          href="/tenants/new"
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
-        >
-          <Plus className="w-4 h-4" />
-          新增租客
-        </AppLink>
+        <PermissionGate menuId={MENU_ID.TENANTS} action="import">
+          <button
+            type="button"
+            onClick={() => setBatchImportOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
+          >
+            <Upload className="w-4 h-4" />
+            批量导入
+          </button>
+        </PermissionGate>
+        <PermissionGate menuId={MENU_ID.TENANTS} action="create">
+          <AppLink
+            href="/tenants/new"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
+          >
+            <Plus className="w-4 h-4" />
+            新增租客
+          </AppLink>
+        </PermissionGate>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -204,12 +212,16 @@ export function TenantList() {
                 >
                   <td className="p-4">{t.type}</td>
                   <td className="p-4">
-                    <AppLink
-                      href={`/tenants/${t.id}`}
-                      className="font-medium text-blue-600 hover:underline"
-                    >
-                      {t.companyName}
-                    </AppLink>
+                    {can(MENU_ID.TENANTS, 'view') ? (
+                      <AppLink
+                        href={`/tenants/${t.id}`}
+                        className="font-medium text-blue-600 hover:underline"
+                      >
+                        {t.companyName}
+                      </AppLink>
+                    ) : (
+                      <span className="font-medium">{t.companyName}</span>
+                    )}
                   </td>
                   <td className="p-4">{t.building?.name || '-'}</td>
                   <td className="p-4">{t.roomNumbers || '-'}</td>
@@ -222,28 +234,34 @@ export function TenantList() {
                   <td className="p-4">{formatDateTime(t.createdAt)}</td>
                   <td className="p-4">
                     <div className="flex gap-2">
-                      <AppLink
-                        href={`/tenants/${t.id}`}
-                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded"
-                        title="租户详情"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </AppLink>
-                      <AppLink
-                        href={`/tenants/${t.id}/edit`}
-                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded"
-                        title="编辑"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </AppLink>
-                      <button
-                        onClick={() => handleDelete(t.id)}
-                        disabled={deletingId === t.id}
-                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 rounded disabled:opacity-50"
-                        title="删除"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <PermissionGate menuId={MENU_ID.TENANTS} action="view">
+                        <AppLink
+                          href={`/tenants/${t.id}`}
+                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded"
+                          title="租户详情"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </AppLink>
+                      </PermissionGate>
+                      <PermissionGate menuId={MENU_ID.TENANTS} action="update">
+                        <AppLink
+                          href={`/tenants/${t.id}/edit`}
+                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded"
+                          title="编辑"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </AppLink>
+                      </PermissionGate>
+                      <PermissionGate menuId={MENU_ID.TENANTS} action="delete">
+                        <button
+                          onClick={() => handleDelete(t.id)}
+                          disabled={deletingId === t.id}
+                          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 rounded disabled:opacity-50"
+                          title="删除"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </PermissionGate>
                     </div>
                   </td>
                 </tr>

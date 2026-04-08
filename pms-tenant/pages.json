@@ -72,6 +72,18 @@
       "style": {
         "navigationBarTitleText": "个人中心"
       }
+    },
+    {
+      "path": "pages/profile/change-password",
+      "style": {
+        "navigationBarTitleText": "修改密码"
+      }
+    },
+    {
+      "path": "pages/profile/tenant-staff",
+      "style": {
+        "navigationBarTitleText": "员工管理"
+      }
     }
   ],
   "globalStyle": {
