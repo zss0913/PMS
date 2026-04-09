@@ -30,6 +30,10 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
+# Uni-app / 小程序子项目（HBuilderX 构建与本地配置）
+unpackage/
+.hbuilderx/
+
 # IDE
 .idea/
 .vscode/

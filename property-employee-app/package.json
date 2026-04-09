@@ -1,0 +1,21 @@
+{
+  "name": "property-employee-app",
+  "version": "1.0.0",
+  "description": "物业管理系统-员工端",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@iconify/json": "^2.2.454",
+    "pinia": "^2.1.7",
+    "uview-plus": "^3.2.31"
+  },
+  "devDependencies": {
+    "sass": "^1.72.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
