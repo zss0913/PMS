@@ -71,10 +71,14 @@ async function getStats(user: AuthUser) {
   })
   const buildingIds = buildings.map((b) => b.id)
 
-  const rooms = await prisma.room.findMany({
-    where: { companyId, buildingId: { in: buildingIds } },
-    select: { id: true, area: true, status: true },
-  })
+  // Prisma/SQL 不允许 `IN ()`：无楼宇时直接视为 0 间房源，避免整页 Internal Server Error
+  const rooms =
+    buildingIds.length === 0
+      ? []
+      : await prisma.room.findMany({
+          where: { companyId, buildingId: { in: buildingIds } },
+          select: { id: true, area: true, status: true },
+        })
   const leasedArea = rooms.filter((r) => r.status === '已租').reduce((s, r) => s + Number(r.area), 0)
   const selfUseArea = rooms.filter((r) => r.status === '自用').reduce((s, r) => s + Number(r.area), 0)
 
@@ -211,12 +215,12 @@ async function getStats(user: AuthUser) {
         ...(isLeader ? {} : { id: -1 }), // 非组长不显示待派工单
       },
     }),
-    // 待处理工单：assignedTo=当前用户，status in (待响应, 处理中)
+    // 待办工单：assignedTo=当前用户，含待响应、处理中、已付费待物业继续处理（待处理）
     prisma.workOrder.count({
       where: {
         companyId,
         assignedTo: userId,
-        status: { in: ['assigned', 'processing', '待响应', '处理中'] },
+        status: { in: ['assigned', 'processing', '待响应', '处理中', '待处理'] },
       },
     }),
     // 待巡检任务：status=待巡检/pending，userIds 包含当前用户
@@ -317,7 +321,7 @@ export async function DashboardHome({ user }: { user: AuthUser }) {
             <h2 className="text-lg font-semibold mb-4">待办事项</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <TodoCard href="/work-orders?status=pending" title="待派工单" count={stats.pendingAssignCount} />
-              <TodoCard href="/work-orders?status=assigned,processing" title="待处理工单" count={stats.pendingProcessCount} />
+              <TodoCard href="/work-orders" title="待办工单" count={stats.pendingProcessCount} />
               <TodoCard href="/inspection-tasks?status=pending" title="待巡检任务" count={stats.pendingInspectionCount} iconType="clipboard" />
               <TodoCard href="/bills?overdue=1" title="逾期账单" count={stats.overdueCount} iconType="alert" />
             </div>

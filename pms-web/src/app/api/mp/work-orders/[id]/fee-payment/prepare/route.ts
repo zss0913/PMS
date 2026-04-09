@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import {
   findPendingFeeCheckoutPayment,
   getOrCreateWorkOrderFeeBill,
+  tryAdvanceWorkOrderZeroFeeOnTenantPrepare,
 } from '@/lib/mp-work-order-fee-pay'
 import { operatorFromAuthUser } from '@/lib/work-order-activity-log'
 
@@ -31,6 +32,24 @@ export async function POST(
     const workOrderId = parseInt(id, 10)
     if (isNaN(workOrderId)) {
       return NextResponse.json({ success: false, message: '无效的工单ID' }, { status: 400 })
+    }
+
+    const zeroSkip = await tryAdvanceWorkOrderZeroFeeOnTenantPrepare(prisma, {
+      workOrderId,
+      companyId: user.companyId,
+      tenantIds,
+      tenantUserId: user.id,
+      operator: operatorFromAuthUser(user),
+    })
+    if (zeroSkip.advanced) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          zeroFeeSkipped: true,
+          bill: null,
+          pendingPayment: null,
+        },
+      })
     }
 
     const r = await getOrCreateWorkOrderFeeBill(prisma, {

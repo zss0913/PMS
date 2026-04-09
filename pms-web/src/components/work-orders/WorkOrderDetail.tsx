@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { formatDateTime } from '@/lib/utils'
 import {
   displayWorkOrderSource,
+  displayWorkOrderType,
   isTenantSubmittedWorkOrderSource,
   parseWorkOrderImageUrls,
 } from '@/lib/work-order'
@@ -48,8 +49,12 @@ type WorkOrder = {
   completionImageUrls: string[]
   completionRemark: string | null
   evaluationNote: string | null
+  evaluationStars: number | null
+  evaluationImageUrls: string[]
   createdAt: string
   updatedAt: string
+  /** 是否存在工单费用账单（租客在线支付路径）；内部确认费用时为 false */
+  hasWorkOrderFeeBill: boolean
 }
 
 export function WorkOrderDetail({
@@ -83,6 +88,10 @@ export function WorkOrderDetail({
   const [completeUploading, setCompleteUploading] = useState(false)
   const [evalModal, setEvalModal] = useState(false)
   const [evalContentInput, setEvalContentInput] = useState('')
+  const [feeBriefTenants, setFeeBriefTenants] = useState<{ id: number; companyName: string }[]>(
+    []
+  )
+  const [feeAssignTenantId, setFeeAssignTenantId] = useState<number | ''>('')
 
   const imageUrls = parseWorkOrderImageUrls(workOrder.images)
   const completionUrls = workOrder.completionImageUrls ?? []
@@ -104,14 +113,45 @@ export function WorkOrderDetail({
     )
   }, [workOrder.feeRemark, workOrder.feeTotal, workOrder.id, workOrder.updatedAt])
 
+  useEffect(() => {
+    if (workOrder.status !== '待员工确认费用' || workOrder.tenant) {
+      setFeeBriefTenants([])
+      setFeeAssignTenantId('')
+      return
+    }
+    const bid = workOrder.building?.id
+    const qs = bid != null ? `?buildingId=${bid}` : ''
+    void fetch(`/api/tenants${qs}`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((j: { success?: boolean; data?: { list?: { id: number; companyName: string }[] } }) => {
+        if (j.success && Array.isArray(j.data?.list)) {
+          setFeeBriefTenants(
+            j.data.list.map((t) => ({ id: t.id, companyName: t.companyName }))
+          )
+        } else {
+          setFeeBriefTenants([])
+        }
+      })
+      .catch(() => setFeeBriefTenants([]))
+    setFeeAssignTenantId('')
+  }, [
+    workOrder.id,
+    workOrder.status,
+    workOrder.tenant,
+    workOrder.building?.id,
+    workOrder.updatedAt,
+  ])
+
   const callAdvance = async (
     action: string,
     extra?: {
       feeRemark?: string
       feeTotal?: number
+      assignTenantId?: number
       completionImages?: string[]
       completionRemark?: string
       evaluationContent?: string
+      refundReason?: string
     }
   ) => {
     setAdvancing(true)
@@ -205,7 +245,8 @@ export function WorkOrderDetail({
         <h2 className="text-lg font-semibold mb-3">流程进度</h2>
         <WorkOrderFlowStepBar status={workOrder.status} />
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-4 mb-4">
-          有费用：点「登记费用」填写金额与说明后进入待员工确认 → 送租客支付。无费用：弹窗内合计填 0 或留空后确认，或点「未产生任何费用」，均保持处理中、无需租客确认。
+          有费用：登记费用 → 待员工确认 → 送租客微信支付 → 进入「待处理」（已付费待物业继续）。无费用：合计填 0
+          或点「未产生任何费用」，保持「处理中」直至办结。未走线上收费的工单办结后不经过「待处理」节点。
         </p>
 
         <div className="flex flex-wrap gap-2">
@@ -270,22 +311,127 @@ export function WorkOrderDetail({
           {workOrder.status === '待员工确认费用' && (
             <>
               <p className="text-sm text-slate-600 dark:text-slate-400 w-full mb-2">
-                请核对费用合计与说明无误后，再送租客确认。
+                {workOrder.tenant
+                  ? '请核对费用合计与说明无误后，再送租客确认。费用合计为 0 元时，将直接回到「处理中」，无需租客在线支付。'
+                  : '本单未关联租客：可指定费用承担租客后走在线支付；或「仅内部确认」不产生账单，直接进入「待处理」。'}
               </p>
+              {!workOrder.tenant && (
+                <>
+                  {feeBriefTenants.length > 0 ? (
+                    <select
+                      className="w-full mb-2 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      value={feeAssignTenantId === '' ? '' : String(feeAssignTenantId)}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setFeeAssignTenantId(v === '' ? '' : parseInt(v, 10))
+                      }}
+                    >
+                      <option value="">请选择费用承担租客</option>
+                      {feeBriefTenants.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.companyName}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 w-full">
+                      当前楼宇暂无租客档案，请使用「仅内部确认」或先在系统中维护租客。
+                    </p>
+                  )}
+                </>
+              )}
               <button
                 type="button"
-                disabled={advancing}
-                onClick={() => callAdvance('publish_fee_for_tenant')}
+                disabled={
+                  advancing ||
+                  (!workOrder.tenant &&
+                    (feeBriefTenants.length === 0 || feeAssignTenantId === ''))
+                }
+                onClick={() => {
+                  if (!workOrder.tenant) {
+                    if (feeBriefTenants.length === 0 || feeAssignTenantId === '') {
+                      alert('请先选择费用承担租客，或改用「仅内部确认」')
+                      return
+                    }
+                    void callAdvance('publish_fee_for_tenant', {
+                      assignTenantId: feeAssignTenantId as number,
+                    })
+                  } else {
+                    void callAdvance('publish_fee_for_tenant')
+                  }
+                }}
                 className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-500 disabled:opacity-50"
               >
                 确认并送租客核对
               </button>
+              {!workOrder.tenant && (
+                <button
+                  type="button"
+                  disabled={advancing}
+                  onClick={() => {
+                    if (
+                      !confirm(
+                        '不产生账单、无需租客在线支付，工单将进入「待处理」。确定？'
+                      )
+                    ) {
+                      return
+                    }
+                    void callAdvance('confirm_fee_internal_pending')
+                  }}
+                  className="mt-2 px-4 py-2 border border-slate-400 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/40 disabled:opacity-50 w-full sm:w-auto"
+                >
+                  仅内部确认（不产生账单）
+                </button>
+              )}
             </>
           )}
           {workOrder.status === '待租客确认费用' && (
             <p className="text-sm text-slate-600 dark:text-slate-400 w-full">
-              等待租客在小程序确认费用后继续；确认后状态将回到「处理中」。若租客拒绝付费，工单将变为「已取消」。
+              等待租客在小程序通过微信支付；支付成功后进入「待处理」（已付费待物业继续维修），不可再次支付。若租客拒绝付费，工单将变为「已取消」。
             </p>
+          )}
+          {workOrder.status === '待处理' && (
+            <>
+              <p className="text-sm text-slate-600 dark:text-slate-400 w-full mb-2">
+                {workOrder.hasWorkOrderFeeBill
+                  ? '租客已在线支付费用，请继续现场处理。办结后进入「待评价」。不可再次登记费用或重复支付。如需关闭工单并冲回已缴费用，请使用「退费并取消工单」。'
+                  : '已通过内部确认费用（未产生租客费用账单），请继续现场处理。办结后进入「待评价」。不可再次登记费用。'}
+              </p>
+              <button
+                type="button"
+                disabled={advancing}
+                onClick={() => {
+                  setCompletePhotoUrls([])
+                  setCompleteRemarkInput('')
+                  setCompleteModal(true)
+                }}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 disabled:opacity-50"
+              >
+                办结并进入待评价
+              </button>
+              {workOrder.hasWorkOrderFeeBill && (
+                <button
+                  type="button"
+                  disabled={advancing}
+                  onClick={() => {
+                    const reason = window.prompt('可选：退费原因（记入日志）', '') ?? ''
+                    if (
+                      !window.confirm(
+                        '确定退费冲账并取消工单？账单将回退已缴金额，工单关闭，且不可恢复。'
+                      )
+                    ) {
+                      return
+                    }
+                    void callAdvance('refund_fee_cancel', {
+                      refundReason: reason.trim() || undefined,
+                    })
+                  }}
+                  className="px-4 py-2 border border-red-400 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
+                >
+                  退费并取消工单
+                </button>
+              )}
+            </>
           )}
           {workOrder.status === '待评价' && tenantSubmitted && (
             <p className="text-sm text-slate-600 dark:text-slate-400 w-full">
@@ -376,7 +522,7 @@ export function WorkOrderDetail({
           </div>
           <div>
             <dt className="text-sm text-slate-500">类型</dt>
-            <dd>{workOrder.type}</dd>
+            <dd>{displayWorkOrderType(workOrder.type)}</dd>
           </div>
           <div>
             <dt className="text-sm text-slate-500">来源</dt>
@@ -564,12 +710,42 @@ export function WorkOrderDetail({
             )}
           </div>
         )}
-        {workOrder.evaluationNote?.trim() && (
+        {(workOrder.evaluationStars != null ||
+          workOrder.evaluationNote?.trim() ||
+          (workOrder.evaluationImageUrls?.length ?? 0) > 0) && (
           <div className="mt-4 p-3 rounded-lg bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-600">
-            <dt className="text-sm font-medium text-slate-700 dark:text-slate-200">评价说明</dt>
-            <dd className="text-sm mt-1 whitespace-pre-wrap text-slate-800 dark:text-slate-100">
-              {workOrder.evaluationNote}
-            </dd>
+            <dt className="text-sm font-medium text-slate-700 dark:text-slate-200">租客评价</dt>
+            {workOrder.evaluationStars != null &&
+            workOrder.evaluationStars >= 1 &&
+            workOrder.evaluationStars <= 5 ? (
+              <dd className="text-base mt-2 text-amber-500" aria-label={`${workOrder.evaluationStars} 星`}>
+                {'★'.repeat(workOrder.evaluationStars)}
+                <span className="ml-2 text-sm text-slate-600 dark:text-slate-400">
+                  {workOrder.evaluationStars} 星
+                </span>
+              </dd>
+            ) : null}
+            {workOrder.evaluationNote?.trim() ? (
+              <dd className="text-sm mt-2 whitespace-pre-wrap text-slate-800 dark:text-slate-100">
+                {workOrder.evaluationNote}
+              </dd>
+            ) : null}
+            {(workOrder.evaluationImageUrls?.length ?? 0) > 0 ? (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {(workOrder.evaluationImageUrls ?? []).map((u) => (
+                  <a
+                    key={u}
+                    href={u}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block w-24 h-24 rounded-lg border border-slate-200 dark:border-slate-600 overflow-hidden shrink-0"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={u} alt="" className="w-full h-full object-cover" />
+                  </a>
+                ))}
+              </div>
+            ) : null}
           </div>
         )}
       </div>

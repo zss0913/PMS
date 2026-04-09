@@ -8,6 +8,8 @@ const createSchema = z.object({
   code: z.string().min(1, '角色编码不能为空'),
   dataScope: z.enum(['all', 'project', 'department', 'self']),
   menuIds: z.array(z.coerce.number()).optional().default([]),
+  /** null：全部按钮；JSON 数组：显式允许的 "菜单ID:操作" */
+  buttonPermissionKeys: z.array(z.string()).nullable().optional(),
   companyId: z.number().int().min(0).optional(),
 })
 
@@ -38,6 +40,7 @@ export async function GET(request: NextRequest) {
         code: r.code,
         dataScope: r.dataScope,
         menuIds: r.menuIds ? (JSON.parse(r.menuIds) as number[]) : [],
+        buttonPermissionKeys: r.buttonPermissionKeys,
         companyId: r.companyId,
         companyName: r.company?.name,
         accountCount: r._count.employees,
@@ -93,12 +96,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const btnRaw = parsed.buttonPermissionKeys
     const role = await prisma.role.create({
       data: {
         name: parsed.name,
         code: parsed.code,
         dataScope: parsed.dataScope,
         menuIds: JSON.stringify(parsed.menuIds ?? []),
+        buttonPermissionKeys:
+          btnRaw === undefined || btnRaw === null ? null : JSON.stringify(btnRaw),
         companyId,
       },
     })

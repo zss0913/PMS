@@ -21,6 +21,8 @@ const TODO_WORK_ORDER_STATUSES = [
   '处理中',
   '待员工确认费用',
   '待租客确认费用',
+  /** 租客已付费，员工须继续处理或办结 */
+  '待处理',
 ] as const
 
 /** 员工端：待办列表（工单 + 巡检 + 卫生吐槽）+ 汇总数字 */
@@ -129,7 +131,7 @@ export async function GET(request: Request) {
       where: {
         companyId,
         assignedTo: userId,
-        status: { in: ['待响应', '处理中'] },
+        status: { in: ['待响应', '处理中', '待处理'] },
       },
     }),
     Promise.resolve(inspectionTasks.length),

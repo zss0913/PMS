@@ -19,6 +19,12 @@
       }
     },
     {
+      "path": "pages/profile/change-password",
+      "style": {
+        "navigationBarTitleText": "修改密码"
+      }
+    },
+    {
       "path": "pages/login/login",
       "style": {
         "navigationBarTitleText": "登录"
@@ -45,7 +51,15 @@
     {
       "path": "pages/inspection-tasks/inspection-tasks",
       "style": {
-        "navigationBarTitleText": "巡检任务"
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "巡检任务",
+        "disableScroll": true
+      }
+    },
+    {
+      "path": "pages/inspection-tasks/filter",
+      "style": {
+        "navigationBarTitleText": "筛选条件"
       }
     },
     {
@@ -58,6 +72,12 @@
       "path": "pages/inspection-tasks/execute",
       "style": {
         "navigationBarTitleText": "执行巡检"
+      }
+    },
+    {
+      "path": "pages/inspection-tasks/record-detail",
+      "style": {
+        "navigationBarTitleText": "巡检记录详情"
       }
     },
     {

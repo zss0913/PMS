@@ -11,12 +11,6 @@ export type CycleScheduleV1 =
   | { v: typeof CYCLE_SCHEDULE_VERSION; kind: 'weekly'; slots: WeeklySlot[] }
   | { v: typeof CYCLE_SCHEDULE_VERSION; kind: 'monthly'; slots: MonthlySlot[] }
 
-function startOfDay(d: Date): Date {
-  const x = new Date(d)
-  x.setHours(0, 0, 0, 0)
-  return x
-}
-
 export function combineDateAndTime(dayStart: Date, timeHHmm: string): Date {
   const m = /^(\d{1,2}):(\d{2})$/.exec(timeHHmm.trim())
   if (!m) return new Date(dayStart)
@@ -101,28 +95,68 @@ export type PlanForSchedule = {
   createdAt: Date
 }
 
+const WD_SHORT_TO_ISO: Record<string, number> = {
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+  Sun: 7,
+}
+
+/** 北京时间日历日 YYYY-MM-DD 在当天中午点下的 ISO 周几 1–7 */
+export function isoWeekdayFromYmdShanghai(runYmd: string): number {
+  const anchor = new Date(`${runYmd}T12:00:00+08:00`)
+  const short = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Shanghai',
+    weekday: 'short',
+  }).format(anchor)
+  return WD_SHORT_TO_ISO[short.slice(0, 3)] ?? isoWeekday(anchor)
+}
+
+function monthDayFromYmd(runYmd: string): number {
+  const d = parseInt(runYmd.slice(8, 10), 10)
+  return Number.isFinite(d) ? d : 1
+}
+
+/** 北京时间 runYmd 日 + HH:mm → 绝对时刻（写入 DB 与判重一致） */
+export function combineYmdAndTimeShanghai(runYmd: string, timeHHmm: string): Date {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(timeHHmm.trim())
+  if (!m) return new Date(`${runYmd}T12:00:00+08:00`)
+  const h = Math.min(23, Math.max(0, parseInt(m[1], 10)))
+  const min = Math.min(59, Math.max(0, parseInt(m[2], 10)))
+  const hh = String(h).padStart(2, '0')
+  const mm = String(min).padStart(2, '0')
+  return new Date(`${runYmd}T${hh}:${mm}:00+08:00`)
+}
+
 /**
- * 在 runDate 当天应生成的任务时刻列表（本地日界 + 各时刻）
- * 无 cycleSchedule 时沿用旧规则：命中则仅 0:00 一条
+ * 在「北京时间」runYmd（YYYY-MM-DD）当天应生成的任务时刻列表。
+ * 与服务器所在时区无关，避免 UTC 机器上「周几 / 几号 / 时刻」错位导致不生成或判重异常。
+ * 无 cycleSchedule 时沿用旧规则：命中则该日北京时间 0:00 一条。
  */
-export function getScheduledDatetimesForRunDate(plan: PlanForSchedule, runDate: Date): Date[] {
-  const dayStart = startOfDay(runDate)
+export function getScheduledDatetimesForRunDate(plan: PlanForSchedule, runYmd: string): Date[] {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(runYmd)) return []
+
   const parsed = parseCycleSchedule(plan.cycleSchedule)
+  const legacyRunDate = new Date(`${runYmd}T12:00:00+08:00`)
+
   if (parsed) {
     if (plan.cycleType === '每天' && parsed.kind === 'daily') {
-      return parsed.slots.map((s) => combineDateAndTime(dayStart, s.time))
+      return parsed.slots.map((s) => combineYmdAndTimeShanghai(runYmd, s.time))
     }
     if (plan.cycleType === '每周' && parsed.kind === 'weekly') {
-      const wd = isoWeekday(dayStart)
+      const wd = isoWeekdayFromYmdShanghai(runYmd)
       return parsed.slots
         .filter((s) => s.weekday === wd)
-        .map((s) => combineDateAndTime(dayStart, s.time))
+        .map((s) => combineYmdAndTimeShanghai(runYmd, s.time))
     }
     if (plan.cycleType === '每月' && parsed.kind === 'monthly') {
-      const dom = dayStart.getDate()
+      const dom = monthDayFromYmd(runYmd)
       return parsed.slots
         .filter((s) => s.monthDay === dom)
-        .map((s) => combineDateAndTime(dayStart, s.time))
+        .map((s) => combineYmdAndTimeShanghai(runYmd, s.time))
     }
     return []
   }
@@ -134,8 +168,8 @@ export function getScheduledDatetimesForRunDate(plan: PlanForSchedule, runDate: 
     cycleMonthDay: plan.cycleMonthDay,
     createdAt: plan.createdAt,
   }
-  if (shouldGenerateOnDate(legacy, runDate)) {
-    return [dayStart]
+  if (shouldGenerateOnDate(legacy, legacyRunDate)) {
+    return [new Date(`${runYmd}T00:00:00+08:00`)]
   }
   return []
 }

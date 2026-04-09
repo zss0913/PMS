@@ -229,3 +229,14 @@ export function post<T = unknown>(url: string, data?: unknown) {
 export function put<T = unknown>(url: string, data?: unknown) {
   return request<T>({ url, method: 'PUT', data })
 }
+
+export function patch<T = unknown>(url: string, data?: unknown) {
+  return request<T>({ url, method: 'PATCH', data })
+}
+
+export function del<T = unknown>(url: string, params?: Record<string, string>) {
+  const query = params
+    ? '?' + Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
+    : ''
+  return request<T>({ url: url + query, method: 'DELETE' })
+}

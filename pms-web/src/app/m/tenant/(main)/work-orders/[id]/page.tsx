@@ -2,8 +2,10 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { WorkOrderFlowStepBar } from '@/components/work-orders/WorkOrderFlowStepBar'
 import { normalizeTelForDial } from '@/lib/utils'
+import { displayWorkOrderType } from '@/lib/work-order'
 
 type Wo = {
   id: number
@@ -21,6 +23,8 @@ type Wo = {
   completionImageUrls?: string[]
   completionRemark?: string | null
   evaluationNote?: string | null
+  evaluationStars?: number | null
+  evaluationImageUrls?: string[]
   building: { name: string } | null
   room: { roomNumber: string; name: string } | null
   tenant: { companyName: string } | null
@@ -58,6 +62,13 @@ export default function TenantWorkOrderDetailPage() {
   const [msg, setMsg] = useState('')
   const [evalBusy, setEvalBusy] = useState(false)
   const [evalText, setEvalText] = useState('')
+  const [evalStars, setEvalStars] = useState(5)
+  const [evalImageUrls, setEvalImageUrls] = useState<string[]>([])
+  const [evalUploading, setEvalUploading] = useState(false)
+  const [evalPreviewIdx, setEvalPreviewIdx] = useState<number | null>(null)
+  const evalTouchStartX = useRef<number | null>(null)
+  const evalFileRef = useRef<HTMLInputElement>(null)
+  const MAX_EVAL_IMAGES = 10
 
   function isTenantSubmittedSource(src: string | undefined): boolean {
     if (!src) return false
@@ -73,6 +84,11 @@ export default function TenantWorkOrderDetailPage() {
       const j = await r.json()
       const w = (j.workOrder ?? null) as Wo | null
       setWo(w)
+      if (w?.status === '待评价' && isTenantSubmittedSource(w.source)) {
+        setEvalStars(5)
+        setEvalText('')
+        setEvalImageUrls([])
+      }
 
       if (w?.status === '待租客确认费用') {
         const pr = await fetch(`/api/mp/work-orders/${id}/fee-payment/prepare`, {
@@ -80,6 +96,13 @@ export default function TenantWorkOrderDetailPage() {
           credentials: 'include',
         })
         const pj = await pr.json()
+        if (pr.ok && pj.success && pj.data?.zeroFeeSkipped) {
+          const r2 = await fetch(`/api/mp/work-orders/${id}`, { credentials: 'include' })
+          const j2 = await r2.json()
+          setWo((j2.workOrder ?? null) as Wo | null)
+          setFeePay(null)
+          return
+        }
         if (pr.ok && pj.success && pj.data?.bill) {
           const b = pj.data.bill
           setFeePay({
@@ -115,8 +138,43 @@ export default function TenantWorkOrderDetailPage() {
     void load()
   }, [load])
 
+  const addEvalPhotos = useCallback(async (fileList: FileList) => {
+    setEvalUploading(true)
+    setMsg('')
+    const uploaded: string[] = []
+    try {
+      for (const f of Array.from(fileList)) {
+        if (uploaded.length >= MAX_EVAL_IMAGES) break
+        const fd = new FormData()
+        fd.set('file', f)
+        const r = await fetch('/api/work-orders/upload-image', {
+          method: 'POST',
+          credentials: 'include',
+          body: fd,
+        })
+        const j = (await r.json()) as { success?: boolean; data?: { url?: string }; message?: string }
+        if (!j.success || !j.data?.url) {
+          setMsg(j.message || '上传失败')
+          break
+        }
+        uploaded.push(j.data.url)
+      }
+      if (uploaded.length > 0) {
+        setEvalImageUrls((p) => [...p, ...uploaded].slice(0, MAX_EVAL_IMAGES))
+      }
+    } catch {
+      setMsg('上传失败')
+    } finally {
+      setEvalUploading(false)
+    }
+  }, [])
+
   const submitTenantEvaluation = async () => {
     if (!wo || wo.status !== '待评价') return
+    if (!Number.isInteger(evalStars) || evalStars < 1 || evalStars > 5) {
+      setMsg('请选择 1～5 星评价')
+      return
+    }
     setEvalBusy(true)
     setMsg('')
     try {
@@ -126,7 +184,9 @@ export default function TenantWorkOrderDetailPage() {
         credentials: 'include',
         body: JSON.stringify({
           action: 'submit_tenant_evaluation',
+          evaluationStars: evalStars,
           evaluationContent: evalText.trim() || undefined,
+          evaluationImages: evalImageUrls.length > 0 ? evalImageUrls : undefined,
         }),
       })
       const j = (await r.json()) as { success?: boolean; message?: string }
@@ -135,6 +195,8 @@ export default function TenantWorkOrderDetailPage() {
         return
       }
       setEvalText('')
+      setEvalStars(5)
+      setEvalImageUrls([])
       await load()
     } catch {
       setMsg('网络错误')
@@ -143,7 +205,18 @@ export default function TenantWorkOrderDetailPage() {
     }
   }
 
-  const checkout = async (channel: 'wechat' | 'alipay') => {
+  useEffect(() => {
+    if (evalPreviewIdx === null) return
+    if (evalImageUrls.length === 0) {
+      setEvalPreviewIdx(null)
+      return
+    }
+    if (evalPreviewIdx >= evalImageUrls.length) {
+      setEvalPreviewIdx(evalImageUrls.length - 1)
+    }
+  }, [evalImageUrls.length, evalPreviewIdx])
+
+  const checkout = async () => {
     if (!feePay) return
     setMsg('')
     setPayBusy(true)
@@ -152,11 +225,15 @@ export default function TenantWorkOrderDetailPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ billId: feePay.billId, channel }),
+        body: JSON.stringify({ billId: feePay.billId, channel: 'wechat' }),
       })
       const j = await r.json()
       if (!r.ok || !j.success) {
         setMsg(j.message || '下单失败')
+        return
+      }
+      if (j.data?.mockPaymentCompleted) {
+        await load()
         return
       }
       const p = j.data.payment as {
@@ -256,6 +333,13 @@ export default function TenantWorkOrderDetailPage() {
       <Link href="/m/tenant/work-orders" className="text-sm text-slate-500">
         ← 返回列表
       </Link>
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 space-y-2">
+        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">流程进度</h2>
+        <WorkOrderFlowStepBar status={wo.status} />
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          当前及之前步骤高亮，后续为灰色（与 PC 端一致）。
+        </p>
+      </div>
       <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 space-y-3">
         <div className="flex justify-between gap-2">
           <span className="font-mono text-xs text-slate-500">{wo.code}</span>
@@ -266,7 +350,7 @@ export default function TenantWorkOrderDetailPage() {
         <dl className="text-sm space-y-1 text-slate-600 dark:text-slate-400">
           <div className="flex gap-2">
             <dt className="text-slate-400 shrink-0">类型</dt>
-            <dd>{wo.type}</dd>
+            <dd>{displayWorkOrderType(wo.type)}</dd>
           </div>
           {wo.facilityScope && (
             <div className="flex gap-2">
@@ -362,7 +446,7 @@ export default function TenantWorkOrderDetailPage() {
               {wo.status === '待租客确认费用' && feePay && (
                 <div className="mt-3 space-y-2 border-t border-amber-200/60 dark:border-amber-800/60 pt-3">
                   <p className="text-xs text-amber-800 dark:text-amber-200">
-                    须在线支付后方可继续维修。已生成账单{' '}
+                    须通过微信支付结清账单。支付成功后工单进入「待处理」，由物业继续维修，无需再次支付。已生成账单{' '}
                     <span className="font-mono">{feePay.billCode}</span>（{feePay.feeType}，账期{' '}
                     {feePay.period}，应付 {feePay.amountDue.toFixed(2)} 元）。
                   </p>
@@ -375,19 +459,11 @@ export default function TenantWorkOrderDetailPage() {
                     <div className="flex flex-col gap-2">
                       <button
                         type="button"
-                        onClick={() => void checkout('wechat')}
+                        onClick={() => void checkout()}
                         disabled={payBusy || refusing}
                         className="w-full py-2.5 rounded-lg bg-emerald-600 text-white font-medium text-sm disabled:opacity-50"
                       >
                         {payBusy ? '处理中…' : '微信支付'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void checkout('alipay')}
-                        disabled={payBusy || refusing}
-                        className="w-full py-2.5 rounded-lg bg-sky-600 text-white font-medium text-sm disabled:opacity-50"
-                      >
-                        {payBusy ? '处理中…' : '支付宝支付'}
                       </button>
                     </div>
                   )}
@@ -398,7 +474,7 @@ export default function TenantWorkOrderDetailPage() {
                         {feePay.pendingPayment.paymentMethod}）
                       </p>
                       <p className="text-slate-600 dark:text-slate-400">
-                        请在微信或支付宝完成付款。接入真实收银台后，支付成功将自动确认；当前演示可在付款后点击下方按钮确认到账。
+                        请在微信内完成付款。接入真实收银台后，支付成功将自动确认；当前演示可在付款后点击下方按钮确认到账。
                       </p>
                       <button
                         type="button"
@@ -423,6 +499,12 @@ export default function TenantWorkOrderDetailPage() {
             </div>
           )}
 
+        {wo.status === '待处理' && (
+          <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 p-3 text-sm text-emerald-900 dark:text-emerald-100">
+            费用已支付，物业将继续处理本单；办结后您将收到待评价通知。本阶段无需再次支付。
+          </div>
+        )}
+
         {(wo.completionImageUrls?.length ?? 0) > 0 && (
           <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 p-3 bg-emerald-50/40 dark:bg-emerald-950/20">
             <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">办结现场</p>
@@ -443,10 +525,29 @@ export default function TenantWorkOrderDetailPage() {
         )}
 
         {wo.status === '待评价' && isTenantSubmittedSource(wo.source) && (
-          <div className="rounded-xl border border-slate-200 dark:border-slate-600 p-3 space-y-2">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-600 p-3 space-y-3">
             <p className="text-sm text-slate-700 dark:text-slate-200">
-              物业已办结，请提交评价（选填）以完结工单。
+              物业已办结，请完成星级评价后提交以完结工单。说明与图片选填。
             </p>
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">满意度（必填）</p>
+              <div className="flex items-center gap-0.5">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setEvalStars(n)}
+                    className={`text-3xl leading-none px-0.5 py-0.5 rounded ${
+                      n <= evalStars ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600'
+                    }`}
+                    aria-label={`${n} 星`}
+                  >
+                    ★
+                  </button>
+                ))}
+                <span className="ml-2 text-xs text-slate-500">{evalStars} 星</span>
+              </div>
+            </div>
             <textarea
               value={evalText}
               onChange={(e) => setEvalText(e.target.value)}
@@ -455,9 +556,59 @@ export default function TenantWorkOrderDetailPage() {
               placeholder="选填：服务感受或建议"
               className="w-full rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-950"
             />
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                评价附图（选填，最多 {MAX_EVAL_IMAGES} 张）
+              </p>
+              <input
+                ref={evalFileRef}
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,.jpg,.jpeg,.png"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = e.target.files
+                  if (!files?.length) return
+                  void addEvalPhotos(files).finally(() => {
+                    e.target.value = ''
+                  })
+                }}
+              />
+              <div className="flex flex-wrap gap-2">
+                {evalImageUrls.map((u, i) => (
+                  <div key={u} className="relative h-16 w-16 shrink-0">
+                    <button
+                      type="button"
+                      className="block h-full w-full overflow-hidden rounded-lg border border-slate-200 p-0 dark:border-slate-600"
+                      onClick={() => setEvalPreviewIdx(i)}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={u} alt="" className="h-full w-full object-cover" />
+                    </button>
+                    <button
+                      type="button"
+                      className="absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] text-white"
+                      onClick={() => setEvalImageUrls((p) => p.filter((x) => x !== u))}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                {evalImageUrls.length < MAX_EVAL_IMAGES ? (
+                  <button
+                    type="button"
+                    disabled={evalUploading || evalBusy}
+                    onClick={() => evalFileRef.current?.click()}
+                    className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-slate-300 text-slate-400 dark:border-slate-600"
+                  >
+                    {evalUploading ? '…' : '+'}
+                  </button>
+                ) : null}
+              </div>
+            </div>
             <button
               type="button"
-              disabled={evalBusy}
+              disabled={evalBusy || evalUploading}
               onClick={() => void submitTenantEvaluation()}
               className="w-full py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-medium disabled:opacity-50"
             >
@@ -471,10 +622,41 @@ export default function TenantWorkOrderDetailPage() {
           </p>
         )}
 
-        {wo.evaluationNote?.trim() && wo.status === '评价完成' ? (
-          <div className="rounded-xl border border-slate-200 dark:border-slate-600 p-3 text-sm">
-            <p className="text-slate-500 mb-1">评价说明</p>
-            <p className="text-slate-800 dark:text-slate-100 whitespace-pre-wrap">{wo.evaluationNote}</p>
+        {wo.status === '评价完成' &&
+        (wo.evaluationStars != null ||
+          wo.evaluationNote?.trim() ||
+          (wo.evaluationImageUrls?.length ?? 0) > 0) ? (
+          <div className="rounded-xl border border-slate-200 dark:border-slate-600 p-3 text-sm space-y-2">
+            <p className="text-slate-500 dark:text-slate-400 font-medium">我的评价</p>
+            {wo.evaluationStars != null &&
+            wo.evaluationStars >= 1 &&
+            wo.evaluationStars <= 5 ? (
+              <p className="text-amber-500 text-lg">
+                {'★'.repeat(wo.evaluationStars)}
+                <span className="ml-2 text-sm text-slate-600 dark:text-slate-400">
+                  {wo.evaluationStars} 星
+                </span>
+              </p>
+            ) : null}
+            {wo.evaluationNote?.trim() ? (
+              <p className="text-slate-800 dark:text-slate-100 whitespace-pre-wrap">{wo.evaluationNote}</p>
+            ) : null}
+            {(wo.evaluationImageUrls?.length ?? 0) > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {(wo.evaluationImageUrls ?? []).map((url) => (
+                  <a
+                    key={url}
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block h-20 w-20 shrink-0 overflow-hidden rounded-lg border"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt="" className="h-full w-full object-cover" />
+                  </a>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -494,6 +676,94 @@ export default function TenantWorkOrderDetailPage() {
 
         {msg && <p className="text-sm text-red-600">{msg}</p>}
       </div>
+
+      {evalPreviewIdx !== null && evalImageUrls.length > 0 ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="评价附图预览"
+          className="fixed inset-0 z-[200] flex flex-col bg-black/92"
+          onClick={() => setEvalPreviewIdx(null)}
+        >
+          <div className="flex shrink-0 items-center justify-between px-3 py-3 text-white">
+            <span className="text-sm tabular-nums">
+              {evalPreviewIdx + 1} / {evalImageUrls.length}
+            </span>
+            <button
+              type="button"
+              className="rounded-lg px-3 py-1.5 text-sm text-white/90 ring-1 ring-white/30"
+              onClick={(e) => {
+                e.stopPropagation()
+                setEvalPreviewIdx(null)
+              }}
+            >
+              关闭
+            </button>
+          </div>
+          <div
+            className="relative flex min-h-0 flex-1 items-center justify-center px-2 pb-6"
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={(e) => {
+              evalTouchStartX.current = e.touches[0]?.clientX ?? null
+            }}
+            onTouchEnd={(e) => {
+              const start = evalTouchStartX.current
+              const end = e.changedTouches[0]?.clientX
+              evalTouchStartX.current = null
+              if (start == null || end == null || evalImageUrls.length < 2) return
+              const d = end - start
+              if (d > 50) {
+                setEvalPreviewIdx(
+                  (idx) =>
+                    idx === null ? null : (idx - 1 + evalImageUrls.length) % evalImageUrls.length
+                )
+              } else if (d < -50) {
+                setEvalPreviewIdx((idx) =>
+                  idx === null ? null : (idx + 1) % evalImageUrls.length
+                )
+              }
+            }}
+          >
+            {evalImageUrls.length > 1 ? (
+              <button
+                type="button"
+                className="absolute left-1 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/10 px-2 py-3 text-xl text-white"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setEvalPreviewIdx(
+                    (idx) =>
+                      idx === null ? null : (idx - 1 + evalImageUrls.length) % evalImageUrls.length
+                  )
+                }}
+                aria-label="上一张"
+              >
+                ‹
+              </button>
+            ) : null}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={evalImageUrls[evalPreviewIdx] ?? ''}
+              alt=""
+              className="max-h-[min(78vh,100%)] max-w-full object-contain"
+            />
+            {evalImageUrls.length > 1 ? (
+              <button
+                type="button"
+                className="absolute right-1 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/10 px-2 py-3 text-xl text-white"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setEvalPreviewIdx((idx) =>
+                    idx === null ? null : (idx + 1) % evalImageUrls.length
+                  )
+                }}
+                aria-label="下一张"
+              >
+                ›
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

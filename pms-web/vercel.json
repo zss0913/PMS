@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/auto-reminder",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/inspection-tasks-generate",
+      "schedule": "0 4,10,16 * * *"
     }
   ]
 }

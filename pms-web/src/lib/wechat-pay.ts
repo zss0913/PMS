@@ -1,12 +1,23 @@
 import { createDecipheriv, createPrivateKey, createSign, createVerify, randomBytes } from 'node:crypto'
+import { resolvePlatformMpCredentials, type MpClientKind } from '@/lib/platform-wechat-mp'
 
-export type WechatPayConfig = {
-  appId: string
-  appSecret: string
+export type WechatMchV3Config = {
   mchId: string
   mchSerialNo: string
   apiV3Key: string
   privateKeyPem: string
+}
+
+export type WechatPayConfig = WechatMchV3Config & {
+  appId: string
+  appSecret: string
+}
+
+export type CompanyWechatMerchantInput = {
+  wechatMchId: string | null
+  wechatMchSerialNo: string | null
+  wechatApiV3Key: string | null
+  wechatPrivateKeyPem: string | null
 }
 
 export type MiniProgramPayParams = {
@@ -24,15 +35,6 @@ type EncryptResource = {
   nonce: string
 }
 
-type CompanyWechatConfigInput = {
-  appId: string | null
-  appSecret: string | null
-  wechatMchId: string | null
-  wechatMchSerialNo: string | null
-  wechatApiV3Key: string | null
-  wechatPrivateKeyPem: string | null
-}
-
 type WechatCertificateResponse = {
   data?: Array<{
     serial_no: string
@@ -44,23 +46,40 @@ function clean(v: string | null | undefined) {
   return String(v || '').trim()
 }
 
-export function getWechatPayConfig(input: CompanyWechatConfigInput): WechatPayConfig {
-  const config: WechatPayConfig = {
-    appId: clean(input.appId),
-    appSecret: clean(input.appSecret),
+/** 物业公司侧：仅商户号与 API 证书相关字段 */
+export function getWechatMchV3Config(input: CompanyWechatMerchantInput): WechatMchV3Config {
+  const config: WechatMchV3Config = {
     mchId: clean(input.wechatMchId),
     mchSerialNo: clean(input.wechatMchSerialNo),
     apiV3Key: clean(input.wechatApiV3Key),
     privateKeyPem: clean(input.wechatPrivateKeyPem),
   }
-  if (!config.appId) throw new Error('当前公司未配置微信小程序 AppId')
-  if (!config.appSecret) throw new Error('当前公司未配置微信小程序 AppSecret')
   if (!config.mchId) throw new Error('当前公司未配置微信支付商户号')
   if (!config.mchSerialNo) throw new Error('当前公司未配置微信支付商户证书序列号')
   if (!config.apiV3Key) throw new Error('当前公司未配置微信支付 APIv3 Key')
   if (config.apiV3Key.length !== 32) throw new Error('微信支付 APIv3 Key 长度必须为 32 位')
   if (!config.privateKeyPem) throw new Error('当前公司未配置微信支付商户私钥')
   return config
+}
+
+const mpHint: Record<MpClientKind, string> = {
+  tenant:
+    '未配置租客端小程序：请在超级管理员「全局小程序配置」中填写，或设置环境变量 WECHAT_MP_TENANT_APP_ID、WECHAT_MP_TENANT_APP_SECRET',
+  staff:
+    '未配置员工端小程序：请在超级管理员「全局小程序配置」中填写，或设置环境变量 WECHAT_MP_STAFF_APP_ID、WECHAT_MP_STAFF_APP_SECRET',
+}
+
+/** 全局小程序身份 + 当前公司商户配置 */
+export async function getWechatPayConfigAsync(
+  merchant: CompanyWechatMerchantInput,
+  mpKind: MpClientKind
+): Promise<WechatPayConfig> {
+  const mch = getWechatMchV3Config(merchant)
+  const { appId, appSecret } = await resolvePlatformMpCredentials(mpKind)
+  if (!appId || !appSecret) {
+    throw new Error(mpHint[mpKind])
+  }
+  return { ...mch, appId, appSecret }
 }
 
 function randomNonce() {
@@ -81,7 +100,7 @@ function verifyText(publicKeyPem: string, text: string, signature: string) {
   return verify.verify(publicKeyPem, signature, 'base64')
 }
 
-function buildAuthorization(config: WechatPayConfig, method: string, urlPath: string, body: string) {
+function buildAuthorization(config: WechatMchV3Config, method: string, urlPath: string, body: string) {
   const nonceStr = randomNonce()
   const timestamp = Math.floor(Date.now() / 1000).toString()
   const message = `${method}\n${urlPath}\n${timestamp}\n${nonceStr}\n${body}\n`
@@ -89,7 +108,12 @@ function buildAuthorization(config: WechatPayConfig, method: string, urlPath: st
   return `WECHATPAY2-SHA256-RSA2048 mchid="${config.mchId}",nonce_str="${nonceStr}",timestamp="${timestamp}",serial_no="${config.mchSerialNo}",signature="${signature}"`
 }
 
-async function callWechatApi<T>(config: WechatPayConfig, method: 'GET' | 'POST', urlPath: string, bodyObj?: unknown) {
+async function callWechatApi<T>(
+  config: WechatMchV3Config,
+  method: 'GET' | 'POST',
+  urlPath: string,
+  bodyObj?: unknown
+) {
   const body = bodyObj ? JSON.stringify(bodyObj) : ''
   const res = await fetch(`https://api.mch.weixin.qq.com${urlPath}`, {
     method,
@@ -128,7 +152,7 @@ function decryptResource(apiV3Key: string, resource: EncryptResource) {
   return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8')
 }
 
-async function fetchPlatformPublicKeyPem(config: WechatPayConfig, serialNo: string) {
+async function fetchPlatformPublicKeyPem(config: WechatMchV3Config, serialNo: string) {
   const resp = await callWechatApi<WechatCertificateResponse>(config, 'GET', '/v3/certificates')
   const cert = (resp.data || []).find((item) => item.serial_no === serialNo)
   if (!cert) {
@@ -202,7 +226,7 @@ export function buildMiniProgramPayParams(config: WechatPayConfig, prepayId: str
 }
 
 export async function parseWechatPayNotify(
-  config: WechatPayConfig,
+  config: WechatMchV3Config,
   input: {
     rawBody: string
     signature: string

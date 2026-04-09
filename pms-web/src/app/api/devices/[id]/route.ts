@@ -153,7 +153,6 @@ export async function DELETE(
 
     const existing = await prisma.device.findFirst({
       where: { id: deviceId, companyId: user.companyId },
-      include: { _count: { select: { maintenances: true } } },
     })
     if (!existing) {
       return NextResponse.json(
@@ -162,13 +161,7 @@ export async function DELETE(
       )
     }
 
-    if (existing._count.maintenances > 0) {
-      return NextResponse.json(
-        { success: false, message: `该设备有 ${existing._count.maintenances} 条维保记录，无法删除` },
-        { status: 400 }
-      )
-    }
-
+    // 维保明细对设备为 SetNull + 快照，删除设备不影响历史维保记录
     await prisma.device.delete({ where: { id: deviceId } })
     return NextResponse.json({ success: true })
   } catch (e) {

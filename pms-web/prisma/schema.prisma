@@ -12,6 +12,16 @@ datasource db {
 
 // ========== 系统管理 ==========
 
+/// 平台级微信小程序 AppId/AppSecret（租客端 / 员工端各一套），与物业公司收款商户配置分离
+model PlatformMpSettings {
+  id              Int      @id @default(1)
+  tenantAppId     String?
+  tenantAppSecret String?
+  staffAppId      String?
+  staffAppSecret  String?
+  updatedAt       DateTime @updatedAt
+}
+
 model Company {
   id        Int      @id @default(autoincrement())
   name      String
@@ -51,8 +61,8 @@ model Company {
   announcements   Announcement[]
   complaints            Complaint[]
   complaintActivityLogs ComplaintActivityLog[]
-  devices         Device[]
-  deviceMaintenances DeviceMaintenance[]
+  devices                  Device[]
+  deviceMaintenanceRecords DeviceMaintenanceRecord[]
   accounts            Account[]
   autoReminderSetting AutoReminderSetting?
   printTemplates      PrintTemplate[]
@@ -91,6 +101,8 @@ model Role {
   code      String
   dataScope String
   menuIds   String?
+  /// JSON string[]，格式 "菜单ID:操作"，如 "3:create"；null 表示未配置（兼容旧数据，视为全部按钮）
+  buttonPermissionKeys String?
   companyId Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -120,8 +132,9 @@ model Employee {
   department Department? @relation(fields: [departmentId], references: [id])
   role       Role       @relation(fields: [roleId], references: [id])
   project    Project?   @relation(fields: [projectId], references: [id])
-  assignedWorkOrders WorkOrder[] @relation("AssignedWorkOrders")
-  staffNotifications StaffNotification[]
+  assignedWorkOrders       WorkOrder[]                 @relation("AssignedWorkOrders")
+  staffNotifications       StaffNotification[]
+  deviceMaintenanceRecords DeviceMaintenanceRecord[]
 }
 
 // 超级管理员(跨公司)
@@ -684,7 +697,13 @@ model WorkOrder {
   completionRemark   String?
   /// 评价说明：员工标记评价完成或租客提交评价时写入（选填）
   evaluationNote     String?
+  /// 租客提交评价时的星级（1～5），员工端标记评价完成可不填
+  evaluationStars    Int?
+  /// 租客评价附图（JSON 字符串数组，与 images 格式一致，选填）
+  evaluationImages   String?
   companyId    Int
+  /// 选填：关联的设备维保记录（每条工单最多关联一条维保记录）
+  deviceMaintenanceRecordId Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -693,8 +712,11 @@ model WorkOrder {
   tenant    Tenant?   @relation(fields: [tenantId], references: [id])
   room      Room?     @relation(fields: [roomId], references: [id])
   assignedEmployee Employee? @relation("AssignedWorkOrders", fields: [assignedTo], references: [id])
+  deviceMaintenanceRecord DeviceMaintenanceRecord? @relation(fields: [deviceMaintenanceRecordId], references: [id], onDelete: SetNull)
   activityLogs     WorkOrderActivityLog[]
   feeBills         Bill[]
+
+  @@index([companyId, deviceMaintenanceRecordId])
 }
 
 /// 工单操作日志（创建、编辑、派单、流程节点等）
@@ -788,6 +810,8 @@ model InspectionPlan {
   cycleSchedule  String?
   /// 是否要求每个巡检点 NFC 打卡后必须拍照
   requirePhoto   Boolean  @default(true)
+  /// 为 true 时参与每日定时 Cron 自动生成任务；手动「按周期生成」不受此限制
+  autoGenerateTasks Boolean @default(true)
   userIds        String?
   route          String?
   checkItems     String?
@@ -959,28 +983,51 @@ model Device {
 
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   building    Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
-  maintenances DeviceMaintenance[]
+  maintenanceItems       DeviceMaintenanceItem[]
   inspectionPointDevices InspectionPointDevice[]
 
   @@unique([companyId, code])
 }
 
-model DeviceMaintenance {
-  id           Int      @id @default(autoincrement())
-  code         String
-  deviceId     Int
-  type         String
-  date         DateTime
-  maintainerId Int
-  cost         Decimal  @default(0)
-  content      String
-  images       String?
-  remark       String?
-  companyId    Int
-  createdAt    DateTime @default(now())
+/// 设备维保记录（一条可含多台设备；明细含设备快照，台账删除后历史仍保留）
+model DeviceMaintenanceRecord {
+  id             Int      @id @default(autoincrement())
+  code           String
+  type           String
+  date           DateTime
+  maintainerId   Int?
+  maintainerName String
+  cost           Decimal  @default(0)
+  content        String
+  images         String?
+  remark         String?
+  companyId      Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  device  Device  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  company    Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  maintainer Employee?               @relation(fields: [maintainerId], references: [id], onDelete: SetNull)
+  items      DeviceMaintenanceItem[]
+  linkedWorkOrders WorkOrder[]
+
+  @@unique([companyId, code])
+  @@index([companyId, date])
+}
+
+model DeviceMaintenanceItem {
+  id           Int     @id @default(autoincrement())
+  recordId     Int
+  deviceId     Int?
+  deviceCode   String
+  deviceName   String
+  deviceType   String?
+  buildingName String?
+
+  record DeviceMaintenanceRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  device Device?                 @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([recordId])
+  @@index([deviceId])
 }
 
 // ========== 系统配置 ==========

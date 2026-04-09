@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
+import { PermissionGate } from '@/components/permissions/PermissionGate'
+import { MENU_ID } from '@/lib/menu-config'
 import { Plus, Pencil, Trash2, Upload, Download } from 'lucide-react'
 import { DeviceForm } from './DeviceForm'
 import { DeviceBatchImportModal } from './DeviceBatchImportModal'

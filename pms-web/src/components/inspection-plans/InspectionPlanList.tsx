@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import type { CycleScheduleV1 } from '@/lib/inspection-cycle-schedule'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { Plus, Pencil, Search, Trash2 } from 'lucide-react'
@@ -16,6 +17,8 @@ type InspectionPlan = {
   cycleMonthDay?: number | null
   cycleLabel: string
   requirePhoto?: boolean
+  autoGenerateTasks?: boolean
+  cycleSchedule?: CycleScheduleV1 | null
   userIds: number[]
   checkItems: { name: string; nfcTagId: number }[]
   inspectionPointIds?: number[]
@@ -186,6 +189,7 @@ export function InspectionPlanList() {
                 <th className="text-left p-4 font-medium">巡检类型</th>
                 <th className="text-left p-4 font-medium">周期</th>
                 <th className="text-left p-4 font-medium">须拍照</th>
+                <th className="text-left p-4 font-medium">定时自动</th>
                 <th className="text-left p-4 font-medium">巡检人员</th>
                 <th className="text-left p-4 font-medium">状态</th>
                 <th className="text-left p-4 font-medium w-28">操作</th>
@@ -194,13 +198,13 @@ export function InspectionPlanList() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="p-12 text-center text-slate-500">
+                  <td colSpan={9} className="p-12 text-center text-slate-500">
                     加载中...
                   </td>
                 </tr>
               ) : paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-12 text-center text-slate-500">
+                  <td colSpan={9} className="p-12 text-center text-slate-500">
                     {list.length === 0
                       ? '暂无巡检计划，点击「新建计划」添加'
                       : '无符合条件的计划，请调整名称搜索或巡检类型'}
@@ -217,6 +221,7 @@ export function InspectionPlanList() {
                     <td className="p-4">{p.inspectionType}</td>
                     <td className="p-4">{p.cycleLabel}</td>
                     <td className="p-4">{p.requirePhoto !== false ? '是' : '否'}</td>
+                    <td className="p-4">{p.autoGenerateTasks !== false ? '是' : '否'}</td>
                     <td className="p-4">{getPersonnelNames(p.userIds)}</td>
                     <td className="p-4">{p.status === 'active' ? '启用' : '停用'}</td>
                     <td className="p-4">

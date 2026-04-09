@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { completeWorkOrderFeePayment } from '@/lib/mp-work-order-fee-pay'
-import { getWechatPayConfig, parseWechatPayNotify } from '@/lib/wechat-pay'
+import { resolveAllPlatformAppIds } from '@/lib/platform-wechat-mp'
+import { getWechatMchV3Config, parseWechatPayNotify } from '@/lib/wechat-pay'
 
 export const runtime = 'nodejs'
 
@@ -21,8 +22,6 @@ export async function POST(
       where: { id: parsedCompanyId },
       select: {
         id: true,
-        appId: true,
-        appSecret: true,
         wechatMchId: true,
         wechatMchSerialNo: true,
         wechatApiV3Key: true,
@@ -33,7 +32,8 @@ export async function POST(
       return NextResponse.json({ code: 'FAIL', message: '公司不存在' }, { status: 404 })
     }
 
-    const config = getWechatPayConfig(company)
+    const mchConfig = getWechatMchV3Config(company)
+    const allowedAppIds = await resolveAllPlatformAppIds()
     const signature = request.headers.get('Wechatpay-Signature') || ''
     const timestamp = request.headers.get('Wechatpay-Timestamp') || ''
     const nonce = request.headers.get('Wechatpay-Nonce') || ''
@@ -42,7 +42,7 @@ export async function POST(
       return NextResponse.json({ code: 'FAIL', message: '缺少微信支付签名头' }, { status: 400 })
     }
 
-    const { resource } = await parseWechatPayNotify(config, {
+    const { resource } = await parseWechatPayNotify(mchConfig, {
       rawBody,
       signature,
       timestamp,
@@ -50,7 +50,8 @@ export async function POST(
       serial,
     })
 
-    if (resource.appid !== config.appId || resource.mchid !== config.mchId) {
+    const appOk = allowedAppIds.length === 0 ? false : allowedAppIds.includes(resource.appid)
+    if (!appOk || resource.mchid !== mchConfig.mchId) {
       return NextResponse.json({ code: 'FAIL', message: '商户信息不匹配' }, { status: 400 })
     }
 

@@ -87,6 +87,7 @@ export async function GET(
 
     const imageUrls = parseWorkOrderImageUrls(wo.images)
     const completionImageUrls = parseWorkOrderImageUrls(wo.completionImages)
+    const evaluationImageUrls = parseWorkOrderImageUrls(wo.evaluationImages)
 
     const reporter = await resolveWorkOrderReporter(
       prisma,
@@ -135,6 +136,15 @@ export async function GET(
       if (t) tenantPayload = t
     }
 
+    const workOrderFeeBill = await prisma.bill.findFirst({
+      where: {
+        companyId: wo.companyId,
+        workOrderId: wo.id,
+        billSource: 'work_order_fee',
+      },
+      orderBy: { id: 'desc' },
+    })
+
     let feePayment:
       | {
           billId: number
@@ -154,35 +164,25 @@ export async function GET(
         }
       | undefined
 
-    if (user.type === 'tenant' && wo.status === '待租客确认费用') {
-      const feeBill = await prisma.bill.findFirst({
-        where: {
-          companyId: wo.companyId,
-          workOrderId: wo.id,
-          billSource: 'work_order_fee',
-        },
-        orderBy: { id: 'desc' },
-      })
-      if (feeBill) {
-        const pending = await findPendingFeeCheckoutPayment(prisma, feeBill.id, wo.companyId)
-        feePayment = {
-          billId: feeBill.id,
-          billCode: feeBill.code,
-          feeType: feeBill.feeType,
-          period: feeBill.period,
-          dueDate: feeBill.dueDate.toISOString(),
-          accountReceivable: Number(feeBill.accountReceivable),
-          amountDue: Number(feeBill.amountDue),
-          paymentStatus: feeBill.paymentStatus,
-          pendingPayment: pending
-            ? {
-                id: pending.id,
-                code: pending.code,
-                paymentMethod: pending.paymentMethod,
-                paymentStatus: pending.paymentStatus,
-              }
-            : null,
-        }
+    if (user.type === 'tenant' && wo.status === '待租客确认费用' && workOrderFeeBill) {
+      const pending = await findPendingFeeCheckoutPayment(prisma, workOrderFeeBill.id, wo.companyId)
+      feePayment = {
+        billId: workOrderFeeBill.id,
+        billCode: workOrderFeeBill.code,
+        feeType: workOrderFeeBill.feeType,
+        period: workOrderFeeBill.period,
+        dueDate: workOrderFeeBill.dueDate.toISOString(),
+        accountReceivable: Number(workOrderFeeBill.accountReceivable),
+        amountDue: Number(workOrderFeeBill.amountDue),
+        paymentStatus: workOrderFeeBill.paymentStatus,
+        pendingPayment: pending
+          ? {
+              id: pending.id,
+              code: pending.code,
+              paymentMethod: pending.paymentMethod,
+              paymentStatus: pending.paymentStatus,
+            }
+          : null,
       }
     }
 
@@ -213,6 +213,8 @@ export async function GET(
         completionImageUrls,
         completionRemark: wo.completionRemark,
         evaluationNote: wo.evaluationNote,
+        evaluationStars: wo.evaluationStars,
+        evaluationImageUrls,
         building: wo.building,
         room: wo.room,
         tenant: tenantPayload,
@@ -227,6 +229,8 @@ export async function GET(
         evaluatedAt: iso(wo.evaluatedAt),
         createdAt: wo.createdAt.toISOString(),
         updatedAt: wo.updatedAt.toISOString(),
+        /** 是否存在工单费用账单（租客承担费用并走支付时才有；内部确认费用无账单） */
+        hasWorkOrderFeeBill: workOrderFeeBill != null,
       },
     })
   } catch (e) {
@@ -283,6 +287,19 @@ export async function PUT(
     if (['评价完成', '已取消'].includes(existing.status)) {
       return NextResponse.json(
         { success: false, message: '当前状态不可编辑' },
+        { status: 400 }
+      )
+    }
+
+    if (
+      user.type === 'tenant' &&
+      ['待处理', '待评价'].includes(existing.status)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: '费用已确认后的工单不可修改内容，如有问题请联系物业。',
+        },
         { status: 400 }
       )
     }

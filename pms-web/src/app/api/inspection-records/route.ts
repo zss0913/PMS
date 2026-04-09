@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
+import { batchResolveLinkedWorkOrdersForInspectionRecords } from '@/lib/inspection-record-linked-work-order'
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,43 +19,57 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const taskIdStr = searchParams.get('taskId')?.trim()
-    const taskCode = searchParams.get('taskCode')?.trim()
+    const taskCodeSearch = searchParams.get('taskCode')?.trim()
     const buildingIdStr = searchParams.get('buildingId')?.trim()
     const inspectionType = searchParams.get('inspectionType')?.trim()
     const tagId = searchParams.get('tagId')?.trim()
     const dateFrom = searchParams.get('dateFrom')?.trim()
     const dateTo = searchParams.get('dateTo')?.trim()
-    const keyword = searchParams.get('keyword')?.trim()
+    const resultStatus = searchParams.get('resultStatus')?.trim()
 
-    const where: Record<string, unknown> = { companyId: user.companyId }
+    const andParts: Prisma.InspectionRecordWhereInput[] = [{ companyId: user.companyId }]
+
     if (taskIdStr) {
       const tid = parseInt(taskIdStr, 10)
-      if (!Number.isNaN(tid)) where.taskId = tid
+      if (!Number.isNaN(tid)) andParts.push({ taskId: tid })
     }
-    if (taskCode) where.taskCode = { contains: taskCode }
-    if (inspectionType) where.inspectionType = inspectionType
-    if (tagId) where.tagId = { contains: tagId }
+    if (taskCodeSearch) {
+      andParts.push({
+        OR: [
+          { taskCode: { contains: taskCodeSearch } },
+          {
+            task: {
+              planName: { contains: taskCodeSearch },
+              companyId: user.companyId,
+            },
+          },
+        ],
+      })
+    }
+    if (inspectionType) andParts.push({ inspectionType })
+    if (tagId) andParts.push({ tagId: { contains: tagId } })
+    if (resultStatus === 'normal' || resultStatus === 'abnormal') {
+      andParts.push({ status: resultStatus })
+    }
     if (dateFrom || dateTo) {
       const gte = dateFrom ? new Date(dateFrom + 'T00:00:00') : undefined
       const lte = dateTo ? new Date(dateTo + 'T23:59:59.999') : undefined
-      where.checkedAt = {}
-      if (gte && !Number.isNaN(gte.getTime())) (where.checkedAt as Record<string, Date>).gte = gte
-      if (lte && !Number.isNaN(lte.getTime())) (where.checkedAt as Record<string, Date>).lte = lte
-    }
-    if (keyword) {
-      where.OR = [
-        { taskCode: { contains: keyword } },
-        { location: { contains: keyword } },
-        { tagId: { contains: keyword } },
-        { inspectionType: { contains: keyword } },
-      ]
+      const checkedAt: Prisma.DateTimeFilter = {}
+      if (gte && !Number.isNaN(gte.getTime())) checkedAt.gte = gte
+      if (lte && !Number.isNaN(lte.getTime())) checkedAt.lte = lte
+      andParts.push({ checkedAt })
     }
     if (buildingIdStr) {
       const bid = parseInt(buildingIdStr, 10)
       if (!Number.isNaN(bid)) {
-        where.task = { buildingId: bid, companyId: user.companyId }
+        andParts.push({
+          task: { buildingId: bid, companyId: user.companyId },
+        })
       }
     }
+
+    const where: Prisma.InspectionRecordWhereInput =
+      andParts.length === 1 ? andParts[0]! : { AND: andParts }
 
     const records = await prisma.inspectionRecord.findMany({
       where,
@@ -80,8 +96,11 @@ export async function GET(request: NextRequest) {
         : []
     const taskMap = Object.fromEntries(tasks.map((t) => [t.id, t]))
 
+    const linkedMap = await batchResolveLinkedWorkOrdersForInspectionRecords(prisma, user.companyId, records)
+
     const list = records.map((r) => {
       const tk = taskMap[r.taskId]
+      const linkedWorkOrder = linkedMap.get(r.id) ?? null
       return {
         id: r.id,
         taskId: r.taskId,
@@ -96,6 +115,7 @@ export async function GET(request: NextRequest) {
         checkedByName: employeeMap[r.checkedBy] ?? '-',
         status: r.status,
         detail: r.checkItems,
+        linkedWorkOrder,
       }
     })
 

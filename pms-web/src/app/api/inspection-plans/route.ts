@@ -29,6 +29,8 @@ const createSchema = z.object({
   /** JSON：{ v, kind, slots } */
   cycleSchedule: z.any(),
   requirePhoto: z.boolean().optional().default(true),
+  /** 是否参与每日定时自动生成巡检任务 */
+  autoGenerateTasks: z.boolean().optional().default(true),
   buildingId: z.number().int().min(1, '请选择楼宇'),
   userIds: z.array(z.number()).optional().default([]),
   inspectionPointIds: z.array(z.number().int().positive()).min(1, '请至少选择一个巡检点'),
@@ -103,6 +105,7 @@ export async function GET(request: NextRequest) {
         cycleMonthDay: p.cycleMonthDay,
         cycleSchedule: scheduleObj,
         requirePhoto: p.requirePhoto,
+        autoGenerateTasks: p.autoGenerateTasks,
         cycleLabel: formatCycleScheduleSummary(p.cycleType, p.cycleValue, p.cycleSchedule),
         userIds: p.userIds ? (JSON.parse(p.userIds) as number[]) : [],
         checkItems: parseCheckItemsJson(p.checkItems),
@@ -220,6 +223,7 @@ export async function POST(request: NextRequest) {
         cycleMonthDay: null,
         cycleSchedule: JSON.stringify(scheduleNorm),
         requirePhoto: parsed.requirePhoto,
+        autoGenerateTasks: parsed.autoGenerateTasks,
         buildingId: parsed.buildingId,
         userIds: parsed.userIds.length > 0 ? JSON.stringify(parsed.userIds) : null,
         checkItems: JSON.stringify(enriched),

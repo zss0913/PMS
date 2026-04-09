@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { AppLink } from '@/components/AppLink'
+import { PermissionGate } from '@/components/permissions/PermissionGate'
+import { MENU_ID } from '@/lib/menu-config'
 import { Pagination } from '@/components/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { Plus, Pencil, Trash2, Search } from 'lucide-react'
@@ -131,13 +133,15 @@ export function ProjectList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             </button>
           </div>
         </div>
-        <AppLink
-          href="/projects/new"
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
-        >
-          <Plus className="w-4 h-4" />
-          新增项目
-        </AppLink>
+        <PermissionGate menuId={MENU_ID.PROJECTS} action="create">
+          <AppLink
+            href="/projects/new"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
+          >
+            <Plus className="w-4 h-4" />
+            新增项目
+          </AppLink>
+        </PermissionGate>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -170,19 +174,23 @@ export function ProjectList({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 <td className="p-4">{formatDate(p.createdAt)}</td>
                 <td className="p-4">
                   <div className="flex gap-2">
-                    <AppLink
-                      href={`/projects/${p.id}/edit`}
-                      className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </AppLink>
-                    <button
-                      onClick={() => handleDelete(p.id)}
-                      disabled={deletingId === p.id}
-                      className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded disabled:opacity-50"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <PermissionGate menuId={MENU_ID.PROJECTS} action="update">
+                      <AppLink
+                        href={`/projects/${p.id}/edit`}
+                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </AppLink>
+                    </PermissionGate>
+                    <PermissionGate menuId={MENU_ID.PROJECTS} action="delete">
+                      <button
+                        onClick={() => handleDelete(p.id)}
+                        disabled={deletingId === p.id}
+                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-600 rounded disabled:opacity-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </PermissionGate>
                   </div>
                 </td>
               </tr>

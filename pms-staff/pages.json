@@ -19,6 +19,12 @@
       }
     },
     {
+      "path": "pages/profile/change-password",
+      "style": {
+        "navigationBarTitleText": "修改密码"
+      }
+    },
+    {
       "path": "pages/login/login",
       "style": {
         "navigationBarTitleText": "登录"
@@ -58,6 +64,12 @@
       "path": "pages/inspection-tasks/execute",
       "style": {
         "navigationBarTitleText": "执行巡检"
+      }
+    },
+    {
+      "path": "pages/inspection-tasks/record-detail",
+      "style": {
+        "navigationBarTitleText": "巡检记录详情"
       }
     },
     {

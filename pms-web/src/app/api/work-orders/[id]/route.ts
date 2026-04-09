@@ -64,6 +64,7 @@ export async function GET(
     }
 
     const completionImageUrls = parseWorkOrderImageUrls(workOrder.completionImages)
+    const evaluationImageUrls = parseWorkOrderImageUrls(workOrder.evaluationImages)
 
     let tenantPayload = workOrder.tenant
     if (!tenantPayload && workOrder.tenantId != null) {
@@ -109,6 +110,8 @@ export async function GET(
           completionImageUrls,
           completionRemark: workOrder.completionRemark,
           evaluationNote: workOrder.evaluationNote,
+          evaluationStars: workOrder.evaluationStars,
+          evaluationImageUrls,
           createdAt: workOrder.createdAt.toISOString(),
           updatedAt: workOrder.updatedAt.toISOString(),
         },

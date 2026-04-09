@@ -93,6 +93,7 @@ export async function GET(request: Request) {
       departmentId: employee.departmentId,
       departmentName: employee.department?.name ?? '',
       position: employee.position,
+      businessTypes: employee.businessTypes ?? '',
       isLeader: employee.isLeader,
     },
   })

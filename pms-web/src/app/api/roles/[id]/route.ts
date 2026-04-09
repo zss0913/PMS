@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { COMPANY_ADMIN_ROLE_CODE } from '@/lib/menu-config'
 import { z } from 'zod'
 
 const updateSchema = z.object({
@@ -8,6 +9,7 @@ const updateSchema = z.object({
   code: z.string().min(1, '角色编码不能为空').optional(),
   dataScope: z.enum(['all', 'project', 'department', 'self']).optional(),
   menuIds: z.array(z.number()).optional(),
+  buttonPermissionKeys: z.array(z.string()).nullable().optional(),
 })
 
 export async function PUT(
@@ -61,15 +63,24 @@ export async function PUT(
       }
     }
 
+    const isCompanyAdmin = role.code === COMPANY_ADMIN_ROLE_CODE
     const updated = await prisma.role.update({
       where: { id: roleId },
       data: {
         ...(parsed.name && { name: parsed.name }),
         ...(parsed.code && { code: parsed.code }),
         ...(parsed.dataScope && { dataScope: parsed.dataScope }),
-        ...(parsed.menuIds !== undefined && {
-          menuIds: JSON.stringify(parsed.menuIds),
-        }),
+        ...(!isCompanyAdmin &&
+          parsed.menuIds !== undefined && {
+            menuIds: JSON.stringify(parsed.menuIds),
+          }),
+        ...(!isCompanyAdmin &&
+          parsed.buttonPermissionKeys !== undefined && {
+            buttonPermissionKeys:
+              parsed.buttonPermissionKeys === null
+                ? null
+                : JSON.stringify(parsed.buttonPermissionKeys),
+          }),
       },
     })
 
