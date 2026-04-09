@@ -37,6 +37,12 @@
       }
     },
     {
+      "path": "pages/complaints/list",
+      "style": {
+        "navigationBarTitleText": "卫生吐槽"
+      }
+    },
+    {
       "path": "pages/complaints/detail",
       "style": {
         "navigationBarTitleText": "卫生吐槽详情"

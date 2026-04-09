@@ -1,8 +1,5 @@
 <template>
   <view class="container">
-    <view class="toolbar" style="display: none;">
-      <u-button type="primary" text="我要吐槽" @click="goSubmit"></u-button>
-    </view>
     <view v-if="loading" class="hint">加载中…</view>
     <view v-else class="list">
       <view v-for="item in list" :key="item.id" class="list-item" @click="goDetail(item.id)">
@@ -17,11 +14,16 @@
       </view>
       <u-empty v-if="!list.length" mode="list" text="暂无吐槽" margin-top="60"></u-empty>
     </view>
+
+    <view class="fab" @click="goSubmit">
+      <u-icon name="plus" color="#ffffff" size="22"></u-icon>
+    </view>
   </view>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { get } from '../../utils/request.js'
 import { formatDateTime } from '../../utils/datetime.js'
 
@@ -49,7 +51,7 @@ async function load() {
   }
 }
 
-onMounted(() => {
+onShow(() => {
   void load()
 })
 
@@ -64,16 +66,24 @@ function goDetail(id) {
 
 <style lang="scss" scoped>
 .container {
-  padding: 24rpx;
+  min-height: 100vh;
+  background: #f5f6f7;
+  padding-bottom: calc(32rpx + 140rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  position: relative;
 }
-.toolbar {
-  margin-bottom: 24rpx;
-}
+
 .hint {
   text-align: center;
   color: #909399;
-  padding: 40rpx;
+  padding: 80rpx 40rpx;
+  font-size: 28rpx;
 }
+
+.list {
+  padding: 24rpx;
+}
+
 .list-item {
   background-color: #fff;
   border-radius: 12rpx;
@@ -109,6 +119,25 @@ function goDetail(id) {
       color: #999;
       margin-top: 16rpx;
     }
+  }
+}
+
+.fab {
+  position: fixed;
+  right: 32rpx;
+  bottom: calc(32rpx + env(safe-area-inset-bottom));
+  z-index: 100;
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f7b864, #f3a73f);
+  box-shadow: 0 10rpx 28rpx rgba(243, 167, 63, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.96);
   }
 }
 </style>

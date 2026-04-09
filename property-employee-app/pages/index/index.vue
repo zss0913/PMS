@@ -32,12 +32,12 @@
         <text class="menu-label">巡检任务</text>
         <text class="menu-hint">计划与执行</text>
       </view>
-      <view class="menu-card" @tap="goNotice">
+      <view class="menu-card" @tap="goComplaints">
         <view class="icon-wrap">
-          <text class="icon-char">告</text>
+          <text class="icon-char">吐</text>
         </view>
-        <text class="menu-label">公告列表</text>
-        <text class="menu-hint">物业通知与制度</text>
+        <text class="menu-label">卫生吐槽</text>
+        <text class="menu-hint">查看租客反馈，指派与办结</text>
       </view>
     </view>
   </view>
@@ -72,8 +72,8 @@ function goInspectionTasks() {
   openPage('/pages/inspection/list')
 }
 
-function goNotice() {
-  openPage('/pages/notice/list')
+function goComplaints() {
+  openPage('/pages/complaints/list')
 }
 </script>
 

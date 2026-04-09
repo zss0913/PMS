@@ -19,7 +19,10 @@ export default defineConfig({
   css: {
     preprocessorOptions: {
       scss: {
-        additionalData: `@import "${path.join(__dirname, 'src/styles/theme.scss').replace(/\\/g, '/')}";\n`,
+        // @use 替代已弃用的 @import；as * 使变量/mixin 与原先全局注入行为一致
+        additionalData: `@use "${path.join(__dirname, 'src/styles/theme.scss').replace(/\\/g, '/')}" as *;\n`,
+        // Dart Sass：抑制旧版 JS API 等弃用告警（开发/构建日志更干净）
+        silenceDeprecations: ['legacy-js-api', 'import'],
       },
     },
   },

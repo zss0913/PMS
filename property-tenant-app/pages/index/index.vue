@@ -16,13 +16,13 @@
     </view>
 
     <view class="grid-menu">
-      <view class="menu-item" @click="goTo('/pages/repair/submit')">
+      <view class="menu-item" @click="goTo('/pages/repair/list')">
         <view class="icon-box bg-blue">
           <u-icon name="setting" color="#fff" size="28"></u-icon>
         </view>
         <text class="text">报事报修</text>
       </view>
-      <view class="menu-item" @click="goTo('/pages/feedback/submit')">
+      <view class="menu-item" @click="goTo('/pages/feedback/list')">
         <view class="icon-box bg-orange">
           <u-icon name="chat" color="#fff" size="28"></u-icon>
         </view>

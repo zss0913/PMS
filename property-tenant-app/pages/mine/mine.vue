@@ -19,14 +19,6 @@
     <view class="menu-group">
       <u-cell-group :border="false">
         <u-cell icon="home" title="当前租客" :value="tenantLabel" @click="openTenantSwitch" isLink></u-cell>
-      </u-cell-group>
-    </view>
-
-    <view class="menu-group">
-      <u-cell-group :border="false">
-        <u-cell icon="file-text" title="我的工单" isLink @click="goTo('/pages/repair/list')"></u-cell>
-        <u-cell icon="chat" title="我的吐槽" isLink @click="goTo('/pages/feedback/list')"></u-cell>
-        <u-cell v-if="showEmployee" icon="rmb" title="企业账单" isLink @click="goTo('/pages/bill/list')"></u-cell>
         <u-cell v-if="showEmployee" icon="account" title="员工管理" isLink @click="goTo('/pages/employee/list')"></u-cell>
       </u-cell-group>
     </view>

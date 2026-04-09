@@ -36,6 +36,10 @@
         </view>
       </view>
     </view>
+
+    <view class="fab" @click="goSubmit">
+      <u-icon name="plus" color="#ffffff" size="22"></u-icon>
+    </view>
   </view>
 </template>
 
@@ -134,6 +138,10 @@ onShow(() => {
 function goToDetail(id) {
   uni.navigateTo({ url: '/pages/repair/detail?id=' + id })
 }
+
+function goSubmit() {
+  uni.navigateTo({ url: '/pages/repair/submit' })
+}
 </script>
 
 <style lang="scss" scoped>
@@ -141,8 +149,9 @@ function goToDetail(id) {
   padding: 0;
   min-height: 100vh;
   background: #f5f6f7;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: calc(32rpx + 140rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
+  position: relative;
 }
 
 .search-bar {
@@ -160,6 +169,25 @@ function goToDetail(id) {
 
 .list {
   padding: 24rpx;
+}
+
+.fab {
+  position: fixed;
+  right: 32rpx;
+  bottom: calc(32rpx + env(safe-area-inset-bottom));
+  z-index: 100;
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #5193ff, #2979ff);
+  box-shadow: 0 10rpx 28rpx rgba(41, 121, 255, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.96);
+  }
 }
 
 .list-item {

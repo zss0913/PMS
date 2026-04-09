@@ -11,12 +11,6 @@
 
     <view class="menu-group">
       <u-cell-group :border="false">
-        <u-cell icon="map" title="巡检任务" isLink url="/pages/inspection/list"></u-cell>
-      </u-cell-group>
-    </view>
-
-    <view class="menu-group">
-      <u-cell-group :border="false">
         <u-cell icon="lock" title="修改密码" isLink url="/pages/password/password"></u-cell>
         <u-cell icon="info-circle" title="关于我们" isLink url="/pages/about/about"></u-cell>
       </u-cell-group>
