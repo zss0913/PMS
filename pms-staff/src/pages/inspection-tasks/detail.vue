@@ -69,17 +69,26 @@ function pointThumbs(c: CheckItem) {
   return arr.slice(0, 2)
 }
 
+function normTag(s: string) {
+  return String(s || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s/g, '')
+}
+
 /** 是否已有该 NFC 的巡检记录（与 PC 端 doneSet 规则一致） */
 function isPointDone(c: CheckItem) {
   const ids = detail.value?.doneTagIds
-  return !!(c.tagId && ids?.includes(c.tagId))
+  if (!c.tagId || !ids?.length) return false
+  const n = normTag(c.tagId)
+  return ids.some((id) => normTag(id) === n)
 }
 
 /** 该巡检点对应的打卡记录（用于跳转详情；status 为 normal / abnormal） */
 function pointRecord(c: CheckItem) {
   const list = detail.value?.taskRecords
   if (!list?.length || !c.tagId) return null
-  return list.find((r) => r.tagId === c.tagId) ?? null
+  return list.find((r) => normTag(r.tagId) === normTag(c.tagId)) ?? null
 }
 
 function goRecordDetail(recordId: number) {

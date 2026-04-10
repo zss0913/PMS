@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { get } from '@/api/request'
+import { getSystemInfoCompat } from '@/utils/system-info'
 
 /** 与 PC 端工单状态一致 */
 const STATUS_TABS = [
@@ -43,7 +44,7 @@ let searchDebounce: ReturnType<typeof setTimeout> | null = null
 
 onMounted(() => {
   try {
-    const sys = uni.getSystemInfoSync()
+    const sys = getSystemInfoCompat()
     statusBarHeight.value = sys.statusBarHeight ?? 20
   } catch {
     statusBarHeight.value = 20

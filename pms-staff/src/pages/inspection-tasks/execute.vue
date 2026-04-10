@@ -86,8 +86,8 @@ const requirePhoto = computed(() => detail.value?.requirePhoto !== false)
 const pendingItems = computed(() => {
   const d = detail.value
   if (!d) return []
-  const done = new Set(d.doneTagIds || [])
-  return d.checkItems.filter((c) => c.tagId && !done.has(c.tagId))
+  const done = new Set((d.doneTagIds || []).map((id) => normTag(id)))
+  return d.checkItems.filter((c) => c.tagId && !done.has(normTag(c.tagId)))
 })
 
 function normTag(s: string) {

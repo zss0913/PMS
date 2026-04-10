@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { get, post } from '@/api/request'
+import { getSystemInfoCompat } from '@/utils/system-info'
 
 const FILTER_KEY = 'pms_bill_list_filter_v1'
 
@@ -109,7 +110,7 @@ async function loadList() {
 
 onMounted(() => {
   try {
-    const sys = uni.getSystemInfoSync()
+    const sys = getSystemInfoCompat()
     statusBarHeight.value = sys.statusBarHeight ?? 20
   } catch {
     statusBarHeight.value = 20

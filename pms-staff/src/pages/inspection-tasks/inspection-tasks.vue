@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { get } from '@/api/request'
+import { getSystemInfoCompat } from '@/utils/system-info'
 
 const FILTER_STORAGE = 'pms_inspection_list_filters_v1'
 
@@ -63,7 +64,7 @@ const hasActiveFilters = computed(
 
 function initNavMetrics() {
   try {
-    const sys = uni.getSystemInfoSync()
+    const sys = getSystemInfoCompat()
     const winW = sys.windowWidth || 375
     windowHeightPx.value = sys.windowHeight || 667
     safeBottomPx.value = sys.safeAreaInsets?.bottom ?? 0
