@@ -42,7 +42,8 @@
     },
     "quickapp" : {},
     "mp-weixin" : {
-        "appid" : "",
+        "appid" : "touristappid",
+        "libVersion" : "latest",
         "setting" : {
             "urlCheck" : false
         },

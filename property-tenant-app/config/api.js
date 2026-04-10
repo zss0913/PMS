@@ -4,7 +4,7 @@
  *
  * 可在运行时覆盖：uni.setStorageSync('pms_api_base', 'http://xxx:5001')
  */
-export const API_BASE_URL = 'http://127.0.0.1:5001'
+export const API_BASE_URL = 'http://192.168.0.124:5001'
 
 export function getApiBaseUrl() {
   try {

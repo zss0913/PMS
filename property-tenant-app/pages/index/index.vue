@@ -69,6 +69,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { get } from '../../utils/request.js'
 import { formatDateTime } from '../../utils/datetime.js'
 import { useUserStore } from '../../stores/user.js'
+import { getSystemInfoCompat } from '../../utils/system-info.js'
 
 const userStore = useUserStore()
 
@@ -83,7 +84,7 @@ const tenantCardStyle = computed(() => {
 })
 
 function initMpSafeArea() {
-  const sys = uni.getSystemInfoSync()
+  const sys = getSystemInfoCompat()
   const sb = sys.statusBarHeight || 20
   // #ifdef MP-WEIXIN
   try {

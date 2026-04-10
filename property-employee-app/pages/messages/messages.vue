@@ -70,6 +70,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { get, post } from '../../utils/request.js'
 import { formatDateTime } from '../../utils/datetime.js'
 import { openPage } from '../../utils/navigate.js'
+import { getSystemInfoCompat } from '../../utils/system-info.js'
 
 const kindShort = {
   announcement: '公告',
@@ -240,7 +241,7 @@ async function onTapBusiness(item) {
 
 function updateScrollHeight() {
   try {
-    const sys = uni.getSystemInfoSync()
+    const sys = getSystemInfoCompat()
     const winH = sys.windowHeight || sys.screenHeight || 667
     // 预留头部（筛选、loading）；用比例避免挡 tabBar
     scrollHeightPx.value = Math.max(280, Math.floor(winH * 0.58))

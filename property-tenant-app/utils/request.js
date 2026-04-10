@@ -17,6 +17,16 @@ function networkFailHint(base, raw) {
   return raw
 }
 
+/** 真机小程序访问 127.0.0.1 会连到手机自身，常见 request:fail errcode:-102 */
+function appendMpLoopbackHint(base, message) {
+  // #ifdef MP-WEIXIN
+  if (/127\.0\.0\.1|localhost/i.test(base)) {
+    return `${message}；真机请把 API 改为电脑的局域网 IP（如 http://192.168.x.x:5001），见 config/api.js 或 Storage 键 pms_api_base。`
+  }
+  // #endif
+  return message
+}
+
 function shouldRedirectOnUnauthorized(optionsUrl) {
   return !optionsUrl.startsWith('/api/mp/login') && !optionsUrl.startsWith('/api/mp/invite-login')
 }
@@ -54,7 +64,7 @@ export function request(options) {
       },
       fail: (err) => {
         const raw = err.errMsg || '网络请求失败'
-        reject(new Error(networkFailHint(base, raw)))
+        reject(new Error(appendMpLoopbackHint(base, networkFailHint(base, raw))))
       },
     })
   })

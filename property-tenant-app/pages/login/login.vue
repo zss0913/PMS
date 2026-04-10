@@ -71,6 +71,7 @@
 import { reactive, ref, onMounted } from 'vue'
 import { useUserStore } from '../../stores/user.js'
 import { post } from '../../utils/request.js'
+import { getSystemInfoCompat } from '../../utils/system-info.js'
 
 const userStore = useUserStore()
 const statusBarHeight = ref(20)
@@ -91,7 +92,7 @@ const inviteForm = reactive({
 })
 
 onMounted(() => {
-  const sysInfo = uni.getSystemInfoSync()
+  const sysInfo = getSystemInfoCompat()
   statusBarHeight.value = sysInfo.statusBarHeight || 20
 })
 

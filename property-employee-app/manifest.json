@@ -8,10 +8,23 @@
     "app-plus" : {
         "usingComponents" : true,
         "nvueStyleCompiler" : "uni-app",
-        "compilerVersion" : 3
+        "compilerVersion" : 3,
+        "distribute" : {
+            "android" : {
+                "permissions" : [
+                    "<uses-permission android:name=\"android.permission.NFC\"/>",
+                    "<uses-feature android:name=\"android.hardware.nfc\" android:required=\"false\"/>"
+                ]
+            },
+            "ios" : {
+                "privacyDescription" : {
+                    "NFCReaderUsageDescription" : "用于巡检时读取 NFC 标签以核验检查点"
+                }
+            }
+        }
     },
     "mp-weixin" : {
-        "appid" : "touristappid",
+        "appid" : "wx712fa24178deb49c",
         "libVersion" : "latest",
         "setting" : {
             "urlCheck" : false

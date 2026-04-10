@@ -17,6 +17,15 @@ function networkFailHint(base, raw) {
   return raw
 }
 
+function appendMpLoopbackHint(base, message) {
+  // #ifdef MP-WEIXIN
+  if (/127\.0\.0\.1|localhost/i.test(base)) {
+    return `${message}；真机请把 API 改为电脑的局域网 IP（config/api.js 或 Storage pms_api_base）。`
+  }
+  // #endif
+  return message
+}
+
 function shouldRedirectOnUnauthorized(optionsUrl) {
   return !optionsUrl.startsWith('/api/mp/login')
 }
@@ -71,7 +80,7 @@ export function request(options) {
       },
       fail: (err) => {
         const raw = err.errMsg || '网络请求失败'
-        reject(new Error(networkFailHint(base, raw)))
+        reject(new Error(appendMpLoopbackHint(base, networkFailHint(base, raw))))
       },
     })
   })
