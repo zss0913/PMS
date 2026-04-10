@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { X, FileText, Search, CheckCircle2 } from 'lucide-react'
-import { DateRangeField } from '@/components/ui/DateRangeField'
 
 type TemplateOpt = { id: number; name: string }
+type TenantOpt = { id: number; companyName: string }
 
 const PAYMENT_STATUS_OPTIONS = [
   { value: 'unpaid', label: '未缴纳' },
@@ -22,8 +22,6 @@ export type DunningDrawerInitialFilters = {
   feeTypeKeyword: string
   dueDateStart: string
   dueDateEnd: string
-  periodStart: string
-  periodEnd: string
 }
 
 type DunningApiData = {
@@ -54,22 +52,113 @@ function buildDunningSuccessDetail(
   return parts.join('；')
 }
 
+function TenantSearchSelect({
+  tenants,
+  value,
+  onChange,
+  inputRef,
+  dropRef,
+  dropdownOpen,
+  setDropdownOpen,
+}: {
+  tenants: TenantOpt[]
+  value: string
+  onChange: (v: string) => void
+  inputRef: React.RefObject<HTMLInputElement | null>
+  dropRef: React.RefObject<HTMLDivElement | null>
+  dropdownOpen: boolean
+  setDropdownOpen: (v: boolean) => void
+}) {
+  const filtered = useMemo(() => {
+    const q = value.trim().toLowerCase()
+    if (!q) return tenants
+    return tenants.filter((t) => t.companyName.toLowerCase().includes(q))
+  }, [tenants, value])
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (
+        dropRef.current && !dropRef.current.contains(e.target as Node) &&
+        inputRef.current && !inputRef.current.contains(e.target as Node)
+      ) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [dropRef, inputRef, setDropdownOpen])
+
+  return (
+    <div className="relative">
+      <label className="block text-xs font-medium text-slate-500 mb-1">租客</label>
+      <input
+        ref={inputRef}
+        type="text"
+        placeholder="输入关键词搜索或选择租客"
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value)
+          setDropdownOpen(true)
+        }}
+        onFocus={() => setDropdownOpen(true)}
+        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => { onChange(''); inputRef.current?.focus(); setDropdownOpen(true) }}
+          className="absolute right-2 top-[26px] p-0.5 text-slate-400 hover:text-slate-600"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
+      {dropdownOpen && (
+        <div
+          ref={dropRef}
+          className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 shadow-lg"
+        >
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-slate-400">无匹配租客</div>
+          ) : (
+            filtered.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 dark:hover:bg-slate-600 cursor-pointer"
+                onClick={() => {
+                  onChange(t.companyName)
+                  setDropdownOpen(false)
+                }}
+              >
+                {t.companyName}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function DunningExportDrawer({
   open,
   onClose,
   buildings,
+  tenants,
   initialFilters,
 }: {
   open: boolean
   onClose: () => void
   buildings: { id: number; name: string }[]
+  tenants: TenantOpt[]
   initialFilters: DunningDrawerInitialFilters
 }) {
   const [buildingId, setBuildingId] = useState('')
   const [tenantKeyword, setTenantKeyword] = useState('')
+  const [tenantDropdownOpen, setTenantDropdownOpen] = useState(false)
+  const tenantInputRef = useRef<HTMLInputElement>(null)
+  const tenantDropRef = useRef<HTMLDivElement>(null)
   const [feeTypeKeyword, setFeeTypeKeyword] = useState('')
-  const [periodStart, setPeriodStart] = useState('')
-  const [periodEnd, setPeriodEnd] = useState('')
   const [status, setStatus] = useState('')
   /** 空数组表示「全部」；否则为所选结清状态（可多选） */
   const [paymentStatuses, setPaymentStatuses] = useState<string[]>([])
@@ -98,8 +187,6 @@ export function DunningExportDrawer({
     setBuildingId(initialFilters.buildingId)
     setTenantKeyword(initialFilters.tenantKeyword)
     setFeeTypeKeyword(initialFilters.feeTypeKeyword)
-    setPeriodStart(initialFilters.periodStart)
-    setPeriodEnd(initialFilters.periodEnd)
     setStatus(initialFilters.status)
     const ps = initialFilters.paymentStatus?.trim()
     setPaymentStatuses(ps ? ps.split(',').map((s) => s.trim()).filter(Boolean) : [])
@@ -170,8 +257,6 @@ export function DunningExportDrawer({
     if (overdue) params.set('overdue', 'true')
     if (dueDateStart) params.set('dueDateStart', dueDateStart)
     if (dueDateEnd) params.set('dueDateEnd', dueDateEnd)
-    if (periodStart) params.set('periodStart', periodStart)
-    if (periodEnd) params.set('periodEnd', periodEnd)
     return params
   }
 
@@ -226,8 +311,6 @@ export function DunningExportDrawer({
           overdue: overdue ? 'true' : undefined,
           dueDateStart: dueDateStart || undefined,
           dueDateEnd: dueDateEnd || undefined,
-          periodStart: periodStart || undefined,
-          periodEnd: periodEnd || undefined,
         }),
       })
       const j = (await res.json().catch(() => ({}))) as {
@@ -337,16 +420,15 @@ export function DunningExportDrawer({
             </select>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">租客（模糊）</label>
-            <input
-              type="search"
-              placeholder="公司名称关键词"
-              value={tenantKeyword}
-              onChange={(e) => setTenantKeyword(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
-            />
-          </div>
+          <TenantSearchSelect
+            tenants={tenants}
+            value={tenantKeyword}
+            onChange={setTenantKeyword}
+            inputRef={tenantInputRef}
+            dropRef={tenantDropRef}
+            dropdownOpen={tenantDropdownOpen}
+            setDropdownOpen={setTenantDropdownOpen}
+          />
 
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">费用类型（模糊）</label>
@@ -379,17 +461,6 @@ export function DunningExportDrawer({
               />
             </div>
           </div>
-
-          <DateRangeField
-            label="账期重叠（与账单账期区间有交集即纳入）"
-            start={periodStart}
-            end={periodEnd}
-            onChange={({ start, end }) => {
-              setPeriodStart(start)
-              setPeriodEnd(end)
-            }}
-            hint="与账单账期（起～止）有任意一天重叠即纳入；需同时填写起止。"
-          />
 
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">账单状态</label>

@@ -15,7 +15,7 @@ export default async function DashboardLayout({
     <RolePermissionsProvider>
       <div className="flex h-screen bg-slate-50 dark:bg-slate-900">
         <Sidebar user={user} />
-        <main className="dashboard-main flex-1 overflow-auto">{children}</main>
+        <main className="dashboard-main min-w-0 flex-1 overflow-auto">{children}</main>
       </div>
     </RolePermissionsProvider>
   )

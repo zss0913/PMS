@@ -75,14 +75,10 @@ export function buildBillWhereClause(companyId: number, p: BillWhereParams): Rec
   if (p.dueDateStart || p.dueDateEnd) {
     const dateCond: Record<string, Date> = {}
     if (p.dueDateStart) {
-      const d = new Date(p.dueDateStart)
-      d.setHours(0, 0, 0, 0)
-      dateCond.gte = d
+      dateCond.gte = new Date(p.dueDateStart + 'T00:00:00.000Z')
     }
     if (p.dueDateEnd) {
-      const d = new Date(p.dueDateEnd)
-      d.setHours(23, 59, 59, 999)
-      dateCond.lte = d
+      dateCond.lte = new Date(p.dueDateEnd + 'T23:59:59.999Z')
     }
     where.dueDate = dateCond
   }
@@ -107,9 +103,9 @@ export function buildBillWhereClause(companyId: number, p: BillWhereParams): Rec
       where.dueDate = { lt: new Date() }
     }
   } else if (p.overdue === 'false') {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const or: Record<string, unknown>[] = [{ dueDate: { gte: today } }, { paymentStatus: 'paid' }]
+    const todayStr = new Date().toISOString().slice(0, 10)
+    const todayStart = new Date(todayStr + 'T00:00:00.000Z')
+    const or: Record<string, unknown>[] = [{ dueDate: { gte: todayStart } }, { paymentStatus: 'paid' }]
     if (selected?.length) {
       where.AND = [{ paymentStatus: { in: selected } }, { OR: or }]
     } else {

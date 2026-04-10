@@ -6,11 +6,11 @@ import { resolveEffectiveTenantIds } from '@/lib/mp-effective-tenant-ids'
 import { createTenantBatchBillCheckout } from '@/lib/mp-bill-tenant-pay'
 
 const bodySchema = z.object({
-  billIds: z.array(z.number().int().min(1)).min(2),
+  billIds: z.array(z.number().int().min(1)).min(1),
   channel: z.enum(['wechat', 'alipay']),
 })
 
-/** 多笔账单合并发起在线支付（pending） */
+/** 多笔或单笔账单合并发起在线支付（pending，billIds 至少 1 个） */
 export async function POST(request: NextRequest) {
   try {
     const user = await getMpAuthUser(request)

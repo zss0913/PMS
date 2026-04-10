@@ -197,18 +197,15 @@ export function Sidebar({ user, collapsed: propCollapsed, onCollapseChange }: Si
   const router = useRouter()
   const { canMenu } = useRolePermissions()
   const [collapsed, setCollapsed] = useState(propCollapsed ?? false)
-  const [mounted, setMounted] = useState(false)
 
-  // 从 localStorage 读取折叠状态
+  // 从 localStorage 读取折叠状态（首帧与 SSR 均为默认展开，避免 hydration 不一致；不整段隐藏侧栏以免主区误占满宽挡点击）
   useEffect(() => {
-    setMounted(true)
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sidebar-collapsed')
-      if (saved !== null) {
-        const isCollapsed = saved === 'true'
-        setCollapsed(isCollapsed)
-        onCollapseChange?.(isCollapsed)
-      }
+    if (typeof window === 'undefined') return
+    const saved = localStorage.getItem('sidebar-collapsed')
+    if (saved !== null) {
+      const isCollapsed = saved === 'true'
+      setCollapsed(isCollapsed)
+      onCollapseChange?.(isCollapsed)
     }
   }, [])
 
@@ -248,14 +245,10 @@ export function Sidebar({ user, collapsed: propCollapsed, onCollapseChange }: Si
     return canMenu(mid)
   }
 
-  if (!mounted) {
-    return null
-  }
-
   return (
     <aside
       className={cn(
-        'bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 transition-all duration-300 ease-in-out relative',
+        'shrink-0 bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 transition-all duration-300 ease-in-out relative',
         collapsed ? 'w-16' : 'w-52'
       )}
     >

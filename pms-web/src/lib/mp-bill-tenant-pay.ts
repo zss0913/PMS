@@ -167,8 +167,8 @@ export async function createTenantBatchBillCheckout(
   | { ok: false; message: string; status: number }
 > {
   const ids = [...new Set(input.billIds)].filter((x) => x > 0)
-  if (ids.length < 2) {
-    return { ok: false, message: '合并支付请至少选择 2 笔账单', status: 400 }
+  if (ids.length < 1) {
+    return { ok: false, message: '请至少选择 1 笔账单', status: 400 }
   }
 
   const bills = await db.bill.findMany({
@@ -411,7 +411,7 @@ export async function completeTenantBillOnlinePayment(
     } catch {
       return { ok: false, message: '缴费单数据异常', status: 400 }
     }
-    if (billIds.length < 2) {
+    if (billIds.length < 1) {
       return { ok: false, message: '缴费单数据异常', status: 400 }
     }
 

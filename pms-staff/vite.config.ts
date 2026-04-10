@@ -1,9 +1,11 @@
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { defineConfig } from 'vite'
 import uni from '@dcloudio/vite-plugin-uni'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+/** file:// + 百分号编码，避免 Windows 下含中文绝对路径在 Dart Sass 中无法解析 */
+const themeScssUrl = pathToFileURL(path.join(__dirname, 'src/styles/theme.scss')).href
 
 export default defineConfig({
   plugins: [uni()],
@@ -19,9 +21,7 @@ export default defineConfig({
   css: {
     preprocessorOptions: {
       scss: {
-        // @use 替代已弃用的 @import；as * 使变量/mixin 与原先全局注入行为一致
-        additionalData: `@use "${path.join(__dirname, 'src/styles/theme.scss').replace(/\\/g, '/')}" as *;\n`,
-        // Dart Sass：抑制旧版 JS API 等弃用告警（开发/构建日志更干净）
+        additionalData: `@use "${themeScssUrl}" as *;\n`,
         silenceDeprecations: ['legacy-js-api', 'import'],
       },
     },

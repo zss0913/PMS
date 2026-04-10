@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { getMpAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
@@ -143,10 +143,42 @@ export async function POST(request: NextRequest) {
     const firstLink = await prisma.tenantRoom.findFirst({
       where: { tenantId: rel.tenantId },
       orderBy: { id: 'asc' },
+      include: {
+        room: { select: { id: true, buildingId: true, companyId: true } },
+      },
     })
 
-    const buildingId = tenant.buildingId
-    const roomId = firstLink?.roomId ?? null
+    /** 与 GET /work-order-submit-context 一致：有租赁房源时以房源所在楼宇为准，避免 tenant.buildingId 滞后导致外键/数据异常 */
+    let buildingId: number
+    let roomId: number | null = null
+    if (firstLink?.room) {
+      if (firstLink.room.companyId !== user.companyId) {
+        return NextResponse.json(
+          { success: false, message: '房源所属公司与当前账号不一致，无法提交报修' },
+          { status: 400 }
+        )
+      }
+      buildingId = firstLink.room.buildingId
+      roomId = firstLink.room.id
+    } else {
+      buildingId = tenant.buildingId ?? rel.buildingId
+    }
+
+    const buildingOk = await prisma.building.findFirst({
+      where: { id: buildingId, companyId: user.companyId },
+      select: { id: true },
+    })
+    if (!buildingOk) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            '未找到与账号匹配的楼宇信息。请联系物业核对租客档案中的楼宇、或为您绑定租赁房源后再提交。',
+        },
+        { status: 400 }
+      )
+    }
+
     const tenantId = tenant.id
 
     let code = genWorkOrderCode()
@@ -208,6 +240,17 @@ export async function POST(request: NextRequest) {
         { success: false, message: e.errors[0]?.message ?? '参数错误' },
         { status: 400 }
       )
+    }
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      if (e.code === 'P2003') {
+        return NextResponse.json(
+          {
+            success: false,
+            message: '楼宇或房源关联数据异常，请稍后重试或联系物业核对租赁关系与档案楼宇是否一致。',
+          },
+          { status: 400 }
+        )
+      }
     }
     console.error(e)
     return NextResponse.json({ success: false, message: '服务器错误' }, { status: 500 })

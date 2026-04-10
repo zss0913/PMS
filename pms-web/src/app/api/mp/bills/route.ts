@@ -112,6 +112,7 @@ export async function GET(request: NextRequest) {
 
   const list = bills.map((b) => ({
     id: b.id,
+    tenantId: b.tenantId,
     code: b.code,
     ruleName: b.ruleName,
     feeType: b.feeType,

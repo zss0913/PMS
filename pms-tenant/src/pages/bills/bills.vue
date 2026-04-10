@@ -119,6 +119,10 @@ function goFilter() {
   uni.navigateTo({ url: '/pages/bills/filter' })
 }
 
+function goPay() {
+  uni.navigateTo({ url: '/pages/bills/pay' })
+}
+
 function clearFilter() {
   uni.removeStorageSync(FILTER_KEY)
   hasFilter.value = false
@@ -208,6 +212,10 @@ const pageContentTopPx = () => topInsetPx() + 14
           </view>
         </view>
       </view>
+    </view>
+
+    <view class="fab-pay" hover-class="fab-pay--active" @click.stop="goPay">
+      <text class="fab-pay-text">缴费</text>
     </view>
   </view>
 </template>
@@ -308,9 +316,38 @@ const pageContentTopPx = () => topInsetPx() + 14
 }
 
 .page {
-  padding: 0 24rpx calc(48rpx + env(safe-area-inset-bottom, 0px));
+  padding: 0 24rpx calc(200rpx + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
   min-height: 100vh;
+}
+
+.fab-pay {
+  position: fixed;
+  right: 32rpx;
+  bottom: calc(48rpx + env(safe-area-inset-bottom, 0px));
+  z-index: 90;
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 999rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, #0ea5e9 0%, #2563eb 55%, #1d4ed8 100%);
+  box-shadow:
+    0 12rpx 32rpx rgba(37, 99, 235, 0.45),
+    0 0 0 1rpx rgba(255, 255, 255, 0.12) inset;
+  @include pms-tap;
+}
+
+.fab-pay--active {
+  opacity: 0.88;
+  transform: scale(0.96);
+}
+
+.fab-pay-text {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #fff;
 }
 
 .summary-bar {

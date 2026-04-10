@@ -829,8 +829,6 @@ export function BillList({
       feeTypeKeyword: filters.feeTypeKeyword,
       dueDateStart: filters.dueDateStart,
       dueDateEnd: filters.dueDateEnd,
-      periodStart: filters.periodStart,
-      periodEnd: filters.periodEnd,
     }),
     [
       filters.buildingId,
@@ -841,8 +839,6 @@ export function BillList({
       filters.feeTypeKeyword,
       filters.dueDateStart,
       filters.dueDateEnd,
-      filters.periodStart,
-      filters.periodEnd,
     ]
   )
 
@@ -1469,6 +1465,7 @@ export function BillList({
         open={dunningDrawerOpen}
         onClose={() => setDunningDrawerOpen(false)}
         buildings={buildings}
+        tenants={data?.tenants ?? []}
         initialFilters={dunningInitialFilters}
       />
     </div>

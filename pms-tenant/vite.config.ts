@@ -1,9 +1,10 @@
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { defineConfig } from 'vite'
 import uni from '@dcloudio/vite-plugin-uni'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const themeScssUrl = pathToFileURL(path.join(__dirname, 'src/styles/theme.scss')).href
 
 export default defineConfig({
   plugins: [uni()],
@@ -28,7 +29,8 @@ export default defineConfig({
   css: {
     preprocessorOptions: {
       scss: {
-        additionalData: `@import "${path.join(__dirname, 'src/styles/theme.scss').replace(/\\/g, '/')}";\n`,
+        additionalData: `@use "${themeScssUrl}" as *;\n`,
+        silenceDeprecations: ['legacy-js-api', 'import'],
       },
     },
   },
