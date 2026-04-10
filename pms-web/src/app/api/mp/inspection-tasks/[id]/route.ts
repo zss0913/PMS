@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getMpAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { parseCheckItemsJson } from '@/lib/inspection-check-items'
+import { normalizeInspectionBizTagId, parseCheckItemsJson } from '@/lib/inspection-check-items'
 import { fetchLinkedDevicesPerCheckItem } from '@/lib/inspection-task-linked-devices'
 import { fetchInspectionPointImagesPerCheckItem } from '@/lib/inspection-task-point-images'
 import {
@@ -106,11 +106,11 @@ export async function GET(
     where: { taskId, companyId: user.companyId },
     orderBy: { checkedAt: 'asc' },
   })
-  const doneSet = new Set(records.map((r) => r.tagId))
+  const doneNormSet = new Set(records.map((r) => normalizeInspectionBizTagId(r.tagId)))
 
   const progress = {
     total: itemsOut.length,
-    done: itemsOut.filter((i) => i.tagId && doneSet.has(i.tagId)).length,
+    done: itemsOut.filter((i) => i.tagId && doneNormSet.has(normalizeInspectionBizTagId(i.tagId))).length,
   }
 
   /** 每个已打点 NFC 对应的记录 id 与结果（供详情页跳转记录详情） */
@@ -142,7 +142,8 @@ export async function GET(
       buildingName: task.building?.name ?? null,
       checkItems: itemsOut,
       progress,
-      doneTagIds: [...doneSet],
+      /** 规范化后的业务标签号，便于与读卡结果比对 */
+      doneTagIds: [...doneNormSet],
       taskRecords,
       route: task.route,
       requirePhoto: requirePhotoEffective,

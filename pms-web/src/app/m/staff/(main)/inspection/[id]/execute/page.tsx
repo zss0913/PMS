@@ -16,6 +16,10 @@ type Detail = {
   doneTagIds: string[]
 }
 
+function normBizTag(s: string) {
+  return s.trim().toUpperCase().replace(/\s/g, '')
+}
+
 export default function StaffInspectionExecutePage() {
   const params = useParams()
   const id = params?.id as string | undefined
@@ -51,8 +55,9 @@ export default function StaffInspectionExecutePage() {
     void load()
   }, [load])
 
+  const doneSet = new Set((detail?.doneTagIds ?? []).map(normBizTag))
   const pending =
-    detail?.checkItems.filter((c) => c.tagId && !detail.doneTagIds?.includes(c.tagId)) ?? []
+    detail?.checkItems.filter((c) => c.tagId && !doneSet.has(normBizTag(c.tagId))) ?? []
 
   async function submit() {
     if (!id || !pick || !scanned.trim()) return

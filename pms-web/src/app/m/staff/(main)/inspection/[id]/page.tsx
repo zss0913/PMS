@@ -20,6 +20,10 @@ type Detail = {
   doneTagIds?: string[]
 }
 
+function normBizTag(s: string) {
+  return s.trim().toUpperCase().replace(/\s/g, '')
+}
+
 export default function StaffInspectionDetailPage() {
   const params = useParams()
   const id = params?.id as string | undefined
@@ -90,20 +94,25 @@ export default function StaffInspectionDetailPage() {
             <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
               <p className="text-slate-500 text-xs mb-2">检查项与 NFC</p>
               <ul className="space-y-2 text-xs">
-                {d.checkItems.map((c, i) => (
+                {d.checkItems.map((c, i) => {
+                  const done = (d.doneTagIds ?? []).some(
+                    (x) => normBizTag(x) === normBizTag(c.tagId)
+                  )
+                  return (
                   <li key={i} className="flex gap-2">
                     <span
                       className={
-                        d.doneTagIds?.includes(c.tagId) ? 'text-green-600' : 'text-slate-400'
+                        done ? 'text-green-600' : 'text-slate-400'
                       }
                     >
-                      {d.doneTagIds?.includes(c.tagId) ? '✓' : '○'}
+                      {done ? '✓' : '○'}
                     </span>
                     <span>
                       {c.name} — {c.tagId}（{c.location || '—'}）
                     </span>
                   </li>
-                ))}
+                  )
+                })}
               </ul>
             </div>
           )}

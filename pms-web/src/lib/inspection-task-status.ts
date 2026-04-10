@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client'
-import { parseCheckItemsJson } from '@/lib/inspection-check-items'
+import { normalizeInspectionBizTagId, parseCheckItemsJson } from '@/lib/inspection-check-items'
 
 /** 将历史「执行中」与新产品「巡检中」统一 */
 export function normalizeInspectionTaskStatus(status: string): string {
@@ -21,7 +21,7 @@ export async function syncInspectionTaskProgress(
     where: { taskId },
     select: { tagId: true },
   })
-  const doneTagIds = new Set(records.map((r) => r.tagId))
+  const doneNorm = new Set(records.map((r) => normalizeInspectionBizTagId(r.tagId)))
 
   const tags = await prisma.nfcTag.findMany({
     where: { id: { in: items.map((i) => i.nfcTagId) } },
@@ -32,7 +32,7 @@ export async function syncInspectionTaskProgress(
   let doneCount = 0
   for (const it of items) {
     const bid = businessIdByPk.get(it.nfcTagId)
-    if (bid && doneTagIds.has(bid)) doneCount += 1
+    if (bid && doneNorm.has(normalizeInspectionBizTagId(bid))) doneCount += 1
   }
 
   const rawStatus = normalizeInspectionTaskStatus(task.status)

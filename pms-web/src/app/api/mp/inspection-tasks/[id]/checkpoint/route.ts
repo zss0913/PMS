@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getMpAuthUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-import { parseCheckItemsJson } from '@/lib/inspection-check-items'
+import { normalizeInspectionBizTagId, parseCheckItemsJson } from '@/lib/inspection-check-items'
 import { syncInspectionTaskProgress } from '@/lib/inspection-task-status'
 import { logWorkOrderActivity, WORK_ORDER_ACTION } from '@/lib/work-order-activity-log'
 import { writeStaffNotifications } from '@/lib/staff-notification-write'
@@ -76,7 +76,7 @@ export async function POST(
     return NextResponse.json({ success: false, message: '您不在该任务的巡检人员列表中' }, { status: 403 })
   }
 
-  const norm = (s: string) => s.trim().toUpperCase().replace(/\s/g, '')
+  const norm = normalizeInspectionBizTagId
   let body: z.infer<typeof bodySchema>
   try {
     body = bodySchema.parse(await request.json())
@@ -112,10 +112,11 @@ export async function POST(
     )
   }
 
-  const dup = await prisma.inspectionRecord.findFirst({
-    where: { taskId, companyId: user.companyId, tagId: matched.tagId },
+  const existingRecords = await prisma.inspectionRecord.findMany({
+    where: { taskId, companyId: user.companyId },
+    select: { tagId: true },
   })
-  if (dup) {
+  if (existingRecords.some((r) => norm(r.tagId) === scanned)) {
     return NextResponse.json({ success: false, message: '该巡检点已提交过' }, { status: 400 })
   }
 
@@ -282,11 +283,11 @@ export async function POST(
     where: { taskId },
     select: { tagId: true },
   })
-  const doneSet = new Set(recordsAfter.map((r) => r.tagId))
+  const doneNorm = new Set(recordsAfter.map((r) => norm(r.tagId)))
   let done = 0
   for (const it of items) {
     const t = tagRows.find((x) => x.id === it.nfcTagId)
-    if (t && doneSet.has(t.tagId)) done += 1
+    if (t && doneNorm.has(norm(t.tagId))) done += 1
   }
 
   return NextResponse.json({

@@ -7,6 +7,14 @@ export type InspectionCheckItemJson = {
   location?: string
 }
 
+/** 与员工端读卡 / 巡检提交一致：业务层 NFC 编号比对（去空白、大写） */
+export function normalizeInspectionBizTagId(s: string | null | undefined): string {
+  return String(s ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s/g, '')
+}
+
 export function parseCheckItemsJson(raw: string | null | undefined): InspectionCheckItemJson[] {
   if (!raw?.trim()) return []
   try {
@@ -41,6 +49,17 @@ export async function validatePlanCheckItems(
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   if (items.length === 0) {
     return { ok: false, message: '请至少添加一条检查项目并绑定 NFC' }
+  }
+  const seenNfc = new Set<number>()
+  for (const it of items) {
+    if (seenNfc.has(it.nfcTagId)) {
+      return {
+        ok: false,
+        message:
+          '巡检路线中不能重复使用同一枚 NFC；每个巡检点须绑定不同的 NFC 标签，否则打卡一次会被误判为多点已完成。',
+      }
+    }
+    seenNfc.add(it.nfcTagId)
   }
   const ids = [...new Set(items.map((i) => i.nfcTagId))]
   const tags = await prisma.nfcTag.findMany({
